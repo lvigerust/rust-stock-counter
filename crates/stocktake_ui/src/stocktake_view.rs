@@ -583,7 +583,7 @@ impl StocktakeView {
                                 .flex_1()
                                 .min_w_0()
                                 .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                                .child(self.render_search(window, cx)),
+                                .child(self.render_search(cx)),
                         )
                     }),
             )
@@ -658,8 +658,7 @@ impl StocktakeView {
 
     /// Where every scan lands, and where products are looked up by number or
     /// name. A filled field, quieter than the table below it.
-    fn render_search(&self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let focused = self.search.focus_handle(cx).is_focused(window);
+    fn render_search(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.theme();
         Input::new(&self.search)
             .id("search")
@@ -673,10 +672,9 @@ impl StocktakeView {
             .map(|input| Styled::h(input, SEARCH_HEIGHT))
             .bg(theme.muted)
             .border_color(theme.border)
-            // The input's own focus border is 1px and drawn over any style
-            // given here, so this field draws its own, a pixel heavier.
+            // Focus doesn't recolor the border: the caret is enough, and
+            // the field is focused nearly all the time anyway.
             .focus_bordered(false)
-            .when(focused, |input| input.border_2().border_color(theme.ring))
     }
 
     /// Hides the sidebar from its own bar, or shows it again from the main
@@ -699,7 +697,7 @@ impl StocktakeView {
                     .text_color(cx.theme().muted_foreground)
                     // Ghost buttons have no border, and focus only colors
                     // the border, so this one keeps an invisible one for the
-                    // focus to show on, as heavy as the search field's.
+                    // focus to show on.
                     .border_2()
                     .border_color(cx.theme().transparent)
                     .tooltip_with_action(tooltip, &ToggleSidebar, Some(CONTEXT))
