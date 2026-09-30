@@ -24,6 +24,15 @@ const DARK_MUTED_FOREGROUND: &str = "neutral-500";
 const LIGHT_TABLE_HOVER: &str = "neutral-100/30";
 const DARK_TABLE_HOVER: &str = "neutral-800/30";
 
+/// The fill of primary buttons, checked checkboxes and other selected
+/// controls, and what's drawn on it. Tailwind's zinc, as hex: gpui-kit's
+/// palette has no zinc, and a name it doesn't know silently falls back to
+/// its own primary.
+const LIGHT_PRIMARY: &str = "#18181b"; // zinc-900
+const LIGHT_PRIMARY_FOREGROUND: &str = "white";
+const DARK_PRIMARY: &str = "#52525b"; // zinc-600
+const DARK_PRIMARY_FOREGROUND: &str = "white";
+
 /// The border of the focused control, in both appearances.
 const FOCUS_RING: &str = "#2b7fff";
 
@@ -80,6 +89,8 @@ fn set_theme_colors(cx: &mut App) {
         theme.focus_ring = false;
 
         let mut light = (*theme.light_theme).clone();
+        light.colors.primary = Some(LIGHT_PRIMARY.into());
+        light.colors.primary_foreground = Some(LIGHT_PRIMARY_FOREGROUND.into());
         light.colors.ring = Some(FOCUS_RING.into());
         light.colors.muted_foreground = Some(LIGHT_MUTED_FOREGROUND.into());
         light.colors.table_hover = Some(LIGHT_TABLE_HOVER.into());
@@ -89,6 +100,8 @@ fn set_theme_colors(cx: &mut App) {
         let mut dark = (*theme.dark_theme).clone();
         dark.colors.background = Some(DARK_BACKGROUND.into());
         dark.colors.sidebar = Some(DARK_SIDEBAR.into());
+        dark.colors.primary = Some(DARK_PRIMARY.into());
+        dark.colors.primary_foreground = Some(DARK_PRIMARY_FOREGROUND.into());
         dark.colors.ring = Some(FOCUS_RING.into());
         dark.colors.muted_foreground = Some(DARK_MUTED_FOREGROUND.into());
         // Tooltips take the popover color; in dark mode they share the
