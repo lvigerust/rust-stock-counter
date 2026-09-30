@@ -4,9 +4,8 @@ use crate::prelude::*;
 
 /// A signed change between two quantities: `+2`, `−3` or `0`.
 ///
-/// Zero is quiet. Any other value is set on a warning tint, because a change
-/// is something to look at. The sign carries the direction, so meaning never
-/// depends on color alone.
+/// Zero is quiet. Any other value is set a weight heavier, because a change
+/// is something to look at. The sign carries the direction.
 #[derive(IntoElement)]
 pub struct Delta {
     value: i64,
@@ -32,10 +31,7 @@ impl RenderOnce for Delta {
                 if self.value == 0 {
                     this.text_color(cx.theme().muted_foreground)
                 } else {
-                    this.px_1p5()
-                        .rounded_sm()
-                        .bg(cx.theme().warning.opacity(0.18))
-                        .font_medium()
+                    this.font_medium()
                 }
             })
             .child(text)

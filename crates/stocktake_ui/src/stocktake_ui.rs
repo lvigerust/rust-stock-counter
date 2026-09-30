@@ -20,6 +20,8 @@ mod product_table;
 mod quantity;
 mod recount_dialog;
 mod stocktake_view;
+// Not rendered while the screens are rebuilt; kept to draw from.
+#[allow(dead_code)]
 mod welcome;
 
 use gpui_kit::{App, KeyBinding, actions};
@@ -38,9 +40,15 @@ actions!(
         /// Moves focus to the search field, ready for a scan.
         FocusSearch,
         FocusNext,
-        FocusPrevious
+        FocusPrevious,
+        /// Hides the sidebar, or shows it again.
+        ToggleSidebar
     ]
 );
+
+/// The application's name, shown atop the sidebar and in the menu bar. It
+/// must match `CFBundleName` in the shell's `Info.plist`.
+pub const APP_NAME: &str = "Scala Bad";
 
 /// Key context of the whole window.
 const CONTEXT: &str = "Stocktake";
@@ -58,6 +66,8 @@ pub fn init(cx: &mut App) {
         KeyBinding::new("secondary-e", ExportStocktake, Some(CONTEXT)),
         KeyBinding::new("escape", CancelCount, Some(COUNT_CELL_CONTEXT)),
         KeyBinding::new("secondary-f", FocusSearch, Some(CONTEXT)),
+        // The standard macOS shortcut for showing and hiding a sidebar.
+        KeyBinding::new("ctrl-cmd-s", ToggleSidebar, Some(CONTEXT)),
         // The table binds Tab to moving between columns, which traps focus in
         // it. These replace that, and also take precedence over the window's
         // own Tab handling so focus can skip the table.

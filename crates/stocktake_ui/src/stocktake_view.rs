@@ -10,28 +10,47 @@
 //! making any of them public.
 
 mod files;
+// Not rendered while the screens are rebuilt; kept to draw from.
+#[allow(dead_code)]
 mod regions;
 
 use std::path::PathBuf;
 
 use gpui_kit::component::{
-    Theme, WindowExt as _,
-    input::{InputEvent, InputState},
+    Size, Theme, WindowExt as _,
+    button::{Button, ButtonVariants as _},
+    input::{Input, InputEvent, InputState},
     notification::Notification,
-    table::{TableEvent, TableState},
+    separator::Separator,
+    table::{DataTable, TableEvent, TableState},
 };
-use gpui_kit::{ExternalPaths, Focusable as _, Subscription};
+use gpui_kit::{
+    ExternalPaths, FocusHandle, Focusable, MouseButton, Pixels, Rems, Subscription, px,
+};
 use stocktake::{Lookup, ProductId, Stocktake, store};
-use ui::prelude::*;
+use ui::{SidebarHeading, SidebarItem, WindowBar, prelude::*};
 
 use crate::{
-    CONTEXT, CancelCount, ExportStocktake, FocusNext, FocusPrevious, FocusSearch, ImportStockList,
-    product_table::{LastCounted, ProductTable},
+    APP_NAME, CONTEXT, CancelCount, ExportStocktake, FocusNext, FocusPrevious, FocusSearch,
+    ImportStockList, ToggleSidebar,
+    product_table::{LastCounted, ProductTable, ROW_HEIGHT},
     quantity::{parse_quantity, quantity_input},
     recount_dialog::{self, Recount},
-    welcome::Welcome,
 };
 use files::ImportSource;
+
+/// Wide enough for a product name beside an icon, and a bar that clears the
+/// traffic lights.
+const SIDEBAR_WIDTH: Pixels = px(256.);
+
+/// Padding around the content of the main pane.
+const MAIN_PADDING: Rems = Rems(3.);
+
+/// The search field's height, a size up from a medium input.
+const SEARCH_HEIGHT: Rems = Rems(2.5);
+
+/// Space above and below the search field in the main pane's bar.
+const SEARCH_PADDING: Rems = Rems(1.5);
 
 /// Whether the last change reached the disk.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -50,6 +69,9 @@ struct Session {
 }
 
 pub struct StocktakeView {
+    /// The window's own focus, so its commands and shortcuts work while no
+    /// control inside it has focus.
+    focus_handle: FocusHandle,
     store_path: PathBuf,
     session: Option<Session>,
     sessions_started: usize,
@@ -67,6 +89,7 @@ pub struct StocktakeView {
     save_state: SaveState,
     /// Why the saved stocktake couldn't be resumed.
     resume_error: Option<SharedString>,
+    sidebar_collapsed: bool,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -112,7 +135,10 @@ impl StocktakeView {
         ];
         Theme::sync_system_appearance(Some(window), cx);
 
+        let focus_handle = cx.focus_handle();
+        focus_handle.focus(window, cx);
         let mut this = Self {
+            focus_handle,
             store_path,
             session: None,
             sessions_started: 0,
@@ -124,6 +150,7 @@ impl StocktakeView {
             pending_recount: None,
             save_state: SaveState::Saved,
             resume_error: None,
+            sidebar_collapsed: false,
             _subscriptions: subscriptions,
         };
         match store::load(&this.store_path) {
@@ -144,7 +171,6 @@ impl StocktakeView {
             TableState::new(delegate, window, cx)
                 .col_selectable(false)
                 .col_movable(false)
-                .sortable(true)
         });
         let table_events = cx.subscribe_in(&table, window, |this, _, event, window, cx| {
             if let TableEvent::SelectRow(row_ix) = event {
@@ -174,7 +200,13 @@ impl StocktakeView {
         let Some(session) = &self.session else {
             return;
         };
-        let width = window.viewport_size().width;
+        // The table spans the main pane.
+        let sidebar = if self.sidebar_collapsed {
+            px(0.)
+        } else {
+            SIDEBAR_WIDTH
+        };
+        let width = window.viewport_size().width - sidebar;
         session.table.update(cx, |table, cx| {
             table.delegate_mut().set_width(width);
             table.refresh(cx);
@@ -525,11 +557,196 @@ impl StocktakeView {
     }
 }
 
+impl StocktakeView {
+    /// The button that was pressed goes away with its bar and its twin
+    /// appears in the other one. Focus on it would go with it, leaving
+    /// nothing to take Tab or the shortcuts, so it returns to the window
+    /// instead; the next Tab reaches the twin, the first stop in either
+    /// state. Focus in the search or the table stays where it is.
+    fn toggle_sidebar(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.sidebar_collapsed = !self.sidebar_collapsed;
+        self.fit_columns(window, cx);
+        let stays = self.search.focus_handle(cx).contains_focused(window, cx)
+            || self
+                .session
+                .as_ref()
+                .is_some_and(|session| session.table.focus_handle(cx).contains_focused(window, cx));
+        if !stays {
+            self.focus_handle.focus(window, cx);
+        }
+        cx.notify();
+    }
+
+    /// The pane along the leading edge, full height, in four sections: the
+    /// top bar with the traffic lights and the button that hides the
+    /// sidebar, a header, a body that takes the remaining height, and a
+    /// footer. Each is padded by 1rem, and holds its content as
+    /// [`SidebarItem`]s. A rule sets the top bar apart.
+    fn render_sidebar(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let toggle = Self::render_sidebar_toggle(true, cx);
+        let theme = cx.theme();
+        v_flex()
+            .id("sidebar")
+            .flex_none()
+            .w(SIDEBAR_WIDTH)
+            .h_full()
+            .bg(theme.sidebar)
+            .text_color(theme.sidebar_foreground)
+            .border_r_1()
+            .border_color(theme.sidebar_border)
+            .child(WindowBar::new().justify_end().child(toggle))
+            .child(Separator::horizontal().color(theme.sidebar_border))
+            .child(Self::render_sidebar_header())
+            .child(
+                v_flex()
+                    .flex_1()
+                    .min_h_0()
+                    .p_4()
+                    .child(SidebarHeading::new("Tellinger")),
+            )
+            .child(v_flex().flex_none().p_4())
+    }
+
+    /// The app's name.
+    fn render_sidebar_header() -> impl IntoElement {
+        v_flex().flex_none().p_4().child(
+            SidebarItem::new().child(
+                div()
+                    .min_w_0()
+                    .truncate()
+                    .text_sm()
+                    .font_semibold()
+                    .child(APP_NAME),
+            ),
+        )
+    }
+
+    /// The pane beside the sidebar: its bar, holding the search, then the
+    /// shell the screens' content goes in. For now the shell holds the stock
+    /// list, once one is imported.
+    fn render_main(&self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let session = self.session.as_ref();
+        v_flex()
+            .flex_1()
+            .min_w_0()
+            .h_full()
+            .child(
+                // With the sidebar hidden, the traffic lights move into this
+                // bar, followed by the way back. With it shown, the search
+                // is inset by the pane's padding, in line with the table's
+                // content below.
+                WindowBar::new()
+                    .traffic_lights(self.sidebar_collapsed)
+                    // With the sidebar shown, taller than its bar: the search
+                    // gets [`SEARCH_PADDING`] above and below. Hidden, the
+                    // bar keeps its height, so the search stays level with
+                    // the traffic lights.
+                    .when(!self.sidebar_collapsed, |this| {
+                        this.h(SEARCH_HEIGHT + SEARCH_PADDING * 2.)
+                    })
+                    .gap_4()
+                    .when(!self.sidebar_collapsed, |this| this.px(MAIN_PADDING))
+                    .when(self.sidebar_collapsed, |this| {
+                        this.child(Self::render_sidebar_toggle(false, cx))
+                    })
+                    .when(session.is_some(), |this| {
+                        // A press here is the field's, not the start of a
+                        // window drag.
+                        this.child(
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                                .child(self.render_search(window, cx)),
+                        )
+                    }),
+            )
+            .child(
+                // The table runs to the pane's edges, so it shows as many
+                // rows as fit and its scrollbar sits against the window. Its
+                // outer columns inset their content by the pane's padding.
+                v_flex()
+                    .flex_1()
+                    .min_h_0()
+                    .when_some(session, |this, session| {
+                        // The rows set their own height; the text stays small.
+                        this.child(
+                            div().flex_1().min_h_0().text_sm().child(
+                                DataTable::new(&session.table)
+                                    .with_size(Size::Size(ROW_HEIGHT))
+                                    // No frame: it would end at the window's
+                                    // edge. The rows' own lines separate them.
+                                    .bordered(false),
+                            ),
+                        )
+                    }),
+            )
+    }
+
+    /// Where every scan lands, and where products are looked up by number or
+    /// name. A filled field, quieter than the table below it.
+    fn render_search(&self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let focused = self.search.focus_handle(cx).is_focused(window);
+        let theme = cx.theme();
+        Input::new(&self.search)
+            .id("search")
+            .prefix(
+                Icon::new(IconName::ScanBarcode)
+                    .small()
+                    .text_color(theme.muted_foreground),
+            )
+            .cleanable(true)
+            // `Input::h` sizes multi-line inputs only; this sets the field.
+            .map(|input| Styled::h(input, SEARCH_HEIGHT))
+            .bg(theme.muted)
+            .border_color(theme.border)
+            // The input's own focus border is 1px and drawn over any style
+            // given here, so this field draws its own, a pixel heavier.
+            .focus_bordered(false)
+            .when(focused, |input| input.border_2().border_color(theme.ring))
+    }
+
+    /// Hides the sidebar from its own bar, or shows it again from the main
+    /// pane's bar once it's hidden.
+    fn render_sidebar_toggle(expanded: bool, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+        let (id, icon, tooltip) = if expanded {
+            ("hide-sidebar", IconName::PanelLeftClose, "Skjul sidepanel")
+        } else {
+            ("show-sidebar", IconName::PanelLeftOpen, "Vis sidepanel")
+        };
+        // A press here is the button's, not the start of a window drag.
+        div()
+            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+            .child(
+                Button::new(id)
+                    .ghost()
+                    .small()
+                    .icon(icon)
+                    // Quieter than the content at rest; hover brings it up.
+                    .text_color(cx.theme().muted_foreground)
+                    // Ghost buttons have no border, and focus only colors
+                    // the border, so this one keeps an invisible one for the
+                    // focus to show on, as heavy as the search field's.
+                    .border_2()
+                    .border_color(cx.theme().transparent)
+                    .tooltip_with_action(tooltip, &ToggleSidebar, Some(CONTEXT))
+                    .on_click(cx.listener(|this, _, window, cx| this.toggle_sidebar(window, cx))),
+            )
+    }
+}
+
+impl Focusable for StocktakeView {
+    fn focus_handle(&self, _: &App) -> FocusHandle {
+        self.focus_handle.clone()
+    }
+}
+
 impl Render for StocktakeView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         div()
             .size_full()
             .key_context(CONTEXT)
+            .track_focus(&self.focus_handle)
             .on_action(cx.listener(|this, _: &ImportStockList, window, cx| {
                 this.import_stock_list(ImportSource::Choose, window, cx)
             }))
@@ -546,6 +763,9 @@ impl Render for StocktakeView {
                 cx.listener(|this, _: &FocusNext, window, cx| this.move_focus(true, window, cx)),
             )
             .on_action(
+                cx.listener(|this, _: &ToggleSidebar, window, cx| this.toggle_sidebar(window, cx)),
+            )
+            .on_action(
                 cx.listener(|this, _: &FocusPrevious, window, cx| {
                     this.move_focus(false, window, cx)
                 }),
@@ -556,10 +776,17 @@ impl Render for StocktakeView {
             .drag_over::<ExternalPaths>(|style, _, _, cx| style.bg(cx.theme().drop_target))
             .bg(cx.theme().background)
             .text_color(cx.theme().foreground)
-            .map(|this| match &self.session {
-                Some(session) => this.child(self.render_counting(session, window, cx)),
-                None => this.child(Welcome::new().resume_error(self.resume_error.clone())),
-            })
+            // Stripped down while the screens are rebuilt piece by piece.
+            // The regions and the welcome screen are kept, unrendered, to
+            // draw from.
+            .child(
+                h_flex()
+                    .size_full()
+                    .when(!self.sidebar_collapsed, |this| {
+                        this.child(self.render_sidebar(cx))
+                    })
+                    .child(self.render_main(window, cx)),
+            )
     }
 }
 
@@ -586,6 +813,11 @@ mod tests {
 
         fn press(&mut self, key: &str) {
             self.step(|window, cx| window.press(key, cx));
+        }
+
+        fn click(&mut self, id: &'static str) {
+            self.find(id);
+            self.step(|window, cx| window.click(id, cx));
         }
 
         fn step(&mut self, f: impl FnOnce(&mut Window, &mut App)) {
@@ -615,6 +847,7 @@ mod tests {
     }
 
     #[gpui_kit::test]
+    #[ignore = "tabs to the import and export buttons, which aren't rendered while the UI is rebuilt"]
     fn counts_scanned_products(cx: &mut TestAppContext) {
         let dir = std::env::temp_dir().join(format!("stocktake-ui-{}", std::process::id()));
         let store_path = dir.join("varetelling.json");
@@ -725,5 +958,58 @@ mod tests {
         }
 
         std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[gpui_kit::test]
+    fn hides_and_shows_the_sidebar(cx: &mut TestAppContext) {
+        let store_path = std::env::temp_dir()
+            .join(format!("stocktake-ui-sidebar-{}", std::process::id()))
+            .join("varetelling.json");
+        cx.update(|cx| {
+            gpui_kit::init(cx);
+            crate::init(cx);
+        });
+        let window = cx.open_window(size(px(1040.), px(720.)), |window, cx| {
+            let view = cx.new(|cx| StocktakeView::with_store_path(store_path, window, cx));
+            Root::new(view, window, cx)
+        });
+        let mut counter = Counter {
+            cx,
+            window: window.into(),
+        };
+
+        // Each state offers only the way to the other: hiding from the
+        // sidebar's bar, showing from the main pane's.
+        let shown = |counter: &mut Counter| {
+            let hide = counter.find("hide-sidebar").is_some();
+            let show = counter.find("show-sidebar").is_some();
+            assert_ne!(hide, show);
+            hide
+        };
+
+        assert!(shown(&mut counter));
+        counter.click("hide-sidebar");
+        assert!(!shown(&mut counter));
+        counter.click("show-sidebar");
+        assert!(shown(&mut counter));
+
+        // The shortcut does the same.
+        counter.press("ctrl-cmd-s");
+        assert!(!shown(&mut counter));
+        counter.press("ctrl-cmd-s");
+        assert!(shown(&mut counter));
+
+        // From the keyboard, focus survives its button going away: the next
+        // Tab reaches the twin in the other bar.
+        counter.press("tab");
+        assert!(counter.is_focused("hide-sidebar"));
+        counter.press("space");
+        assert!(!shown(&mut counter));
+        counter.press("tab");
+        assert!(counter.is_focused("show-sidebar"));
+        counter.press("space");
+        assert!(shown(&mut counter));
+        counter.press("tab");
+        assert!(counter.is_focused("hide-sidebar"));
     }
 }

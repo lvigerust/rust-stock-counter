@@ -7,11 +7,42 @@ use gpui_kit::component::{
     input::{Input, InputState},
     table::{Column, ColumnSort, TableDelegate, TableState},
 };
-use gpui_kit::{Div, Pixels, Stateful, px};
+use gpui_kit::{Div, Edges, Pixels, Stateful, px};
 use stocktake::{ProductId, Stocktake, compare_locations, natural_cmp};
 use ui::{Delta, flash, prelude::*};
 
 use crate::{COUNT_CELL_CONTEXT, count_status::CountStatus};
+
+/// How tall each row is: a 1.5rem line, which fits the quantity input, and
+/// [`ROW_PADDING`] above and below it. Table geometry is in pixels.
+pub const ROW_HEIGHT: Pixels = px(56.);
+
+/// Padding around a cell's content, 1rem, so columns are 2rem apart.
+const ROW_PADDING: Pixels = px(16.);
+
+/// Padding on the row's outer edges instead: the table spans the whole pane,
+/// so the first and last columns inset their content by the pane's 3rem, in
+/// line with the search field above.
+const EDGE_PADDING: Pixels = px(48.);
+
+/// A cell's padding: [`ROW_PADDING`] around its content, [`EDGE_PADDING`] on
+/// the table's outer edges.
+fn cell_paddings(col_ix: usize) -> Edges<Pixels> {
+    Edges {
+        top: ROW_PADDING,
+        bottom: ROW_PADDING,
+        left: if col_ix == 0 {
+            EDGE_PADDING
+        } else {
+            ROW_PADDING
+        },
+        right: if col_ix + 1 == ProductColumn::ALL.len() {
+            EDGE_PADDING
+        } else {
+            ROW_PADDING
+        },
+    }
+}
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum ProductColumn {
@@ -58,17 +89,17 @@ impl ProductColumn {
         }
     }
 
-    /// Fixed widths for everything but the name. Column widths are table
-    /// geometry, which the table API takes in pixels.
+    /// Fixed widths for everything but the name, padding included. Column
+    /// widths are table geometry, which the table API takes in pixels.
     fn fixed_width(self) -> Option<f32> {
         match self {
-            Self::Location => Some(120.),
-            Self::ItemNumber => Some(140.),
+            Self::Location => Some(160.),
+            Self::ItemNumber => Some(156.),
             Self::Name => None,
-            Self::SystemQuantity => Some(120.),
-            Self::CountedQuantity => Some(120.),
-            Self::Difference => Some(130.),
-            Self::Status => Some(140.),
+            Self::SystemQuantity => Some(136.),
+            Self::CountedQuantity => Some(136.),
+            Self::Difference => Some(146.),
+            Self::Status => Some(180.),
         }
     }
 }
@@ -122,6 +153,14 @@ impl ProductTable {
     /// column widths.
     pub fn set_width(&mut self, width: Pixels) {
         self.width = width;
+    }
+
+    /// Which way `column` is sorted, if it's the sorted one.
+    fn sort_of(&self, column: ProductColumn) -> ColumnSort {
+        match self.sort {
+            Some((sorted, direction)) if sorted == column => direction,
+            _ => ColumnSort::Default,
+        }
     }
 
     pub fn product_at(&self, row_ix: usize) -> Option<ProductId> {
@@ -227,15 +266,14 @@ impl TableDelegate for ProductTable {
             .sum();
         // Leave room for the vertical scrollbar.
         let name_width = (f32::from(self.width) - fixed - 16.).max(ProductColumn::MIN_NAME_WIDTH);
-        let sort = match self.sort {
-            Some((sorted, direction)) if sorted == column => direction,
-            _ => ColumnSort::Default,
-        };
+        // No sort state for the table: it would draw its own arrow, pinned
+        // to the cell's trailing edge. `render_th` draws it beside the label
+        // instead and sorts on a click anywhere in the cell.
         Column::new(key, name)
             .width(px(column.fixed_width().unwrap_or(name_width)))
+            .paddings(cell_paddings(col_ix))
             .min_width(px(64.))
             .movable(false)
-            .sort(sort)
             .when(column.is_numeric(), |column| column.text_right())
     }
 
@@ -256,17 +294,57 @@ impl TableDelegate for ProductTable {
         cx.defer(move |cx| table.update(cx, |table, cx| table.clear_selection(cx)));
     }
 
+    /// The label at the leading edge and its sort arrow at the trailing
+    /// edge, the same in every column. The whole cell sorts: this spans it
+    /// by reaching out over the cell's padding and padding itself by the
+    /// same amount.
     fn render_th(
         &mut self,
         col_ix: usize,
         _: &mut Window,
-        _: &mut Context<TableState<Self>>,
+        cx: &mut Context<TableState<Self>>,
     ) -> impl IntoElement {
         let column = ProductColumn::ALL[col_ix];
+        let paddings = cell_paddings(col_ix);
+        let sort = self.sort_of(column);
+        let (icon, sorted) = match sort {
+            ColumnSort::Ascending => (IconName::SortAscending, true),
+            ColumnSort::Descending => (IconName::SortDescending, true),
+            ColumnSort::Default => (IconName::ChevronsUpDown, false),
+        };
+        let arrow = Icon::new(icon)
+            .size_3()
+            .flex_none()
+            .when(!sorted, |icon| icon.opacity(0.5));
+        let label = div().min_w_0().truncate().child(column.key_and_name().1);
+        let hover_color = cx.theme().foreground;
         h_flex()
-            .size_full()
-            .when(column.is_numeric(), |this| this.justify_end())
-            .child(column.key_and_name().1)
+            .id(("sort", col_ix))
+            .flex_1()
+            .min_w_0()
+            .h(ROW_HEIGHT)
+            .ml(-paddings.left)
+            .mr(-paddings.right)
+            .pl(paddings.left)
+            .pr(paddings.right)
+            .justify_between()
+            .gap_1()
+            .font_medium()
+            .cursor_pointer()
+            .hover(move |style| style.text_color(hover_color))
+            .child(label)
+            .child(arrow)
+            // Unsorted, then descending, then ascending, as the table's own
+            // arrow cycles.
+            .on_click(cx.listener(move |table, _, window, cx| {
+                let next = match table.delegate().sort_of(column) {
+                    ColumnSort::Default => ColumnSort::Descending,
+                    ColumnSort::Descending => ColumnSort::Ascending,
+                    ColumnSort::Ascending => ColumnSort::Default,
+                };
+                table.delegate_mut().perform_sort(col_ix, next, window, cx);
+                cx.notify();
+            }))
     }
 
     /// Rows are keyed by product, not position, so row state follows the

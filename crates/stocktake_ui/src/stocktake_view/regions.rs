@@ -5,7 +5,7 @@
 //! bands separated by hairlines, no cards, no gaps.
 //!
 //! ```text
-//! ┌ toolbar ─ [ search ]  31 av 43 telt ▬▬ │ 12 gjenstår │ 3 med differanse   Importer…  Eksporter… ┐
+//! ┌ toolbar ─ ● ● ●  [ search ]  31 av 43 telt ▬▬ │ 12 gjenstår │ 3 med differanse   Importer…  Eksporter… ┐
 //! ├ hint or completion, when there is one ─────────────────────────────────────────────────────────┤
 //! │ table                                                                                           │
 //! ├ status bar ────────────────────────────────────────────────────────────────────────────────────┤
@@ -19,8 +19,8 @@ use gpui_kit::component::{
     status_bar::StatusBar,
     table::DataTable,
 };
-use gpui_kit::rems;
-use ui::{KeyHint, Stat, prelude::*};
+use gpui_kit::{MouseButton, rems};
+use ui::{KeyHint, Stat, WindowBar, prelude::*};
 
 use super::{SaveState, Session, StocktakeView, files::ImportSource};
 use crate::{
@@ -30,6 +30,10 @@ use crate::{
 impl StocktakeView {
     /// Search on the leading edge, where the scanner's text lands; progress
     /// in the middle; commands for the whole stocktake on the trailing edge.
+    ///
+    /// It is also the window's title bar: the traffic lights sit in it, and
+    /// its background drags the window. The search and the buttons keep
+    /// their presses to themselves so they never move it.
     fn render_toolbar(
         &self,
         session: &Session,
@@ -37,22 +41,24 @@ impl StocktakeView {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let search_key = Kbd::binding_for_action(&FocusSearch, Some(CONTEXT), window);
-        h_flex()
+        WindowBar::new()
             .gap_5()
-            .px_4()
-            .py_2p5()
             .border_b_1()
             .border_color(cx.theme().border)
             // The search keeps its width first: it's where every scan lands.
             // Only when the window is too narrow does it give some up.
             .child(
-                div().w(rems(36.)).min_w(rems(16.)).child(
-                    Input::new(&self.search)
-                        .id("search")
-                        .prefix(Icon::new(IconName::ScanBarcode).small())
-                        .when_some(search_key, |input, key| input.suffix(key))
-                        .cleanable(true),
-                ),
+                div()
+                    .w(rems(36.))
+                    .min_w(rems(16.))
+                    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                    .child(
+                        Input::new(&self.search)
+                            .id("search")
+                            .prefix(Icon::new(IconName::ScanBarcode).small())
+                            .when_some(search_key, |input, key| input.suffix(key))
+                            .cleanable(true),
+                    ),
             )
             .child(self.render_stats(session, cx))
             .child(div().flex_1().min_w_0())
@@ -60,6 +66,7 @@ impl StocktakeView {
                 h_flex()
                     .flex_none()
                     .gap_2()
+                    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                     .child(
                         Button::new("import")
                             .ghost()

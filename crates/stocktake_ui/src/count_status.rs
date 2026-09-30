@@ -30,7 +30,7 @@ impl RenderOnce for CountStatus {
             )
         };
         h_flex()
-            .gap_1p5()
+            .gap_2p5()
             .when(self.counted, |this| {
                 this.text_color(cx.theme().muted_foreground)
             })
