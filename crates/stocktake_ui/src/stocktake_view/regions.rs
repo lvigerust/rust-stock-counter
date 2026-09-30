@@ -23,9 +23,7 @@ use gpui_kit::{MouseButton, rems};
 use ui::{KeyHint, Stat, WindowBar, prelude::*};
 
 use super::{SaveState, Session, StocktakeView, files::ImportSource};
-use crate::{
-    CONTEXT, COUNT_CELL_CONTEXT, CancelCount, ExportStocktake, FocusSearch, ImportStockList,
-};
+use crate::{CONTEXT, ExportStocktake, FocusSearch, ImportStockList};
 
 impl StocktakeView {
     /// Search on the leading edge, where the scanner's text lands; progress
@@ -214,10 +212,10 @@ impl StocktakeView {
     /// Teaches the keys for what can be done right now, and confirms that
     /// every count is safely on disk.
     fn render_status_bar(&self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let hints: Vec<Option<KeyHint>> = if self.counting(cx).is_some() {
+        let hints: Vec<Option<KeyHint>> = if self.counting.is_some() {
             vec![
                 Some(KeyHint::new("enter", "Lagre antall")),
-                KeyHint::for_action(&CancelCount, Some(COUNT_CELL_CONTEXT), "Avbryt", window),
+                Some(KeyHint::new("escape", "Avbryt")),
             ]
         } else {
             vec![

@@ -10,15 +10,15 @@
 //! | ---------------- | ------------------------------------------------------ |
 //! | `stocktake_view` | The workflow: session, focus, commands, the layout     |
 //! | `product_table`  | How the stock list renders as rows                     |
-//! | `recount_dialog` | Counting an already-counted product again              |
+//! | `count_dialog`   | Counting one product                                   |
 //! | `welcome`        | The screen before any stock list is imported           |
 //! | `count_status`   | A product's counted/uncounted marker                   |
 //! | `quantity`       | Parsing and entering a quantity                        |
 
+mod count_dialog;
 mod count_status;
 mod product_table;
 mod quantity;
-mod recount_dialog;
 mod stocktake_view;
 // Not rendered while the screens are rebuilt; kept to draw from.
 #[allow(dead_code)]
@@ -35,8 +35,6 @@ actions!(
         ImportStockList,
         /// Writes the counted stock list to an Excel file.
         ExportStocktake,
-        /// Abandons the count being entered without saving it.
-        CancelCount,
         /// Moves focus to the search field, ready for a scan.
         FocusSearch,
         FocusNext,
@@ -53,10 +51,6 @@ pub const APP_NAME: &str = "Scala Bad";
 /// Key context of the whole window.
 const CONTEXT: &str = "Stocktake";
 
-/// Key context around the counted-quantity input, so Escape can cancel the
-/// count after the input itself has ignored it.
-const COUNT_CELL_CONTEXT: &str = "CountCell";
-
 /// Registers the feature's key bindings. Call once at startup, after
 /// `gpui_kit::init`.
 pub fn init(cx: &mut App) {
@@ -64,7 +58,6 @@ pub fn init(cx: &mut App) {
         // `secondary` is Cmd on macOS and Ctrl elsewhere.
         KeyBinding::new("secondary-o", ImportStockList, Some(CONTEXT)),
         KeyBinding::new("secondary-e", ExportStocktake, Some(CONTEXT)),
-        KeyBinding::new("escape", CancelCount, Some(COUNT_CELL_CONTEXT)),
         KeyBinding::new("secondary-f", FocusSearch, Some(CONTEXT)),
         // The standard macOS shortcut for showing and hiding a sidebar.
         KeyBinding::new("ctrl-cmd-s", ToggleSidebar, Some(CONTEXT)),

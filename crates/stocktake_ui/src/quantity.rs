@@ -1,5 +1,4 @@
-//! Entering a quantity: the counted-quantity cell and the recount field
-//! accept the same thing, so they are built the same way.
+//! Entering a quantity: whole, non-negative numbers.
 
 use gpui_kit::component::input::InputState;
 use ui::prelude::*;

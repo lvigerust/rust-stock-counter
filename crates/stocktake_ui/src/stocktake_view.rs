@@ -21,7 +21,9 @@ use gpui_kit::component::{
     button::{Button, ButtonVariants as _},
     input::{Input, InputEvent, InputState},
     notification::Notification,
+    progress::Progress,
     separator::Separator,
+    status_bar::StatusBar,
     table::{DataTable, TableEvent, TableState},
 };
 use gpui_kit::{
@@ -31,11 +33,10 @@ use stocktake::{Lookup, ProductId, Stocktake, store};
 use ui::{SidebarHeading, SidebarItem, WindowBar, prelude::*};
 
 use crate::{
-    APP_NAME, CONTEXT, CancelCount, ExportStocktake, FocusNext, FocusPrevious, FocusSearch,
-    ImportStockList, ToggleSidebar,
+    APP_NAME, CONTEXT, ExportStocktake, FocusNext, FocusPrevious, FocusSearch, ImportStockList,
+    ToggleSidebar, count_dialog,
     product_table::{LastCounted, ProductTable, ROW_HEIGHT},
     quantity::{parse_quantity, quantity_input},
-    recount_dialog::{self, Recount},
 };
 use files::ImportSource;
 
@@ -76,16 +77,14 @@ pub struct StocktakeView {
     session: Option<Session>,
     sessions_started: usize,
     search: Entity<InputState>,
-    /// The counted-quantity cell of the product being counted.
+    /// The quantity field of the count dialog.
     count_input: Entity<InputState>,
-    /// The quantity field of the dialog for counting a product again.
-    recount_input: Entity<InputState>,
     /// Explains why Enter in the search didn't select a product, and how many
     /// hints came before it, so a repeated hint arrives again.
     search_hint: Option<(SharedString, usize)>,
     hints_shown: usize,
-    /// The already-counted product the recount dialog is open for.
-    pending_recount: Option<ProductId>,
+    /// The product the count dialog is open for.
+    counting: Option<ProductId>,
     save_state: SaveState,
     /// Why the saved stocktake couldn't be resumed.
     resume_error: Option<SharedString>,
@@ -103,8 +102,7 @@ impl StocktakeView {
             InputState::new(window, cx)
                 .placeholder("Skann strekkode, eller søk på varenummer eller navn")
         });
-        let count_input = cx.new(|cx| quantity_input(window, cx));
-        let recount_input = cx.new(|cx| quantity_input(window, cx).placeholder("Antall"));
+        let count_input = cx.new(|cx| quantity_input(window, cx).placeholder("Antall"));
 
         let subscriptions = vec![
             cx.subscribe_in(&search, window, |this, _, event, window, cx| match event {
@@ -112,17 +110,9 @@ impl StocktakeView {
                 InputEvent::PressEnter { .. } => this.find_product(window, cx),
                 _ => {}
             }),
-            cx.subscribe_in(&count_input, window, |this, _, event, window, cx| {
-                match event {
-                    InputEvent::PressEnter { .. } => this.confirm_count(window, cx),
-                    // Clicking elsewhere abandons the count without saving it.
-                    InputEvent::Blur => this.cancel_count(window, cx),
-                    _ => {}
-                }
-            }),
-            // The dialog previews each choice's result from the field. Enter
-            // reaches the dialog as its confirm action, so it isn't handled here.
-            cx.subscribe_in(&recount_input, window, |_, _, event, window, _| {
+            // The dialog enables Lagre from the field. Enter reaches the
+            // dialog as its confirm action, so it isn't handled here.
+            cx.subscribe_in(&count_input, window, |_, _, event, window, _| {
                 if let InputEvent::Change = event {
                     window.refresh();
                 }
@@ -144,10 +134,9 @@ impl StocktakeView {
             sessions_started: 0,
             search,
             count_input,
-            recount_input,
             search_hint: None,
             hints_shown: 0,
-            pending_recount: None,
+            counting: None,
             save_state: SaveState::Saved,
             resume_error: None,
             sidebar_collapsed: false,
@@ -166,7 +155,7 @@ impl StocktakeView {
 
     fn start_session(&mut self, stocktake: Stocktake, window: &mut Window, cx: &mut Context<Self>) {
         let stocktake = cx.new(|_| stocktake);
-        let delegate = ProductTable::new(stocktake.clone(), self.count_input.clone(), cx);
+        let delegate = ProductTable::new(stocktake.clone(), cx);
         let table = cx.new(|cx| {
             TableState::new(delegate, window, cx)
                 .col_selectable(false)
@@ -319,69 +308,46 @@ impl StocktakeView {
         }
     }
 
-    fn counting(&self, cx: &App) -> Option<ProductId> {
-        self.session
-            .as_ref()
-            .and_then(|session| session.table.read(cx).delegate().counting())
-    }
-
+    /// Opens the count dialog for the product, with its quantity field
+    /// filled in and selected: Enter keeps what's there, typing replaces it.
+    /// That's the earlier count if there is one, or else the system quantity,
+    /// so confirming it takes a single Enter.
     fn begin_count(&mut self, id: ProductId, window: &mut Window, cx: &mut Context<Self>) {
         let Some(session) = &self.session else {
             return;
         };
-        // Clicking into the cell being edited selects its row again.
-        if self.counting(cx) == Some(id) {
+        if self.counting.is_some() {
             return;
         }
         let product = session.stocktake.read(cx).product(id).clone();
-        match product.counted_quantity() {
-            Some(counted) => {
-                self.recount_input
-                    .update(cx, |input, cx| input.set_value("", window, cx));
-                self.pending_recount = Some(id);
-                recount_dialog::open(
-                    cx.entity().downgrade(),
-                    self.recount_input.clone(),
-                    product.name(),
-                    counted,
-                    window,
-                    cx,
-                );
-                let input = self.recount_input.clone();
-                cx.defer_in(window, move |_, window, cx| {
-                    input.update(cx, |input, cx| input.focus(window, cx));
-                });
-            }
-            None => self.edit_count(id, product.system_quantity(), window, cx),
-        }
-    }
-
-    /// Moves focus to the product's counted-quantity cell, pre-filled and
-    /// selected so typing a number overwrites it.
-    fn edit_count(
-        &mut self,
-        id: ProductId,
-        prefill: i64,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(session) = &self.session else {
-            return;
-        };
-        session.table.update(cx, |table, cx| {
-            table.delegate_mut().set_counting(Some(id));
-            cx.notify();
-        });
+        let prefill = product
+            .counted_quantity()
+            .unwrap_or(product.system_quantity());
         self.count_input.update(cx, |input, cx| {
-            input.set_value(prefill.to_string(), window, cx);
-            input.focus(window, cx);
-            input.select_all(window, cx);
+            input.set_value(prefill.to_string(), window, cx)
         });
-        cx.notify();
+        self.counting = Some(id);
+        count_dialog::open(
+            cx.entity().downgrade(),
+            self.count_input.clone(),
+            &product,
+            window,
+            cx,
+        );
+        // After the dialog has taken focus for itself.
+        let input = self.count_input.clone();
+        cx.defer_in(window, move |_, window, cx| {
+            input.update(cx, |input, cx| {
+                input.focus(window, cx);
+                input.select_all(window, cx);
+            });
+        });
     }
 
-    fn confirm_count(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(id) = self.counting(cx) else {
+    /// Enter or Lagre in the count dialog: saves the quantity, replacing any
+    /// earlier count.
+    pub(crate) fn save_count(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(id) = self.counting else {
             return;
         };
         let text = self.count_input.read(cx).value();
@@ -391,7 +357,9 @@ impl StocktakeView {
         let Some(quantity) = parse_quantity(&text) else {
             return;
         };
-        self.record_count(id, |_| quantity, window, cx);
+        self.counting = None;
+        window.close_dialog(cx);
+        self.record_count(id, quantity, window, cx);
     }
 
     /// A scanner types the barcode and then presses Enter. If the counter
@@ -414,7 +382,7 @@ impl StocktakeView {
             return false;
         };
         let name = stocktake.product(scanned).name().to_string();
-        if self.pending_recount.take().is_some() {
+        if self.counting.take().is_some() {
             window.close_dialog(cx);
         }
         self.finish_count(window, cx);
@@ -427,62 +395,27 @@ impl StocktakeView {
     }
 
     /// Back to the search, with its text selected so typing replaces it.
-    /// Abandons a count being entered, as clicking elsewhere does.
     fn focus_search(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.cancel_count(window, cx);
         self.search.update(cx, |search, cx| {
             search.focus(window, cx);
             search.select_all(window, cx);
         });
     }
 
-    fn cancel_count(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.counting(cx).is_none() {
-            return;
-        }
-        self.finish_count(window, cx);
-    }
-
-    pub(crate) fn apply_recount(
-        &mut self,
-        recount: Recount,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(id) = self.pending_recount else {
-            return;
-        };
-        let text = self.recount_input.read(cx).value();
-        if self.take_scan_from_quantity(&text, window, cx) {
-            return;
-        }
-        let Some(found) = parse_quantity(&text) else {
-            return;
-        };
-        self.pending_recount = None;
-        window.close_dialog(cx);
-        self.record_count(
-            id,
-            |counted| recount.apply(counted.unwrap_or(0), found),
-            window,
-            cx,
-        );
-    }
-
-    /// The recount dialog was dismissed without a choice: nothing is saved,
-    /// and the search is cleared so the next scan doesn't append to the last.
-    pub(crate) fn dismiss_recount(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.pending_recount.take().is_some() {
+    /// The count dialog was dismissed: nothing is saved, and the search is
+    /// cleared so the next scan doesn't append to the last.
+    pub(crate) fn dismiss_count(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.counting.take().is_some() {
             self.finish_count(window, cx);
         }
     }
 
-    /// Saves a product's new counted quantity, computed from its current
-    /// one, then shows where it landed and gets ready for the next scan.
+    /// Saves a product's counted quantity, then shows where it landed and
+    /// gets ready for the next scan.
     fn record_count(
         &mut self,
         id: ProductId,
-        quantity: impl FnOnce(Option<i64>) -> i64,
+        quantity: i64,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -490,7 +423,6 @@ impl StocktakeView {
             return;
         };
         session.stocktake.update(cx, |stocktake, cx| {
-            let quantity = quantity(stocktake.product(id).counted_quantity());
             stocktake.set_counted_quantity(id, quantity);
             cx.notify();
         });
@@ -519,12 +451,6 @@ impl StocktakeView {
 
     /// Ends the count and gets ready for the next scan.
     fn finish_count(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(session) = &self.session {
-            session.table.update(cx, |table, cx| {
-                table.delegate_mut().set_counting(None);
-                cx.notify();
-            });
-        }
         self.search.update(cx, |search, cx| {
             search.set_value("", window, cx);
             search.focus(window, cx);
@@ -622,8 +548,8 @@ impl StocktakeView {
     }
 
     /// The pane beside the sidebar: its bar, holding the search, then the
-    /// shell the screens' content goes in. For now the shell holds the stock
-    /// list, once one is imported.
+    /// shell the screens' content goes in, then the status bar. For now the
+    /// shell holds the stock list, once one is imported.
     fn render_main(&self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let session = self.session.as_ref();
         v_flex()
@@ -681,6 +607,53 @@ impl StocktakeView {
                         )
                     }),
             )
+            .child(self.render_status(cx))
+    }
+
+    /// Along the bottom of the main pane, whatever it shows: how much of the
+    /// stock list is counted at the leading edge, and whether every count is
+    /// on disk at the trailing edge. With no stock list there is nothing to
+    /// show, so it's empty.
+    fn render_status(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+        let progress = self.session.as_ref().map(|session| {
+            let stocktake = session.stocktake.read(cx);
+            let (counted, total) = (stocktake.counted_len(), stocktake.len());
+            // Rounded down, so 100 % means every product is counted.
+            let percent = counted * 100 / total.max(1);
+            h_flex()
+                .gap_2p5()
+                .child(
+                    div().w_48().child(
+                        Progress::new("progress")
+                            .xsmall()
+                            .color(cx.theme().muted_foreground)
+                            .value(percent as f32)
+                            .accessibility_label(format!("{counted} av {total} varer telt")),
+                    ),
+                )
+                .child(div().tabular_nums().child(format!("{percent} %")))
+        });
+        let theme = cx.theme();
+        let (icon, color, label) = match self.save_state {
+            SaveState::Saved => (IconName::Check, theme.muted_foreground, "Lagret"),
+            SaveState::Failed => (IconName::TriangleAlert, theme.danger, "Ikke lagret"),
+        };
+        StatusBar::new()
+            .flex_none()
+            // The same height empty as with the save state in it.
+            .h_8()
+            .pl(MAIN_PADDING)
+            .pr(Rems(1.5))
+            .when_some(progress, |this, progress| this.left(progress))
+            .when(self.session.is_some(), |this| {
+                this.right(
+                    h_flex()
+                        .gap_2()
+                        .text_color(color)
+                        .child(Icon::new(icon).xsmall())
+                        .child(label),
+                )
+            })
     }
 
     /// Where every scan lands, and where products are looked up by number or
@@ -753,9 +726,6 @@ impl Render for StocktakeView {
             .on_action(cx.listener(|this, _: &ExportStocktake, window, cx| {
                 this.export_stocktake(window, cx)
             }))
-            .on_action(
-                cx.listener(|this, _: &CancelCount, window, cx| this.cancel_count(window, cx)),
-            )
             .on_action(
                 cx.listener(|this, _: &FocusSearch, window, cx| this.focus_search(window, cx)),
             )
@@ -880,7 +850,7 @@ mod tests {
                 .collect::<Vec<_>>()
         };
 
-        // Scanning selects the product and pre-fills its counted quantity.
+        // Scanning opens the count dialog, pre-filled with the system quantity.
         assert!(counter.is_focused("search"));
         counter.input("7043811520629");
         counter.press("enter");
@@ -900,13 +870,14 @@ mod tests {
         counter.press("enter");
         assert_eq!(saved(), [Some(33), Some(47), None]);
 
-        // Scanning a counted product again adds to its count.
+        // Scanning a counted product again pre-fills its count, and the new
+        // quantity replaces it.
         counter.input("7043811520629");
         counter.press("enter");
-        assert!(counter.is_focused("recount"));
-        counter.input("3");
+        assert_eq!(counter.value("count").as_deref(), Some("47"));
+        counter.input("50");
         counter.press("enter");
-        assert!(counter.find("recount").is_none());
+        assert!(counter.find("count").is_none());
         assert!(counter.is_focused("search"));
         assert_eq!(saved(), [Some(33), Some(50), None]);
 
@@ -927,11 +898,11 @@ mod tests {
         counter.input("7043811520667");
         counter.press("enter");
         assert_eq!(saved(), [Some(33), Some(50), None]);
-        // That's Burano 120 Hvit, already counted, so it offers a recount.
-        // Escape leaves it, with the search cleared for the next scan.
-        assert!(counter.is_focused("recount"));
+        // That's Burano 120 Hvit. Escape leaves it, with the search cleared
+        // for the next scan.
+        assert_eq!(counter.value("count").as_deref(), Some("33"));
         counter.press("escape");
-        assert!(counter.find("recount").is_none());
+        assert!(counter.find("count").is_none());
         assert_eq!(counter.value("search").as_deref(), Some(""));
         assert_eq!(saved(), [Some(33), Some(50), None]);
 

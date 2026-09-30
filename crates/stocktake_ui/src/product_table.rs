@@ -1,20 +1,16 @@
-//! The stock list as a table, with the counted-quantity cell of the product
-//! being counted turned into an input.
+//! The stock list as a table.
 
 use std::{cmp::Ordering, time::Instant};
 
-use gpui_kit::component::{
-    input::{Input, InputState},
-    table::{Column, ColumnSort, TableDelegate, TableState},
-};
+use gpui_kit::component::table::{Column, ColumnSort, TableDelegate, TableState};
 use gpui_kit::{Div, Edges, Pixels, Stateful, px};
 use stocktake::{ProductId, Stocktake, compare_locations, natural_cmp};
 use ui::{Delta, flash, prelude::*};
 
-use crate::{COUNT_CELL_CONTEXT, count_status::CountStatus};
+use crate::count_status::CountStatus;
 
-/// How tall each row is: a 1.5rem line, which fits the quantity input, and
-/// [`ROW_PADDING`] above and below it. Table geometry is in pixels.
+/// How tall each row is: a 1.5rem line and [`ROW_PADDING`] above and below
+/// it. Table geometry is in pixels.
 pub const ROW_HEIGHT: Pixels = px(56.);
 
 /// Padding around a cell's content, 1rem, so columns are 2rem apart.
@@ -123,14 +119,11 @@ pub struct ProductTable {
     sort: Option<(ProductColumn, ColumnSort)>,
     /// How wide the table is, so the name column can take what's left.
     width: Pixels,
-    count_input: Entity<InputState>,
-    /// The product whose counted quantity is being entered.
-    counting: Option<ProductId>,
     last_counted: Option<LastCounted>,
 }
 
 impl ProductTable {
-    pub fn new(stocktake: Entity<Stocktake>, count_input: Entity<InputState>, cx: &App) -> Self {
+    pub fn new(stocktake: Entity<Stocktake>, cx: &App) -> Self {
         let matches = stocktake.read(cx).search("");
         Self {
             stocktake,
@@ -138,8 +131,6 @@ impl ProductTable {
             matches,
             sort: None,
             width: px(0.),
-            count_input,
-            counting: None,
             last_counted: None,
         }
     }
@@ -169,14 +160,6 @@ impl ProductTable {
 
     pub fn row_of(&self, id: ProductId) -> Option<usize> {
         self.rows.iter().position(|row| *row == id)
-    }
-
-    pub fn counting(&self) -> Option<ProductId> {
-        self.counting
-    }
-
-    pub fn set_counting(&mut self, counting: Option<ProductId>) {
-        self.counting = counting;
     }
 
     /// Flashes the row of the product that was just counted, so the counter
@@ -213,13 +196,6 @@ impl ProductTable {
     }
 
     fn render_counted_quantity(&self, id: ProductId, cx: &App) -> AnyElement {
-        if self.counting == Some(id) {
-            return div()
-                .key_context(COUNT_CELL_CONTEXT)
-                .w_full()
-                .child(Input::new(&self.count_input).id("count").xsmall())
-                .into_any_element();
-        }
         match self.stocktake.read(cx).product(id).counted_quantity() {
             Some(quantity) => quantity.to_string().into_any_element(),
             None => div()
