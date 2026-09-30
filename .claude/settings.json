@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|MultiEdit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=$(jq -r '.tool_response.filePath // .tool_input.file_path'); case \"$f\" in *.rs) rustfmt \"$f\" 2>/dev/null ;; esac; true",
+            "statusMessage": "Formatting Rust file"
+          }
+        ]
+      }
+    ]
+  }
+}
