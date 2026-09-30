@@ -93,6 +93,8 @@ pub struct StocktakeView {
     save_state: SaveState,
     /// Why the saved stocktake couldn't be resumed.
     resume_error: Option<SharedString>,
+    /// Whether the sidebar was hidden. Without a stocktake it's hidden
+    /// anyway, having nothing to act on; see [`Self::sidebar_shown`].
     sidebar_collapsed: bool,
     _subscriptions: Vec<Subscription>,
 }
@@ -197,10 +199,10 @@ impl StocktakeView {
             return;
         };
         // The table spans the main pane.
-        let sidebar = if self.sidebar_collapsed {
-            px(0.)
-        } else {
+        let sidebar = if self.sidebar_shown() {
             SIDEBAR_WIDTH
+        } else {
+            px(0.)
         };
         let width = window.viewport_size().width - sidebar;
         session.table.update(cx, |table, cx| {
@@ -241,10 +243,9 @@ impl StocktakeView {
             );
             return;
         }
-        // The search goes with the stocktake, so focus in it has nowhere to go.
-        if self.search.focus_handle(cx).contains_focused(window, cx) {
-            self.focus_handle.focus(window, cx);
-        }
+        // The search and the sidebar go with the stocktake, so focus in
+        // them has nowhere to go.
+        self.focus_handle.focus(window, cx);
         self.session = None;
         self.filter = Filter::default();
         self.counting = None;
@@ -509,6 +510,12 @@ impl StocktakeView {
 }
 
 impl StocktakeView {
+    /// Whether the sidebar is on screen: only with a stocktake, and only
+    /// while it isn't hidden.
+    fn sidebar_shown(&self) -> bool {
+        self.session.is_some() && !self.sidebar_collapsed
+    }
+
     /// The button that was pressed goes away with its bar and its twin
     /// appears in the other one. Focus on it would go with it, leaving
     /// nothing to take Tab or the shortcuts, so it returns to the window
@@ -533,7 +540,7 @@ impl StocktakeView {
     /// app's name, the filters and the way to start over. Each section holds
     /// its content as [`SidebarItem`]s.
     fn render_sidebar(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let toggle = Self::render_sidebar_toggle(true, cx);
+        let toggle = Self::render_sidebar_toggle(true, false, cx);
         let aisle_filter = self.render_aisle_filter(cx);
         Sidebar::new()
             .w(SIDEBAR_WIDTH)
@@ -627,22 +634,23 @@ impl StocktakeView {
     /// the status bar only comes with the stock list.
     fn render_main(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let session = self.session.as_ref();
+        let sidebar_shown = self.sidebar_shown();
         v_flex()
             .flex_1()
             .min_w_0()
             .h_full()
             .child(
                 // With the sidebar hidden, the traffic lights move into this
-                // bar, followed by the way back. With it shown, the search
-                // is inset by the pane's padding, in line with the table's
-                // content below.
+                // bar, followed by the way back, disabled without a
+                // stocktake. With it shown, the search is inset by the
+                // pane's padding, in line with the table's content below.
                 WindowBar::new()
-                    .traffic_lights(self.sidebar_collapsed)
+                    .traffic_lights(!sidebar_shown)
                     .h(self.bar_height())
                     .gap_4()
-                    .when(!self.sidebar_collapsed, |this| this.px(MAIN_PADDING))
-                    .when(self.sidebar_collapsed, |this| {
-                        this.child(Self::render_sidebar_toggle(false, cx))
+                    .when(sidebar_shown, |this| this.px(MAIN_PADDING))
+                    .when(!sidebar_shown, |this| {
+                        this.child(Self::render_sidebar_toggle(false, session.is_none(), cx))
                     })
                     .when(session.is_some(), |this| {
                         // A press here is the field's, not the start of a
@@ -695,10 +703,10 @@ impl StocktakeView {
     /// Hidden, the bar keeps its height, so the search stays level with the
     /// traffic lights.
     fn bar_height(&self) -> DefiniteLength {
-        if self.sidebar_collapsed {
-            WindowBar::HEIGHT.into()
-        } else {
+        if self.sidebar_shown() {
             (SEARCH_HEIGHT + SEARCH_PADDING * 2.).into()
+        } else {
+            WindowBar::HEIGHT.into()
         }
     }
 
@@ -780,8 +788,14 @@ impl StocktakeView {
     }
 
     /// Hides the sidebar from its own bar, or shows it again from the main
-    /// pane's bar once it's hidden.
-    fn render_sidebar_toggle(expanded: bool, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+    /// pane's bar once it's hidden. Disabled while there's no sidebar to show,
+    /// its tooltip then saying what brings one; the shortcut is left out, as
+    /// it does nothing either.
+    fn render_sidebar_toggle(
+        expanded: bool,
+        disabled: bool,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement + use<> {
         let (id, tooltip) = if expanded {
             ("hide-sidebar", "Skjul sidepanel")
         } else {
@@ -795,13 +809,20 @@ impl StocktakeView {
                     .ghost()
                     .small()
                     .icon(IconName::PanelLeft)
+                    .disabled(disabled)
                     // Quieter than the content at rest; hover brings it up.
                     .text_color(cx.theme().muted_foreground)
                     // gpui-kit would recolor a border for focus; this draws
                     // a faint ring around the button instead.
                     .focus_ring(false)
                     .subtle_focus_ring(cx)
-                    .tooltip_with_action(tooltip, &ToggleSidebar, Some(CONTEXT))
+                    .map(|button| {
+                        if disabled {
+                            button.tooltip("Åpne en fil for å vise sidepanelet")
+                        } else {
+                            button.tooltip_with_action(tooltip, &ToggleSidebar, Some(CONTEXT))
+                        }
+                    })
                     .on_click(cx.listener(|this, _, window, cx| this.toggle_sidebar(window, cx))),
             )
     }
@@ -831,9 +852,13 @@ impl Render for StocktakeView {
             .on_action(
                 cx.listener(|this, _: &FocusNext, window, cx| this.move_focus(true, window, cx)),
             )
-            .on_action(
-                cx.listener(|this, _: &ToggleSidebar, window, cx| this.toggle_sidebar(window, cx)),
-            )
+            // Without a stocktake there's no sidebar, so the shortcut and
+            // the menu item are disabled.
+            .when(self.session.is_some(), |this| {
+                this.on_action(cx.listener(|this, _: &ToggleSidebar, window, cx| {
+                    this.toggle_sidebar(window, cx)
+                }))
+            })
             .on_action(
                 cx.listener(|this, _: &FocusPrevious, window, cx| {
                     this.move_focus(false, window, cx)
@@ -848,7 +873,7 @@ impl Render for StocktakeView {
             .child(
                 h_flex()
                     .size_full()
-                    .when(!self.sidebar_collapsed, |this| {
+                    .when(self.sidebar_shown(), |this| {
                         this.child(self.render_sidebar(cx))
                     })
                     .child(self.render_main(cx)),
@@ -911,14 +936,34 @@ mod tests {
             gpui_kit::init(cx);
             crate::init(cx);
         });
+        let mut view = None;
         let window = cx.open_window(size(px(1040.), px(720.)), |window, cx| {
-            let view = cx.new(|cx| StocktakeView::with_store_path(store_path, window, cx));
-            Root::new(view, window, cx)
+            let stocktake_view =
+                cx.new(|cx| StocktakeView::with_store_path(store_path, window, cx));
+            view = Some(stocktake_view.clone());
+            Root::new(stocktake_view, window, cx)
         });
+        let view = view.unwrap();
         let mut counter = Counter {
             cx,
             window: window.into(),
         };
+
+        // Without a stocktake there's no sidebar, and no way to show it.
+        assert!(counter.find("hide-sidebar").is_none());
+        counter.click("show-sidebar");
+        assert!(counter.find("hide-sidebar").is_none());
+        counter.press("cmd-b");
+        assert!(counter.find("hide-sidebar").is_none());
+
+        // With one, the sidebar comes, and the window keeps focus.
+        counter.step(|window, cx| {
+            view.update(cx, |view, cx| {
+                let products = vec![stocktake::Product::new("1", "Vare", "A1", "", 5)];
+                view.start_session(Stocktake::new(products), window, cx);
+                view.focus_handle.focus(window, cx);
+            })
+        });
 
         // Each state offers only the way to the other: hiding from the
         // sidebar's bar, showing from the main pane's.
