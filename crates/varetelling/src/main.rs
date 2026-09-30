@@ -106,6 +106,9 @@ fn set_theme_colors(cx: &mut App) {
         dark.colors.sidebar = Some(DARK_SIDEBAR.into());
         dark.colors.ring = Some(FOCUS_RING.into());
         dark.colors.muted_foreground = Some(DARK_MUTED_FOREGROUND.into());
+        // Tooltips take the popover color; in dark mode they share the
+        // muted fill instead of gpui-kit's near-black.
+        dark.colors.popover = dark.colors.muted.clone();
         clear_table_colors(&mut dark);
         theme.dark_theme = Rc::new(dark);
     });
