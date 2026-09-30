@@ -53,6 +53,9 @@ pub struct TaskList {
     tasks: Vec<Task>,
     next_id: u64,
     filter: Filter,
+    /// Whether the theme tracks the system appearance. Choosing a theme with
+    /// the toggle turns this off for the rest of the session.
+    follow_system_theme: bool,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -69,12 +72,20 @@ impl TaskList {
         });
         input.update(cx, |state, cx| state.focus(window, cx));
 
+        Theme::sync_system_appearance(Some(window), cx);
+        let appearance = cx.observe_window_appearance(window, |this, window, cx| {
+            if this.follow_system_theme {
+                Theme::sync_system_appearance(Some(window), cx);
+            }
+        });
+
         let mut list = Self {
             input,
             tasks: Vec::new(),
             next_id: 0,
             filter: Filter::All,
-            _subscriptions: vec![subscription],
+            follow_system_theme: true,
+            _subscriptions: vec![subscription, appearance],
         };
         for (title, done) in [
             ("Read the GPUI Kit design guides", true),
@@ -155,14 +166,14 @@ impl TaskList {
         });
     }
 
-    fn toggle_theme(window: &mut Window, cx: &mut gpui_kit::App) {
+    fn toggle_theme(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let mode = if cx.theme().is_dark() {
             ThemeMode::Light
         } else {
             ThemeMode::Dark
         };
+        self.follow_system_theme = false;
         Theme::change(mode, Some(window), cx);
-        window.refresh();
     }
 
     fn render_header(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -198,7 +209,7 @@ impl TaskList {
                     } else {
                         "Switch to dark mode"
                     })
-                    .on_click(|_, window, cx| Self::toggle_theme(window, cx)),
+                    .on_click(cx.listener(|this, _, window, cx| this.toggle_theme(window, cx))),
             )
     }
 
