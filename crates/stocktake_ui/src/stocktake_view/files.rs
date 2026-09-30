@@ -1,11 +1,11 @@
-//! Getting stock lists in and results out: importing (chosen or
-//! dropped), and exporting to Excel.
+//! Getting stock lists in and results out: importing (chosen, dropped or
+//! opened again from the recent ones), and exporting to Excel.
 
 use std::path::{Path, PathBuf};
 
 use gpui_kit::component::{WindowExt as _, button::ButtonVariant, notification::Notification};
 use gpui_kit::{ExternalPaths, PathPromptOptions, WeakEntity};
-use stocktake::{Stocktake, export, stock_list};
+use stocktake::{Stocktake, export, recent, stock_list};
 use ui::prelude::*;
 
 use super::StocktakeView;
@@ -15,8 +15,8 @@ use super::StocktakeView;
 pub(super) enum ImportSource {
     /// Ask with the system's file dialog.
     Choose,
-    /// A file dropped on the window.
-    Dropped(PathBuf),
+    /// A file dropped on the window, or opened again from the recent ones.
+    File(PathBuf),
 }
 
 impl StocktakeView {
@@ -43,10 +43,10 @@ impl StocktakeView {
             "{counted} av {total} varer er telt. En ny vareliste starter en ny varetelling, og tellingen som pågår forkastes."
         )
         .into();
-        // Choosing a file needs more input; a dropped file doesn't.
+        // Choosing a file needs more input; a given file doesn't.
         let ok_text = match source {
             ImportSource::Choose => "Forkast og importer…",
-            ImportSource::Dropped(_) => "Forkast og importer",
+            ImportSource::File(_) => "Forkast og importer",
         };
         let view = cx.entity().downgrade();
         window.open_alert_dialog(cx, move |dialog, _, _| {
@@ -76,7 +76,7 @@ impl StocktakeView {
         cx: &mut Context<Self>,
     ) {
         let path = match source {
-            ImportSource::Dropped(path) => {
+            ImportSource::File(path) => {
                 Self::spawn_read(cx.entity().downgrade(), path, window, cx);
                 return;
             }
@@ -102,9 +102,13 @@ impl StocktakeView {
         .detach();
     }
 
-    /// Reads the stock list off the UI thread, then starts the stocktake.
+    /// Reads the stock list off the UI thread, then starts the stocktake and
+    /// remembers the file among the recent ones.
     fn spawn_read(this: WeakEntity<Self>, path: PathBuf, window: &mut Window, cx: &mut App) {
-        let products = cx.background_spawn(async move { stock_list::read(&path) });
+        let products = cx.background_spawn({
+            let path = path.clone();
+            async move { stock_list::read(&path) }
+        });
         window
             .spawn(cx, async move |cx| {
                 let products = products.await;
@@ -112,6 +116,8 @@ impl StocktakeView {
                     Ok(products) => {
                         this.start_session(Stocktake::new(products), window, cx);
                         this.save(window, cx);
+                        this.recent.add(path);
+                        this.save_recent();
                     }
                     Err(error) => {
                         let description: SharedString = error.to_string().into();
@@ -136,12 +142,42 @@ impl StocktakeView {
     ) {
         let spreadsheet = paths.paths().iter().find(|path| is_spreadsheet(path));
         match spreadsheet {
-            Some(path) => self.import_stock_list(ImportSource::Dropped(path.clone()), window, cx),
+            Some(path) => self.import_stock_list(ImportSource::File(path.clone()), window, cx),
             None => window.push_notification(
                 Notification::warning("Slipp vareliste-eksporten fra MultiCase, en .xlsx-fil."),
                 cx,
             ),
         }
+    }
+
+    /// Imports a stock list from the recent ones. One that has been moved or
+    /// deleted since is dropped from the list instead.
+    pub(super) fn open_recent(
+        &mut self,
+        path: PathBuf,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if path.is_file() {
+            self.import_stock_list(ImportSource::File(path), window, cx);
+            return;
+        }
+        self.recent.remove(&path);
+        self.save_recent();
+        cx.notify();
+        let title: SharedString = format!("Fant ikke {}", file_name(&path)).into();
+        window.open_alert_dialog(cx, move |dialog, _, _| {
+            dialog
+                .title(title.clone())
+                .description("Filen er flyttet eller slettet, og er fjernet fra nylig åpnet.")
+                .ok_text("OK")
+        });
+    }
+
+    /// Losing the recent stock lists costs a trip to the file dialog, not
+    /// any counts, so a failed save isn't worth interrupting the counter.
+    fn save_recent(&self) {
+        recent::save(&self.recent_path, &self.recent).ok();
     }
 
     pub(super) fn export_stocktake(&mut self, window: &mut Window, cx: &mut Context<Self>) {

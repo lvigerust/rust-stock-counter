@@ -5,6 +5,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use serde::{Serialize, de::DeserializeOwned};
+
 use crate::Stocktake;
 
 /// Where the stocktake in progress lives. Only one exists at a time.
@@ -17,6 +19,16 @@ pub fn default_path() -> PathBuf {
 
 /// Loads the saved stocktake, `None` when there isn't one.
 pub fn load(path: &Path) -> io::Result<Option<Stocktake>> {
+    read_json(path)
+}
+
+/// Saves the stocktake. A crash mid-write leaves the previous save intact.
+pub fn save(path: &Path, stocktake: &Stocktake) -> io::Result<()> {
+    write_json(path, stocktake)
+}
+
+/// Reads a value saved with [`write_json`], `None` when there isn't one.
+pub(crate) fn read_json<T: DeserializeOwned>(path: &Path) -> io::Result<Option<T>> {
     match fs::read(path) {
         Ok(bytes) => serde_json::from_slice(&bytes)
             .map(Some)
@@ -26,18 +38,26 @@ pub fn load(path: &Path) -> io::Result<Option<Stocktake>> {
     }
 }
 
-/// Saves by writing a temporary file and renaming it over the old one, so a
-/// crash mid-write leaves the previous save intact.
-pub fn save(path: &Path, stocktake: &Stocktake) -> io::Result<()> {
+/// Writes a value as JSON to a temporary file, then renames it over the old
+/// one, so a crash mid-write leaves the previous save intact.
+pub(crate) fn write_json<T: Serialize>(path: &Path, value: &T) -> io::Result<()> {
     if let Some(dir) = path.parent() {
         fs::create_dir_all(dir)?;
     }
     let temporary = path.with_extension("json.tmp");
     fs::write(
         &temporary,
-        serde_json::to_vec(stocktake).map_err(io::Error::other)?,
+        serde_json::to_vec(value).map_err(io::Error::other)?,
     )?;
     fs::rename(&temporary, path)
+}
+
+/// Deletes the saved stocktake, so the next start has none to resume.
+pub fn clear(path: &Path) -> io::Result<()> {
+    match fs::remove_file(path) {
+        Err(error) if error.kind() != io::ErrorKind::NotFound => Err(error),
+        _ => Ok(()),
+    }
 }
 
 #[cfg(test)]
@@ -57,6 +77,11 @@ mod tests {
         save(&path, &stocktake).unwrap();
 
         assert_eq!(load(&path).unwrap(), Some(stocktake));
+
+        clear(&path).unwrap();
+        assert_eq!(load(&path).unwrap(), None);
+        // Clearing when there's nothing saved isn't an error.
+        clear(&path).unwrap();
         fs::remove_dir_all(dir).ok();
     }
 }

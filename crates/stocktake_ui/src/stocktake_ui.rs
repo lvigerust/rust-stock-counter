@@ -11,6 +11,7 @@
 //! | `stocktake_view` | The workflow: session, focus, commands, the layout     |
 //! | `product_table`  | How the stock list renders as rows                     |
 //! | `count_dialog`   | Counting one product                                   |
+//! | `welcome`        | The screen before any stock list is imported           |
 //! | `count_status`   | A product's counted/uncounted marker                   |
 //! | `quantity`       | Parsing and entering a quantity                        |
 
@@ -19,6 +20,7 @@ mod count_status;
 mod product_table;
 mod quantity;
 mod stocktake_view;
+mod welcome;
 
 use gpui_kit::{App, KeyBinding, actions};
 

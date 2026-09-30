@@ -4,6 +4,7 @@
 //! tests in seconds and can't accidentally depend on how things look.
 
 pub mod export;
+pub mod recent;
 pub mod stock_list;
 pub mod store;
 

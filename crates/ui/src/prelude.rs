@@ -12,4 +12,4 @@ pub use gpui_kit::{
 pub use gpui_kit::assets::IconName;
 pub use gpui_kit::component::{ActiveTheme, Disableable, Icon, Sizable, StyledExt, h_flex, v_flex};
 
-pub use crate::{StyledFocus, StyledTypography};
+pub use crate::{Appear, StyledFocus, StyledTypography};

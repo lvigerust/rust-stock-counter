@@ -2,18 +2,20 @@ use gpui_kit::{MouseButton, Pixels, StyleRefinement, TitlebarOptions, point, px}
 
 use crate::prelude::*;
 
-/// Height of the [`WindowBar`]: a row of small controls (1.5rem) with 1rem
-/// of padding above and below, the same padding the sidebar's sections use.
-const HEIGHT: Pixels = px(56.);
+/// The bar's horizontal padding, the same 1rem the sidebar's sections use.
+const PADDING: Pixels = px(16.);
 
 /// Where the window's traffic lights sit, measured from the top-left corner.
-/// The inset matches the bar's horizontal padding, and the vertical offset
-/// centers the 14px buttons in the bar's row of controls.
-const TRAFFIC_LIGHTS: (Pixels, Pixels) = (px(16.), px(21.));
+/// The inset is the bar's padding plus the 6px an icon button's glyph sits
+/// inside it (a 14px icon centered in 24px, and the glyph's own margin), so
+/// the lights line up with what the bar's buttons draw rather than their
+/// bounds. The vertical offset centers the 14px buttons in the bar's row of
+/// controls.
+const TRAFFIC_LIGHTS: (Pixels, Pixels) = (px(22.), px(21.));
 
 /// How far the bar's content starts from the leading edge, so it clears the
 /// traffic lights with the same gap it keeps between its own groups.
-const TRAFFIC_LIGHTS_CLEARANCE: Pixels = px(88.);
+const TRAFFIC_LIGHTS_CLEARANCE: Pixels = px(94.);
 
 /// The band at the top of the window that the traffic lights sit in, so the
 /// app's own controls share a row with them instead of sitting under a
@@ -36,6 +38,10 @@ pub struct WindowBar {
 }
 
 impl WindowBar {
+    /// The bar's height: a row of small controls (1.5rem) with 1rem of
+    /// padding above and below, the same padding the sidebar's sections use.
+    pub const HEIGHT: Pixels = px(56.);
+
     pub fn new() -> Self {
         Self {
             traffic_lights: true,
@@ -95,15 +101,15 @@ impl RenderOnce for WindowBar {
         {
             TRAFFIC_LIGHTS_CLEARANCE
         } else {
-            TRAFFIC_LIGHTS.0
+            PADDING
         };
 
         h_flex()
             .id("window-bar")
             .flex_none()
-            .h(HEIGHT)
+            .h(Self::HEIGHT)
             .pl(leading)
-            .pr(TRAFFIC_LIGHTS.0)
+            .pr(PADDING)
             .on_mouse_down(
                 MouseButton::Left,
                 window.listener_for(&state, |state, _, _, _| state.pressed = true),

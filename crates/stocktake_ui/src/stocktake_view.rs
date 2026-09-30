@@ -10,7 +10,7 @@
 
 mod files;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use gpui_kit::component::{
     FocusableExt as _, Size, Theme, WindowExt as _,
@@ -23,9 +23,14 @@ use gpui_kit::component::{
     table::{DataTable, TableEvent, TableState},
 };
 use gpui_kit::{
-    ExternalPaths, FocusHandle, Focusable, MouseButton, Pixels, Rems, Subscription, px,
+    DefiniteLength, ExternalPaths, FocusHandle, Focusable, MouseButton, Pixels, Rems, Subscription,
+    px,
 };
-use stocktake::{Lookup, ProductId, Stocktake, store};
+use stocktake::{
+    Lookup, ProductId, Stocktake,
+    recent::{self, RecentStockLists},
+    store,
+};
 use ui::{SidebarHeading, SidebarItem, WindowBar, prelude::*};
 
 use crate::{
@@ -33,6 +38,7 @@ use crate::{
     ToggleSidebar, count_dialog,
     product_table::{LastCounted, ProductTable, ROW_HEIGHT},
     quantity::{parse_quantity, quantity_input},
+    welcome::Welcome,
 };
 use files::ImportSource;
 
@@ -69,12 +75,18 @@ pub struct StocktakeView {
     focus_handle: FocusHandle,
     store_path: PathBuf,
     session: Option<Session>,
+    /// Where [`Self::recent`] is saved.
+    recent_path: PathBuf,
+    /// The stock lists imported before, offered on the welcome.
+    recent: RecentStockLists,
     search: Entity<InputState>,
     /// The quantity field of the count dialog.
     count_input: Entity<InputState>,
     /// The product the count dialog is open for.
     counting: Option<ProductId>,
     save_state: SaveState,
+    /// Why the saved stocktake couldn't be resumed.
+    resume_error: Option<SharedString>,
     sidebar_collapsed: bool,
     _subscriptions: Vec<Subscription>,
 }
@@ -114,19 +126,31 @@ impl StocktakeView {
 
         let focus_handle = cx.focus_handle();
         focus_handle.focus(window, cx);
+        let recent_path = recent::path_beside(&store_path);
+        // Without them the welcome offers only the file dialog, which is
+        // no reason to stop the counter.
+        let recent = recent::load(&recent_path).unwrap_or_default();
         let mut this = Self {
             focus_handle,
             store_path,
             session: None,
+            recent_path,
+            recent,
             search,
             count_input,
             counting: None,
             save_state: SaveState::Saved,
+            resume_error: None,
             sidebar_collapsed: false,
             _subscriptions: subscriptions,
         };
-        if let Ok(Some(stocktake)) = store::load(&this.store_path) {
-            this.start_session(stocktake, window, cx);
+        match store::load(&this.store_path) {
+            Ok(Some(stocktake)) => this.start_session(stocktake, window, cx),
+            Ok(None) => {}
+            Err(error) => {
+                this.resume_error =
+                    Some(format!("Den lagrede varetellingen kunne ikke åpnes: {error}").into())
+            }
         }
         this
     }
@@ -150,6 +174,7 @@ impl StocktakeView {
             _table_events: table_events,
         });
         self.fit_columns(window, cx);
+        self.resume_error = None;
         self.search.update(cx, |search, cx| {
             search.set_value("", window, cx);
             search.focus(window, cx);
@@ -195,6 +220,28 @@ impl StocktakeView {
                 SaveState::Failed
             }
         };
+        cx.notify();
+    }
+
+    /// Forgets the stocktake in progress, on screen and on disk, back to how
+    /// the app first opens. For testing: nothing asks before the counts go.
+    fn clear_stocktake(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Err(error) = store::clear(&self.store_path) {
+            window.push_notification(
+                Notification::error(format!("Tellingen kunne ikke slettes: {error}")),
+                cx,
+            );
+            return;
+        }
+        // The search goes with the stocktake, so focus in it has nowhere to go.
+        if self.search.focus_handle(cx).contains_focused(window, cx) {
+            self.focus_handle.focus(window, cx);
+        }
+        self.session = None;
+        self.counting = None;
+        self.save_state = SaveState::Saved;
+        self.search
+            .update(cx, |search, cx| search.set_value("", window, cx));
         cx.notify();
     }
 
@@ -467,7 +514,7 @@ impl StocktakeView {
     /// top bar with the traffic lights and the button that hides the
     /// sidebar, a header, a body that takes the remaining height, and a
     /// footer. Each is padded by 1rem, and holds its content as
-    /// [`SidebarItem`]s. A rule sets the top bar apart.
+    /// [`SidebarItem`]s. Rules set the top bar and the footer apart.
     fn render_sidebar(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let toggle = Self::render_sidebar_toggle(true, cx);
         let theme = cx.theme();
@@ -490,7 +537,27 @@ impl StocktakeView {
                     .p_4()
                     .child(SidebarHeading::new("Tellinger")),
             )
-            .child(v_flex().flex_none().p_4())
+            .child(Separator::horizontal().color(theme.sidebar_border))
+            .child(
+                v_flex()
+                    .flex_none()
+                    .p_4()
+                    .child(self.render_clear_button(cx)),
+            )
+    }
+
+    /// Starts over without the stocktake in progress. For testing.
+    fn render_clear_button(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
+        SidebarItem::new()
+            .on_click(
+                "clear-stocktake",
+                cx.listener(|this, _, window, cx| this.clear_stocktake(window, cx)),
+            )
+            .disabled(self.session.is_none())
+            .text_sm()
+            .text_color(cx.theme().muted_foreground)
+            .child(Icon::new(IconName::Trash).small())
+            .child(div().min_w_0().truncate().child("Tøm varetelling"))
     }
 
     /// The app's name.
@@ -508,8 +575,9 @@ impl StocktakeView {
     }
 
     /// The pane beside the sidebar: its bar, holding the search, then the
-    /// shell the screens' content goes in, then the status bar. For now the
-    /// shell holds the stock list, once one is imported.
+    /// shell the screens' content goes in, then the status bar. The shell
+    /// holds the stock list once one is imported, and the welcome before;
+    /// the status bar only comes with the stock list.
     fn render_main(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let session = self.session.as_ref();
         v_flex()
@@ -523,13 +591,7 @@ impl StocktakeView {
                 // content below.
                 WindowBar::new()
                     .traffic_lights(self.sidebar_collapsed)
-                    // With the sidebar shown, taller than its bar: the search
-                    // gets [`SEARCH_PADDING`] above and below. Hidden, the
-                    // bar keeps its height, so the search stays level with
-                    // the traffic lights.
-                    .when(!self.sidebar_collapsed, |this| {
-                        this.h(SEARCH_HEIGHT + SEARCH_PADDING * 2.)
-                    })
+                    .h(self.bar_height())
                     .gap_4()
                     .when(!self.sidebar_collapsed, |this| this.px(MAIN_PADDING))
                     .when(self.sidebar_collapsed, |this| {
@@ -551,69 +613,102 @@ impl StocktakeView {
                 // The table runs to the pane's edges, so it shows as many
                 // rows as fit and its scrollbar sits against the window. Its
                 // outer columns inset their content by the pane's padding.
-                v_flex()
-                    .flex_1()
-                    .min_h_0()
-                    .when_some(session, |this, session| {
-                        // The rows set their own height; the text stays small.
-                        this.child(
-                            div().flex_1().min_h_0().text_sm().child(
-                                DataTable::new(&session.table)
-                                    .with_size(Size::Size(ROW_HEIGHT))
-                                    // No frame: it would end at the window's
-                                    // edge. The rows' own lines separate them.
-                                    .bordered(false),
-                            ),
-                        )
-                    }),
+                v_flex().flex_1().min_h_0().map(|this| match session {
+                    // The rows set their own height; the text stays small.
+                    Some(session) => this.child(
+                        div().flex_1().min_h_0().text_sm().child(
+                            DataTable::new(&session.table)
+                                .with_size(Size::Size(ROW_HEIGHT))
+                                // No frame: it would end at the window's
+                                // edge. The rows' own lines separate them.
+                                .bordered(false),
+                        ),
+                    ),
+                    // Padded at the bottom as deep as the bar is at the top,
+                    // so the welcome centers on the whole pane.
+                    None => this.child(
+                        div().size_full().pb(self.bar_height()).child(
+                            Welcome::new()
+                                .resume_error(self.resume_error.clone())
+                                .recent(
+                                    self.recent.iter().map(Path::to_path_buf),
+                                    cx.listener(|this, path: &PathBuf, window, cx| {
+                                        this.open_recent(path.clone(), window, cx)
+                                    }),
+                                ),
+                        ),
+                    ),
+                }),
             )
-            .child(self.render_status(cx))
+            .children(session.map(|session| Self::render_status(session, self.save_state, cx)))
     }
 
-    /// Along the bottom of the main pane, whatever it shows: how much of the
-    /// stock list is counted at the leading edge, and whether every count is
-    /// on disk at the trailing edge. With no stock list there is nothing to
-    /// show, so it's empty.
-    fn render_status(&self, cx: &mut Context<Self>) -> impl IntoElement + use<> {
-        let progress = self.session.as_ref().map(|session| {
-            let stocktake = session.stocktake.read(cx);
-            let (counted, total) = (stocktake.counted_len(), stocktake.len());
-            // Rounded down, so 100 % means every product is counted.
-            let percent = counted * 100 / total.max(1);
-            h_flex()
-                .gap_2p5()
-                .child(
-                    div().w_48().child(
-                        Progress::new("progress")
-                            .xsmall()
-                            .color(cx.theme().muted_foreground)
-                            .value(percent as f32)
-                            .accessibility_label(format!("{counted} av {total} varer telt")),
-                    ),
-                )
-                .child(div().tabular_nums().child(format!("{percent} %")))
-        });
+    /// The height of the main pane's bar. With the sidebar shown, taller than
+    /// the sidebar's bar: the search gets [`SEARCH_PADDING`] above and below.
+    /// Hidden, the bar keeps its height, so the search stays level with the
+    /// traffic lights.
+    fn bar_height(&self) -> DefiniteLength {
+        if self.sidebar_collapsed {
+            WindowBar::HEIGHT.into()
+        } else {
+            (SEARCH_HEIGHT + SEARCH_PADDING * 2.).into()
+        }
+    }
+
+    /// Along the bottom of the main pane, while there's a stock list: how
+    /// much of it is counted at the leading edge, and whether every count is
+    /// on disk at the trailing edge.
+    fn render_status(
+        session: &Session,
+        save_state: SaveState,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement + use<> {
+        let stocktake = session.stocktake.read(cx);
+        let (counted, total) = (stocktake.counted_len(), stocktake.len());
+        // Rounded down, so 100 % means every product is counted.
+        let percent = counted * 100 / total.max(1);
         let theme = cx.theme();
-        let (icon, color, label) = match self.save_state {
+        let (icon, color, label) = match save_state {
             SaveState::Saved => (IconName::Check, theme.muted_foreground, "Lagret"),
             SaveState::Failed => (IconName::TriangleAlert, theme.danger, "Ikke lagret"),
         };
         StatusBar::new()
             .flex_none()
-            // The same height empty as with the save state in it.
             .h_8()
             .pl(MAIN_PADDING)
             .pr(Rems(1.5))
-            .when_some(progress, |this, progress| this.left(progress))
-            .when(self.session.is_some(), |this| {
-                this.right(
-                    h_flex()
-                        .gap_2()
-                        .text_color(color)
-                        .child(Icon::new(icon).xsmall())
-                        .child(label),
-                )
-            })
+            .left(
+                h_flex()
+                    .gap_4()
+                    .child(
+                        div()
+                            .tabular_nums()
+                            .child(format!("{counted} / {total} varer telt")),
+                    )
+                    .child(
+                        h_flex()
+                            .gap_2p5()
+                            .child(
+                                div().w_56().child(
+                                    Progress::new("progress")
+                                        .xsmall()
+                                        .color(theme.muted_foreground)
+                                        .value(percent as f32)
+                                        .accessibility_label(format!(
+                                            "{counted} av {total} varer telt"
+                                        )),
+                                ),
+                            )
+                            .child(div().tabular_nums().child(format!("{percent} %"))),
+                    ),
+            )
+            .right(
+                h_flex()
+                    .gap_2()
+                    .text_color(color)
+                    .child(Icon::new(icon).xsmall())
+                    .child(label),
+            )
     }
 
     /// Where every scan lands, and where products are looked up by number or

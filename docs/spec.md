@@ -40,6 +40,7 @@ Today the stocktake is done in a spreadsheet on a laptop with a USB barcode scan
 - After a count is saved, the table scrolls to the product and its row briefly highlights, so the counter sees where the count landed.
 - When every product is counted, a summary says how many products have a difference, next to an export button.
 - A stock list can also be imported by dropping the `.xlsx` file on the window.
+- Before a stock list is imported, the welcome lists the last five imported, newest first, each with its folder. Opening one imports it again, with the same warning if a stocktake is in progress. A file that has been moved or deleted is removed from the list.
 - The window opens full screen. Columns can be sorted; uncounted products stay at the bottom of the counted-quantity and difference columns whichever way they're sorted.
 - One search field above the table, plus a progress indicator (e.g. 31/43 counted).
 
