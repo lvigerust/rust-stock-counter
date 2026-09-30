@@ -1,0 +1,17 @@
+// Debug configurations. Start with `debugger: start` (f4).
+// See https://zed.dev/docs/debugger
+[
+  {
+    "label": "Debug gpui_kit_demo",
+    "adapter": "CodeLLDB",
+    "request": "launch",
+    // Zed finds the binary from the `cargo build` output.
+    "build": {
+      "command": "cargo",
+      "args": ["build"]
+    },
+    "cwd": "$ZED_WORKTREE_ROOT",
+    // Required for CodeLLDB to show Rust values properly.
+    "sourceLanguages": ["rust"]
+  }
+]

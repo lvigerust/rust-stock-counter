@@ -1,0 +1,47 @@
+// Project tasks. Run with `task: spawn` (alt-shift-t); rerun the last one with `task: rerun` (alt-t).
+// See https://zed.dev/docs/tasks
+[
+  {
+    "label": "cargo run",
+    "command": "cargo run",
+    "reveal": "no_focus"
+  },
+  {
+    "label": "cargo run --release",
+    "command": "cargo run --release",
+    "reveal": "no_focus"
+  },
+  {
+    "label": "cargo check",
+    "command": "cargo check --all-targets",
+    "reveal": "no_focus",
+    "hide": "on_success"
+  },
+  {
+    "label": "cargo clippy",
+    "command": "cargo clippy --all-targets -- -D warnings",
+    "reveal": "no_focus"
+  },
+  {
+    "label": "cargo fmt",
+    "command": "cargo fmt",
+    "reveal": "never",
+    "hide": "on_success"
+  },
+  {
+    "label": "cargo test",
+    "command": "cargo test",
+    "reveal": "no_focus"
+  },
+  {
+    "label": "cargo update",
+    "command": "cargo update",
+    "reveal": "no_focus"
+  },
+  {
+    "label": "cargo clean",
+    "command": "cargo clean",
+    "reveal": "never",
+    "hide": "on_success"
+  }
+]
