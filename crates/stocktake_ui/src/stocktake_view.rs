@@ -712,7 +712,7 @@ impl Focusable for StocktakeView {
 }
 
 impl Render for StocktakeView {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         div()
             .size_full()
             .key_context(CONTEXT)
