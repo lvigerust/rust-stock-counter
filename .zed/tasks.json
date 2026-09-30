@@ -13,13 +13,13 @@
   },
   {
     "label": "cargo check",
-    "command": "cargo check --all-targets",
+    "command": "cargo check --workspace --all-targets",
     "reveal": "no_focus",
     "hide": "on_success"
   },
   {
     "label": "cargo clippy",
-    "command": "cargo clippy --all-targets -- -D warnings",
+    "command": "cargo clippy --workspace --all-targets -- -D warnings",
     "reveal": "no_focus"
   },
   {
@@ -30,7 +30,7 @@
   },
   {
     "label": "cargo test",
-    "command": "cargo test",
+    "command": "cargo test --workspace",
     "reveal": "no_focus"
   },
   {

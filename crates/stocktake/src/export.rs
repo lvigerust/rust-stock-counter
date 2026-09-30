@@ -4,7 +4,7 @@ use std::path::Path;
 
 use rust_xlsxwriter::{Color, Format, FormatBorder, Workbook, XlsxError};
 
-use crate::stocktake::Stocktake;
+use crate::Stocktake;
 
 /// Written in place of a counted quantity for uncounted products.
 pub const UNCOUNTED_MARK: &str = "Ikke telt";
@@ -62,7 +62,7 @@ pub fn write(stocktake: &Stocktake, path: &Path) -> Result<(), XlsxError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::stocktake::{Product, Stocktake};
+    use crate::{Product, Stocktake};
 
     #[test]
     fn exports_counted_and_uncounted_products() {

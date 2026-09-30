@@ -36,7 +36,10 @@ Today the stocktake is done in a spreadsheet on a laptop with a USB barcode scan
 
 ## Counting screen
 
-- The whole stock list as a table: location, item number, name, system quantity (columns H, C, D, N), then counted quantity and whether the product is counted or uncounted.
+- The whole stock list as a table: location, item number, name, system quantity (columns H, C, D, N), then counted quantity, difference, and whether the product is counted or uncounted.
+- After a count is saved, the table scrolls to the product and its row briefly highlights, so the counter sees where the count landed.
+- When every product is counted, a summary says how many products have a difference, next to an export button.
+- A stock list can also be imported by dropping the `.xlsx` file on the window.
 - One search field above the table, plus a progress indicator (e.g. 31/43 counted).
 
 ### Finding a product
@@ -84,5 +87,5 @@ Today the stocktake is done in a spreadsheet on a laptop with a USB barcode scan
 - **Blind vs. pre-filled counting.** v1 pre-fills the system quantity, which risks counters confirming without really checking. Revisit once the basics work.
 - **Barcode column.** The storage owner listed C, D, H and N as the interesting columns, which doesn't include the barcode (F). The spec still reads F so scanning works. Confirm this is fine, or whether they scan something else, such as the item number.
 - **Export columns.** Whether the exported `.xlsx` should keep every original column, or only C, D, H and N plus Counted quantity and Difference.
-- **Scanning into an open count cell.** The counted-quantity cell accepts any digits. If a counter scans the next product instead of pressing Enter first, the barcode is typed into the cell and the scanner's Enter saves it as a quantity (e.g. 7 043 811 520 629 units). The same applies to the quantity field in the "count again" dialog. Not yet checked with the real scanner. Possible guards: a maximum quantity, or treating a barcode-length number as a scan of the next product.
+- **Scanning into an open count cell.** If a counter scans the next product instead of pressing Enter first, the barcode is typed into the counted-quantity cell (or the "count again" field) and the scanner's Enter submits it. The app now guards the case where the text is exactly the barcode of a listed product: nothing is saved, the scanned product is counted next, and a hint says the previous count wasn't saved. A barcode that isn't on the list is still accepted as a quantity. Not yet checked with the real scanner; a maximum quantity could close that gap.
 - **MultiCase import.** Whether MultiCase can import stocktake results directly, which would make a matching export format worthwhile.

@@ -1,0 +1,18 @@
+[package]
+name = "stocktake"
+description = "The stocktake domain: products, counting, importing and exporting. No UI."
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+# Like Zed's crates, the crate root is named after the crate, so an editor tab
+# says `stocktake.rs` rather than one of many `lib.rs`.
+[lib]
+path = "src/stocktake.rs"
+
+[dependencies]
+calamine.workspace = true
+dirs.workspace = true
+rust_xlsxwriter.workspace = true
+serde.workspace = true
+serde_json.workspace = true

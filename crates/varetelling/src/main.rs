@@ -1,15 +1,11 @@
-mod export;
-mod product_table;
-mod stock_list;
-mod stocktake;
-mod stocktake_view;
-mod store;
+//! The application shell: loads fonts, opens the window and hands it to the
+//! stocktake feature. Feature logic doesn't belong here.
 
 use std::borrow::Cow;
 
 use gpui_kit::component::Theme;
 use gpui_kit::*;
-use stocktake_view::StocktakeView;
+use stocktake_ui::StocktakeView;
 
 /// Font files from `assets/fonts`, embedded by `build.rs`.
 mod fonts {
@@ -23,7 +19,7 @@ const UI_FONT_FAMILY: &str = "SF Pro Text";
 fn main() {
     application().with_assets(assets::AllAssets).run(|cx| {
         gpui_kit::init(cx);
-        stocktake_view::init(cx);
+        stocktake_ui::init(cx);
 
         if !fonts::FONTS.is_empty() {
             cx.text_system()

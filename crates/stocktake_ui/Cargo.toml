@@ -1,0 +1,18 @@
+[package]
+name = "stocktake_ui"
+description = "The counting window: importing a stock list, counting it and exporting the result."
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[lib]
+path = "src/stocktake_ui.rs"
+
+[dependencies]
+dirs.workspace = true
+gpui-kit.workspace = true
+stocktake.workspace = true
+ui.workspace = true
+
+[dev-dependencies]
+gpui-kit = { workspace = true, features = ["test-support"] }

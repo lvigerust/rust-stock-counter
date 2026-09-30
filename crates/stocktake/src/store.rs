@@ -5,7 +5,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::stocktake::Stocktake;
+use crate::Stocktake;
 
 /// Where the stocktake in progress lives. Only one exists at a time.
 pub fn default_path() -> PathBuf {
@@ -43,7 +43,7 @@ pub fn save(path: &Path, stocktake: &Stocktake) -> io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::stocktake::Product;
+    use crate::Product;
 
     #[test]
     fn saves_and_resumes() {

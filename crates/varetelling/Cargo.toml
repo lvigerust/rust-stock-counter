@@ -1,0 +1,10 @@
+[package]
+name = "varetelling"
+description = "The application shell: fonts, theme and the main window."
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+gpui-kit.workspace = true
+stocktake_ui.workspace = true

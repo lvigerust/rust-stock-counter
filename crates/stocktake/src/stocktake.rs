@@ -1,4 +1,11 @@
 //! The stocktake: the stock list being counted and what has been counted so far.
+//!
+//! This crate is the domain model. It has no UI dependency, so it builds and
+//! tests in seconds and can't accidentally depend on how things look.
+
+pub mod export;
+pub mod stock_list;
+pub mod store;
 
 use std::cmp::Ordering;
 
@@ -11,6 +18,14 @@ use serde::{Deserialize, Serialize};
 /// several lines (one per batch).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct ProductId(usize);
+
+impl ProductId {
+    /// The product's line in the stock list. Stable for the whole stocktake,
+    /// so it can key UI state that must follow the product through filtering.
+    pub fn line(self) -> usize {
+        self.0
+    }
+}
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Product {
@@ -125,12 +140,27 @@ impl Stocktake {
         self.products.len()
     }
 
+    /// Always false for an imported stock list, which import rejects when
+    /// empty; here for completeness alongside [`Self::len`].
+    pub fn is_empty(&self) -> bool {
+        self.products.is_empty()
+    }
+
     pub fn counted_len(&self) -> usize {
         self.products.iter().filter(|p| p.is_counted()).count()
     }
 
     pub fn uncounted_len(&self) -> usize {
         self.len() - self.counted_len()
+    }
+
+    /// Counted products whose counted quantity differs from the system
+    /// quantity: the adjustments to enter into MultiCase.
+    pub fn differing_len(&self) -> usize {
+        self.products
+            .iter()
+            .filter(|p| p.difference().is_some_and(|difference| difference != 0))
+            .count()
     }
 
     pub fn set_counted_quantity(&mut self, id: ProductId, quantity: i64) {
@@ -153,6 +183,17 @@ impl Stocktake {
                 .then_with(|| natural_cmp(a.item_number(), b.item_number()))
         });
         ids
+    }
+
+    /// The product whose barcode is exactly `text`, if any.
+    pub fn product_with_barcode(&self, text: &str) -> Option<ProductId> {
+        let text = text.trim();
+        if text.is_empty() {
+            return None;
+        }
+        self.products()
+            .find(|(_, product)| product.barcode == text)
+            .map(|(id, _)| id)
     }
 
     /// Finds the one product a scan or typed search refers to.
@@ -260,6 +301,19 @@ mod tests {
     }
 
     #[test]
+    fn product_with_barcode_needs_an_exact_barcode() {
+        let stocktake = stocktake();
+        assert_eq!(
+            stocktake.product_with_barcode("7043811520629"),
+            Some(ProductId(1))
+        );
+        // Item numbers, partial barcodes and products without one don't count.
+        assert_eq!(stocktake.product_with_barcode("152062"), None);
+        assert_eq!(stocktake.product_with_barcode("70438115206"), None);
+        assert_eq!(stocktake.product_with_barcode(""), None);
+    }
+
+    #[test]
     fn lookup_by_name() {
         let stocktake = stocktake();
         assert_eq!(stocktake.lookup("veneto 90"), Lookup::Found(ProductId(3)));
@@ -278,5 +332,7 @@ mod tests {
         stocktake.set_counted_quantity(ProductId(0), 30);
         assert_eq!(stocktake.product(ProductId(0)).difference(), Some(-3));
         assert_eq!(stocktake.uncounted_len(), 2);
+        // Zero difference isn't an adjustment; uncounted products aren't either.
+        assert_eq!(stocktake.differing_len(), 1);
     }
 }

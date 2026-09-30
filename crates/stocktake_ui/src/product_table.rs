@@ -2,29 +2,23 @@
 //! being counted turned into an input.
 
 use gpui_kit::component::{
-    ActiveTheme as _, Icon, IconName, Sizable as _, h_flex,
     input::{Input, InputState},
     table::{Column, TableDelegate, TableState},
 };
-use gpui_kit::{
-    App, Context, Entity, InteractiveElement as _, IntoElement, ParentElement as _, SharedString,
-    Styled as _, Window, div, prelude::FluentBuilder as _, px,
-};
+use gpui_kit::{Div, Stateful, px};
+use stocktake::{ProductId, Stocktake};
+use ui::{Delta, flash, prelude::*};
 
-use crate::stocktake::{ProductId, Stocktake};
-
-/// Key context around the counted-quantity input, so Escape can cancel the
-/// count after the input itself has ignored it.
-pub const COUNT_CELL_CONTEXT: &str = "CountCell";
+use crate::{COUNT_CELL_CONTEXT, count_status::CountStatus};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum ProductColumn {
     Location,
     ItemNumber,
-    Barcode,
     Name,
     SystemQuantity,
     CountedQuantity,
+    Difference,
     Status,
 }
 
@@ -32,15 +26,18 @@ impl ProductColumn {
     const ALL: [Self; 7] = [
         Self::Location,
         Self::ItemNumber,
-        Self::Barcode,
         Self::Name,
         Self::SystemQuantity,
         Self::CountedQuantity,
+        Self::Difference,
         Self::Status,
     ];
 
     fn is_numeric(self) -> bool {
-        matches!(self, Self::SystemQuantity | Self::CountedQuantity)
+        matches!(
+            self,
+            Self::SystemQuantity | Self::CountedQuantity | Self::Difference
+        )
     }
 
     fn column(self) -> Column {
@@ -48,11 +45,11 @@ impl ProductColumn {
         let (key, name, width) = match self {
             Self::Location => ("location", "Lokasjon", 96.),
             Self::ItemNumber => ("item-number", "Varenummer", 112.),
-            Self::Barcode => ("barcode", "Strekkode", 136.),
-            Self::Name => ("name", "Produkt", 280.),
-            Self::SystemQuantity => ("system-quantity", "På lager", 104.),
-            Self::CountedQuantity => ("counted-quantity", "Telt", 104.),
-            Self::Status => ("status", "Status", 112.),
+            Self::Name => ("name", "Produkt", 300.),
+            Self::SystemQuantity => ("system-quantity", "På lager", 96.),
+            Self::CountedQuantity => ("counted-quantity", "Telt", 96.),
+            Self::Difference => ("difference", "Differanse", 104.),
+            Self::Status => ("status", "Status", 120.),
         };
         Column::new(key, name)
             .width(px(width))
@@ -62,6 +59,14 @@ impl ProductColumn {
     }
 }
 
+/// The most recently counted product, and how many counts came before it, so
+/// counting the same product twice in a row flashes it twice.
+#[derive(Clone, Copy)]
+pub struct LastCounted {
+    pub id: ProductId,
+    pub generation: usize,
+}
+
 pub struct ProductTable {
     stocktake: Entity<Stocktake>,
     /// The products shown, in display order.
@@ -69,6 +74,7 @@ pub struct ProductTable {
     count_input: Entity<InputState>,
     /// The product whose counted quantity is being entered.
     counting: Option<ProductId>,
+    last_counted: Option<LastCounted>,
 }
 
 impl ProductTable {
@@ -79,6 +85,7 @@ impl ProductTable {
             rows,
             count_input,
             counting: None,
+            last_counted: None,
         }
     }
 
@@ -102,7 +109,13 @@ impl ProductTable {
         self.counting = counting;
     }
 
-    fn render_counted_quantity(&self, id: ProductId, cx: &App) -> gpui_kit::AnyElement {
+    /// Flashes the row of the product that was just counted, so the counter
+    /// sees where the count landed after looking back from the shelf.
+    pub fn set_last_counted(&mut self, last_counted: LastCounted) {
+        self.last_counted = Some(last_counted);
+    }
+
+    fn render_counted_quantity(&self, id: ProductId, cx: &App) -> AnyElement {
         if self.counting == Some(id) {
             return div()
                 .key_context(COUNT_CELL_CONTEXT)
@@ -117,24 +130,6 @@ impl ProductTable {
                 .child("–")
                 .into_any_element(),
         }
-    }
-
-    fn render_status(&self, id: ProductId, cx: &App) -> impl IntoElement {
-        let counted = self.stocktake.read(cx).product(id).is_counted();
-        h_flex()
-            .gap_1()
-            .when(counted, |this| {
-                this.child(
-                    Icon::new(IconName::Check)
-                        .small()
-                        .text_color(cx.theme().success),
-                )
-                .child("Telt")
-            })
-            .when(!counted, |this| {
-                this.text_color(cx.theme().muted_foreground)
-                    .child("Ikke telt")
-            })
     }
 }
 
@@ -164,6 +159,29 @@ impl TableDelegate for ProductTable {
             .child(column.column().name)
     }
 
+    /// Rows are keyed by product, not position, so row state follows the
+    /// product when a search reorders or filters the table.
+    fn render_tr(
+        &mut self,
+        row_ix: usize,
+        window: &mut Window,
+        cx: &mut Context<TableState<Self>>,
+    ) -> Stateful<Div> {
+        let Some(id) = self.product_at(row_ix) else {
+            return div().id(("row", row_ix));
+        };
+        let row = div().id(("product", id.line()));
+        match self.last_counted {
+            Some(last) if last.id == id => {
+                let strength = flash(("counted-flash", last.generation), window, cx);
+                row.when(strength > 0.0, |row| {
+                    row.bg(cx.theme().success.opacity(0.22 * strength))
+                })
+            }
+            _ => row,
+        }
+    }
+
     fn render_td(
         &mut self,
         row_ix: usize,
@@ -177,16 +195,10 @@ impl TableDelegate for ProductTable {
         let column = ProductColumn::ALL[col_ix];
         let product = self.stocktake.read(cx).product(id);
         let content = match column {
-            ProductColumn::Location => {
-                SharedString::from(product.location().to_string()).into_any_element()
-            }
+            ProductColumn::Location => product.location().to_string().into_any_element(),
             ProductColumn::ItemNumber => div()
                 .text_color(cx.theme().muted_foreground)
                 .child(product.item_number().to_string())
-                .into_any_element(),
-            ProductColumn::Barcode => div()
-                .text_color(cx.theme().muted_foreground)
-                .child(product.barcode().to_string())
                 .into_any_element(),
             ProductColumn::Name => div()
                 .truncate()
@@ -196,13 +208,34 @@ impl TableDelegate for ProductTable {
                 product.system_quantity().to_string().into_any_element()
             }
             ProductColumn::CountedQuantity => self.render_counted_quantity(id, cx),
-            ProductColumn::Status => self.render_status(id, cx).into_any_element(),
+            ProductColumn::Difference => match product.difference() {
+                Some(difference) => Delta::new(difference).into_any_element(),
+                None => div().into_any_element(),
+            },
+            ProductColumn::Status => CountStatus::new(product.is_counted()).into_any_element(),
         };
         h_flex()
             .size_full()
-            .when(column.is_numeric(), |this| this.justify_end())
+            .when(column.is_numeric(), |this| {
+                this.justify_end().tabular_nums()
+            })
             .child(content)
             .into_any_element()
+    }
+
+    fn render_empty(
+        &mut self,
+        _: &mut Window,
+        cx: &mut Context<TableState<Self>>,
+    ) -> impl IntoElement {
+        v_flex()
+            .size_full()
+            .items_center()
+            .justify_center()
+            .gap_2()
+            .text_color(cx.theme().muted_foreground)
+            .child(Icon::new(IconName::SearchX).large())
+            .child(div().text_sm().child("Ingen varer passer søket"))
     }
 
     fn cell_text(&self, row_ix: usize, col_ix: usize, cx: &App) -> String {
@@ -213,12 +246,15 @@ impl TableDelegate for ProductTable {
         match ProductColumn::ALL[col_ix] {
             ProductColumn::Location => product.location().to_string(),
             ProductColumn::ItemNumber => product.item_number().to_string(),
-            ProductColumn::Barcode => product.barcode().to_string(),
             ProductColumn::Name => product.name().to_string(),
             ProductColumn::SystemQuantity => product.system_quantity().to_string(),
             ProductColumn::CountedQuantity => product
                 .counted_quantity()
                 .map(|quantity| quantity.to_string())
+                .unwrap_or_default(),
+            ProductColumn::Difference => product
+                .difference()
+                .map(|difference| difference.to_string())
                 .unwrap_or_default(),
             ProductColumn::Status => if product.is_counted() {
                 "Telt"

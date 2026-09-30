@@ -1,0 +1,12 @@
+[package]
+name = "ui"
+description = "The app's design layer on top of gpui-kit: motion, typography and small presentational components. Knows nothing about stocktakes."
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[lib]
+path = "src/ui.rs"
+
+[dependencies]
+gpui-kit.workspace = true

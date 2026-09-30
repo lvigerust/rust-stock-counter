@@ -7,7 +7,7 @@ use std::{fmt, path::Path};
 
 use calamine::{Data, Reader as _, open_workbook_auto};
 
-use crate::stocktake::Product;
+use crate::Product;
 
 const ITEM_NUMBER: &str = "VareNR";
 const NAME: &str = "ProduktDesc1";
@@ -138,16 +138,21 @@ mod tests {
 
     #[test]
     fn reads_the_sample_export() {
-        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("data/Vareliste - varetelling.xlsx");
+        // The sample lives in the workspace's untracked `data` directory.
+        let path =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data/Vareliste - varetelling.xlsx");
         let products = read(&path).expect("sample stock list imports");
         assert_eq!(products.len(), 43);
 
-        let first = &products[0];
-        assert_eq!(first.item_number(), "152066");
-        assert_eq!(first.name(), "Burano 120 Hvit");
-        assert_eq!(first.location(), "C4-7");
-        assert_eq!(first.barcode(), "7043811520667");
-        assert_eq!(first.system_quantity(), 33);
-        assert!(!first.is_counted());
+        // Found by item number, since exports don't promise a row order.
+        let burano = products
+            .iter()
+            .find(|product| product.item_number() == "152066")
+            .expect("sample contains Burano 120 Hvit");
+        assert_eq!(burano.name(), "Burano 120 Hvit");
+        assert_eq!(burano.location(), "C4-7");
+        assert_eq!(burano.barcode(), "7043811520667");
+        assert_eq!(burano.system_quantity(), 33);
+        assert!(!burano.is_counted());
     }
 }
