@@ -29,6 +29,10 @@ const DARK_SIDEBAR: &str = "#1e1e20";
 const LIGHT_MUTED_FOREGROUND: &str = "neutral-400";
 const DARK_MUTED_FOREGROUND: &str = "neutral-500";
 
+/// The hovered table row: the accent at half of gpui-kit's 60% opacity.
+const LIGHT_TABLE_HOVER: &str = "neutral-100/30";
+const DARK_TABLE_HOVER: &str = "neutral-800/30";
+
 /// The border of the focused control, in both appearances.
 const FOCUS_RING: &str = "#2b7fff";
 
@@ -98,6 +102,7 @@ fn set_theme_colors(cx: &mut App) {
         let mut light = (*theme.light_theme).clone();
         light.colors.ring = Some(FOCUS_RING.into());
         light.colors.muted_foreground = Some(LIGHT_MUTED_FOREGROUND.into());
+        light.colors.table_hover = Some(LIGHT_TABLE_HOVER.into());
         clear_table_colors(&mut light);
         theme.light_theme = Rc::new(light);
 
@@ -109,6 +114,7 @@ fn set_theme_colors(cx: &mut App) {
         // Tooltips take the popover color; in dark mode they share the
         // muted fill instead of gpui-kit's near-black.
         dark.colors.popover = dark.colors.muted.clone();
+        dark.colors.table_hover = Some(DARK_TABLE_HOVER.into());
         clear_table_colors(&mut dark);
         theme.dark_theme = Rc::new(dark);
     });
