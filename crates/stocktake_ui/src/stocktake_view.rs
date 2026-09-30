@@ -17,7 +17,7 @@ mod regions;
 use std::path::PathBuf;
 
 use gpui_kit::component::{
-    Size, Theme, WindowExt as _,
+    FocusableExt as _, Size, Theme, WindowExt as _,
     button::{Button, ButtonVariants as _},
     input::{Input, InputEvent, InputState},
     notification::Notification,
@@ -695,11 +695,10 @@ impl StocktakeView {
                     .icon(IconName::PanelLeft)
                     // Quieter than the content at rest; hover brings it up.
                     .text_color(cx.theme().muted_foreground)
-                    // Ghost buttons have no border, and focus only colors
-                    // the border, so this one keeps an invisible one for the
-                    // focus to show on.
-                    .border_2()
-                    .border_color(cx.theme().transparent)
+                    // gpui-kit would recolor a border for focus; this draws
+                    // a faint ring around the button instead.
+                    .focus_ring(false)
+                    .subtle_focus_ring(cx)
                     .tooltip_with_action(tooltip, &ToggleSidebar, Some(CONTEXT))
                     .on_click(cx.listener(|this, _, window, cx| this.toggle_sidebar(window, cx))),
             )

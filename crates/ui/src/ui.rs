@@ -6,7 +6,7 @@
 //! everywhere in the app, so features compose them instead of restyling
 //! gpui-kit at every call site.
 //!
-//! - [`styles`](crate::styles): motion and typography, the parts of the
+//! - [`styles`](crate::styles): focus, motion and typography, the parts of the
 //!   visual language that aren't a single theme color.
 //! - components: small presentational pieces (`RenderOnce`), each in its
 //!   own module and re-exported flat.
