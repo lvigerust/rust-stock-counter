@@ -2,7 +2,7 @@
 // See https://zed.dev/docs/debugger
 [
   {
-    "label": "Debug gpui_kit_demo",
+    "label": "Debug varetelling",
     "adapter": "CodeLLDB",
     "request": "launch",
     // Zed finds the binary from the `cargo build` output.

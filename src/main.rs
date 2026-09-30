@@ -1,10 +1,15 @@
-mod tasks;
+mod export;
+mod product_table;
+mod stock_list;
+mod stocktake;
+mod stocktake_view;
+mod store;
 
 use std::borrow::Cow;
 
 use gpui_kit::component::Theme;
 use gpui_kit::*;
-use tasks::TaskList;
+use stocktake_view::StocktakeView;
 
 /// Font files from `assets/fonts`, embedded by `build.rs`.
 mod fonts {
@@ -16,8 +21,9 @@ mod fonts {
 const UI_FONT_FAMILY: &str = "SF Pro Text";
 
 fn main() {
-    application().with_assets(assets::Assets).run(|cx| {
+    application().with_assets(assets::AllAssets).run(|cx| {
         gpui_kit::init(cx);
+        stocktake_view::init(cx);
 
         if !fonts::FONTS.is_empty() {
             cx.text_system()
@@ -35,19 +41,19 @@ fn main() {
         let options = WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(Bounds::centered(
                 None,
-                size(px(460.), px(560.)),
+                size(px(1040.), px(720.)),
                 cx,
             ))),
-            window_min_size: Some(size(px(360.), px(420.))),
+            window_min_size: Some(size(px(760.), px(480.))),
             titlebar: Some(TitlebarOptions {
-                title: Some("Tasks".into()),
+                title: Some("Varetelling".into()),
                 ..Default::default()
             }),
             ..Default::default()
         };
 
         open_window(options, cx, |window, cx| {
-            cx.new(|cx| TaskList::new(window, cx))
+            cx.new(|cx| StocktakeView::new(window, cx))
         })
         .expect("failed to open window");
 
