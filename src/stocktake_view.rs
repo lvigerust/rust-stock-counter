@@ -624,7 +624,8 @@ impl StocktakeView {
             )
             .child(
                 v_flex()
-                    .w_40()
+                    .w_full()
+                    .max_w_64()
                     .gap_1()
                     .child(div().text_sm().child(format!("{counted} av {total} telt")))
                     .child(
@@ -639,7 +640,7 @@ impl StocktakeView {
                     .child(
                         Button::new("import")
                             .outline()
-                            .label("Importer…")
+                            .label("Importer")
                             .tooltip("Importer ny vareliste (⌘O)")
                             .on_click(cx.listener(|this, _, window, cx| {
                                 this.import_stock_list(window, cx)
@@ -647,7 +648,8 @@ impl StocktakeView {
                     )
                     .child(
                         Button::new("export")
-                            .label("Eksporter…")
+                            .primary()
+                            .label("Eksporter")
                             .tooltip("Eksporter tellingen til Excel (⌘E)")
                             .on_click(
                                 cx.listener(|this, _, window, cx| {

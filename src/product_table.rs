@@ -49,7 +49,7 @@ impl ProductColumn {
             Self::Location => ("location", "Lokasjon", 96.),
             Self::ItemNumber => ("item-number", "Varenummer", 112.),
             Self::Barcode => ("barcode", "Strekkode", 136.),
-            Self::Name => ("name", "Navn", 280.),
+            Self::Name => ("name", "Produkt", 280.),
             Self::SystemQuantity => ("system-quantity", "På lager", 104.),
             Self::CountedQuantity => ("counted-quantity", "Telt", 104.),
             Self::Status => ("status", "Status", 112.),
@@ -180,12 +180,14 @@ impl TableDelegate for ProductTable {
             ProductColumn::Location => {
                 SharedString::from(product.location().to_string()).into_any_element()
             }
-            ProductColumn::ItemNumber => {
-                SharedString::from(product.item_number().to_string()).into_any_element()
-            }
-            ProductColumn::Barcode => {
-                SharedString::from(product.barcode().to_string()).into_any_element()
-            }
+            ProductColumn::ItemNumber => div()
+                .text_color(cx.theme().muted_foreground)
+                .child(product.item_number().to_string())
+                .into_any_element(),
+            ProductColumn::Barcode => div()
+                .text_color(cx.theme().muted_foreground)
+                .child(product.barcode().to_string())
+                .into_any_element(),
             ProductColumn::Name => div()
                 .truncate()
                 .child(product.name().to_string())
