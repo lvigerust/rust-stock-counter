@@ -729,6 +729,7 @@ impl StocktakeView {
         };
         StatusBar::new()
             .flex_none()
+            .bg(theme.background)
             .h_8()
             .pl(MAIN_PADDING)
             .pr(Rems(1.5))
