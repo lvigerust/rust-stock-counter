@@ -1,0 +1,34 @@
+# Builds the Windows executable on demand. GPUI compiles its DirectX shaders
+# with Windows SDK tools, so it can't be cross-compiled from macOS. Run it
+# from the Actions tab and download the artifact from the finished run.
+name: Windows build
+
+on: workflow_dispatch
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build
+        run: cargo build --release --locked
+        env:
+          # Links the C runtime statically, so the executable runs without
+          # the Visual C++ Redistributable installed.
+          RUSTFLAGS: -C target-feature=+crt-static
+
+      - name: Name the executable after the application
+        shell: bash
+        run: |
+          mkdir dist
+          cp target/release/varetelling.exe "dist/Scala Bad.exe"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: scala-bad-windows
+          path: dist/Scala Bad.exe
