@@ -6,5 +6,21 @@
 	<string>Scala Bad</string>
 	<key>CFBundleDisplayName</key>
 	<string>Scala Bad</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.vigerust.scala-bad</string>
+	<key>CFBundleExecutable</key>
+	<string>varetelling</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleShortVersionString</key>
+	<string>0.1.0</string>
+	<key>CFBundleVersion</key>
+	<string>0.1.0</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>11.0</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
 </dict>
 </plist>
