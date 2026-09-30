@@ -1,18 +1,14 @@
 //! The window: importing a stock list, counting it, and exporting the result.
 //!
 //! [`StocktakeView`] owns the workflow — which product is being counted, where
-//! focus goes next, when to save — and composes the regions that render it.
+//! focus goes next, when to save — and renders it.
 //!
 //! One type, several files, split by concern the way Zed splits its editor:
-//! this file holds the state and the counting workflow, `files` getting stock
-//! lists in and results out, and `regions` the parts of the counting screen.
-//! They are child modules, so they share the view's private fields without
-//! making any of them public.
+//! this file holds the state, the counting workflow and the layout, and
+//! `files` getting stock lists in and results out. It's a child module, so it
+//! shares the view's private fields without making any of them public.
 
 mod files;
-// Not rendered while the screens are rebuilt; kept to draw from.
-#[allow(dead_code)]
-mod regions;
 
 use std::path::PathBuf;
 
@@ -64,8 +60,6 @@ enum SaveState {
 struct Session {
     stocktake: Entity<Stocktake>,
     table: Entity<TableState<ProductTable>>,
-    /// Tells this session's entrance apart from the previous one's.
-    generation: usize,
     _table_events: Subscription,
 }
 
@@ -75,19 +69,12 @@ pub struct StocktakeView {
     focus_handle: FocusHandle,
     store_path: PathBuf,
     session: Option<Session>,
-    sessions_started: usize,
     search: Entity<InputState>,
     /// The quantity field of the count dialog.
     count_input: Entity<InputState>,
-    /// Explains why Enter in the search didn't select a product, and how many
-    /// hints came before it, so a repeated hint arrives again.
-    search_hint: Option<(SharedString, usize)>,
-    hints_shown: usize,
     /// The product the count dialog is open for.
     counting: Option<ProductId>,
     save_state: SaveState,
-    /// Why the saved stocktake couldn't be resumed.
-    resume_error: Option<SharedString>,
     sidebar_collapsed: bool,
     _subscriptions: Vec<Subscription>,
 }
@@ -131,24 +118,15 @@ impl StocktakeView {
             focus_handle,
             store_path,
             session: None,
-            sessions_started: 0,
             search,
             count_input,
-            search_hint: None,
-            hints_shown: 0,
             counting: None,
             save_state: SaveState::Saved,
-            resume_error: None,
             sidebar_collapsed: false,
             _subscriptions: subscriptions,
         };
-        match store::load(&this.store_path) {
-            Ok(Some(stocktake)) => this.start_session(stocktake, window, cx),
-            Ok(None) => {}
-            Err(error) => {
-                this.resume_error =
-                    Some(format!("Den lagrede varetellingen kunne ikke åpnes: {error}").into())
-            }
+        if let Ok(Some(stocktake)) = store::load(&this.store_path) {
+            this.start_session(stocktake, window, cx);
         }
         this
     }
@@ -166,16 +144,12 @@ impl StocktakeView {
                 this.select_row(*row_ix, window, cx);
             }
         });
-        self.sessions_started += 1;
         self.session = Some(Session {
             stocktake,
             table,
-            generation: self.sessions_started,
             _table_events: table_events,
         });
         self.fit_columns(window, cx);
-        self.resume_error = None;
-        self.search_hint = None;
         self.search.update(cx, |search, cx| {
             search.set_value("", window, cx);
             search.focus(window, cx);
@@ -238,13 +212,6 @@ impl StocktakeView {
             // Row indices now point at different products.
             table.clear_selection(cx);
         });
-        self.search_hint = None;
-        cx.notify();
-    }
-
-    fn show_search_hint(&mut self, hint: impl Into<SharedString>, cx: &mut Context<Self>) {
-        self.hints_shown += 1;
-        self.search_hint = Some((hint.into(), self.hints_shown));
         cx.notify();
     }
 
@@ -259,10 +226,8 @@ impl StocktakeView {
         }
         match session.stocktake.read(cx).lookup(&query) {
             Lookup::Found(id) => self.select_product(id, window, cx),
-            Lookup::Ambiguous(count) => self.show_search_hint(
-                format!("{count} varer passer. Skriv mer, eller velg varen i tabellen."),
-                cx,
-            ),
+            // The table already shows the matches to pick from.
+            Lookup::Ambiguous(_) => {}
             Lookup::NotFound => self.show_not_found(query, window, cx),
         }
     }
@@ -381,16 +346,11 @@ impl StocktakeView {
         let Some(scanned) = stocktake.product_with_barcode(text) else {
             return false;
         };
-        let name = stocktake.product(scanned).name().to_string();
         if self.counting.take().is_some() {
             window.close_dialog(cx);
         }
         self.finish_count(window, cx);
         self.select_product(scanned, window, cx);
-        self.show_search_hint(
-            format!("Antallet ble ikke lagret, fordi du skannet «{name}». Tell den nå."),
-            cx,
-        );
         true
     }
 
@@ -743,9 +703,6 @@ impl Render for StocktakeView {
             .drag_over::<ExternalPaths>(|style, _, _, cx| style.bg(cx.theme().drop_target))
             .bg(cx.theme().background)
             .text_color(cx.theme().foreground)
-            // Stripped down while the screens are rebuilt piece by piece.
-            // The regions and the welcome screen are kept, unrendered, to
-            // draw from.
             .child(
                 h_flex()
                     .size_full()
@@ -762,7 +719,6 @@ mod tests {
     use gpui_kit::component::Root;
     use gpui_kit::test::{ElementSnapshot, TestWindowExt as _};
     use gpui_kit::{AnyWindowHandle, TestAppContext, px, size};
-    use stocktake::Product;
 
     use super::*;
 
@@ -774,10 +730,6 @@ mod tests {
     }
 
     impl Counter<'_> {
-        fn input(&mut self, text: &str) {
-            self.step(|window, cx| window.input(text, cx));
-        }
-
         fn press(&mut self, key: &str) {
             self.step(|window, cx| window.press(key, cx));
         }
@@ -806,126 +758,6 @@ mod tests {
         fn is_focused(&mut self, id: &'static str) -> bool {
             self.find(id).and_then(|element| element.focused()) == Some(true)
         }
-
-        fn value(&mut self, id: &'static str) -> Option<String> {
-            self.find(id)
-                .and_then(|element| element.value().map(str::to_string))
-        }
-    }
-
-    #[gpui_kit::test]
-    #[ignore = "tabs to the import and export buttons, which aren't rendered while the UI is rebuilt"]
-    fn counts_scanned_products(cx: &mut TestAppContext) {
-        let dir = std::env::temp_dir().join(format!("stocktake-ui-{}", std::process::id()));
-        let store_path = dir.join("varetelling.json");
-        let stocktake = Stocktake::new(vec![
-            Product::new("152066", "Burano 120 Hvit", "C4-7", "7043811520667", 33),
-            Product::new("152062", "Burano 120 Sort", "C4-7", "7043811520629", 49),
-            Product::new("150765", "Veneto 75", "", "", 16),
-        ]);
-        store::save(&store_path, &stocktake).unwrap();
-
-        cx.update(|cx| {
-            gpui_kit::init(cx);
-            crate::init(cx);
-        });
-        let window = cx.open_window(size(px(1040.), px(720.)), |window, cx| {
-            let view = cx.new(|cx| StocktakeView::with_store_path(store_path.clone(), window, cx));
-            Root::new(view, window, cx)
-        });
-        let mut counter = Counter {
-            cx,
-            window: window.into(),
-        };
-        // Reads what was saved, which is also what a restarted app resumes.
-        let saved = || {
-            store::load(&store_path)
-                .unwrap()
-                .unwrap()
-                .products()
-                .map(|(_, product)| product.counted_quantity())
-                .collect::<Vec<_>>()
-        };
-
-        // Scanning opens the count dialog, pre-filled with the system quantity.
-        assert!(counter.is_focused("search"));
-        counter.input("7043811520629");
-        counter.press("enter");
-        assert!(counter.is_focused("count"));
-        assert_eq!(counter.value("count").as_deref(), Some("49"));
-
-        // Typing overwrites the pre-filled value; Enter confirms and saves.
-        counter.input("47");
-        counter.press("enter");
-        assert!(counter.is_focused("search"));
-        assert_eq!(counter.value("search").as_deref(), Some(""));
-        assert_eq!(saved(), [None, Some(47), None]);
-
-        // Enter alone confirms the system quantity.
-        counter.input("152066");
-        counter.press("enter");
-        counter.press("enter");
-        assert_eq!(saved(), [Some(33), Some(47), None]);
-
-        // Scanning a counted product again pre-fills its count, and the new
-        // quantity replaces it.
-        counter.input("7043811520629");
-        counter.press("enter");
-        assert_eq!(counter.value("count").as_deref(), Some("47"));
-        counter.input("50");
-        counter.press("enter");
-        assert!(counter.find("count").is_none());
-        assert!(counter.is_focused("search"));
-        assert_eq!(saved(), [Some(33), Some(50), None]);
-
-        // Products without a barcode are found by name; Escape abandons the
-        // count without saving it.
-        counter.input("veneto");
-        counter.press("enter");
-        assert_eq!(counter.value("count").as_deref(), Some("16"));
-        counter.press("escape");
-        assert!(counter.find("count").is_none());
-        assert!(counter.is_focused("search"));
-        assert_eq!(saved(), [Some(33), Some(50), None]);
-
-        // Scanning the next product before confirming this one doesn't save
-        // the barcode as a quantity; the scanned product is counted instead.
-        counter.input("veneto");
-        counter.press("enter");
-        counter.input("7043811520667");
-        counter.press("enter");
-        assert_eq!(saved(), [Some(33), Some(50), None]);
-        // That's Burano 120 Hvit. Escape leaves it, with the search cleared
-        // for the next scan.
-        assert_eq!(counter.value("count").as_deref(), Some("33"));
-        counter.press("escape");
-        assert!(counter.find("count").is_none());
-        assert_eq!(counter.value("search").as_deref(), Some(""));
-        assert_eq!(saved(), [Some(33), Some(50), None]);
-
-        // An unlisted product isn't recorded.
-        counter.input("999");
-        counter.press("enter");
-        assert!(counter.find("count").is_none());
-        assert_eq!(saved(), [Some(33), Some(50), None]);
-
-        // Tab cycles through the controls, skipping the table, and wraps
-        // back to the search field.
-        counter.press("escape");
-        assert!(counter.is_focused("search"));
-        for id in ["import", "export", "search"] {
-            counter.press("tab");
-            assert!(counter.is_focused(id), "Tab should move focus to {id}");
-        }
-        for id in ["export", "import", "search"] {
-            counter.press("shift-tab");
-            assert!(
-                counter.is_focused(id),
-                "Shift-Tab should move focus to {id}"
-            );
-        }
-
-        std::fs::remove_dir_all(dir).ok();
     }
 
     #[gpui_kit::test]

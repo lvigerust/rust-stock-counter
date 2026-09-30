@@ -154,15 +154,6 @@ impl Stocktake {
         self.len() - self.counted_len()
     }
 
-    /// Counted products whose counted quantity differs from the system
-    /// quantity: the adjustments to enter into MultiCase.
-    pub fn differing_len(&self) -> usize {
-        self.products
-            .iter()
-            .filter(|p| p.difference().is_some_and(|difference| difference != 0))
-            .count()
-    }
-
     pub fn set_counted_quantity(&mut self, id: ProductId, quantity: i64) {
         self.products[id.0].counted_quantity = Some(quantity);
     }
@@ -333,7 +324,5 @@ mod tests {
         stocktake.set_counted_quantity(ProductId(0), 30);
         assert_eq!(stocktake.product(ProductId(0)).difference(), Some(-3));
         assert_eq!(stocktake.uncounted_len(), 2);
-        // Zero difference isn't an adjustment; uncounted products aren't either.
-        assert_eq!(stocktake.differing_len(), 1);
     }
 }
