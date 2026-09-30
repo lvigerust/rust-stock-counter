@@ -30,6 +30,10 @@ _Avoid_: EAN, QR code
 The shelf position code where a product is stored, such as `C4-7`.
 _Avoid_: Lokasjon, bin, slot
 
+**Aisle**:
+The letters a location starts with, such as `C` in `C4-7`. The table can be filtered to some aisles. A product whose location is empty, or doesn't start with a letter, has no aisle.
+_Avoid_: Reol, zone, rack
+
 **System quantity**:
 The number of units MultiCase says is in the storage for a product (FysiskPaaLager).
 _Avoid_: Expected quantity, on hand, stock level

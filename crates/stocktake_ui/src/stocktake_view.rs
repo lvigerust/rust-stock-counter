@@ -15,6 +15,7 @@ use std::path::{Path, PathBuf};
 use gpui_kit::component::{
     FocusableExt as _, Size, Theme, WindowExt as _,
     button::{Button, ButtonVariants as _},
+    checkbox::Checkbox,
     input::{Input, InputEvent, InputState},
     notification::Notification,
     progress::Progress,
@@ -27,11 +28,14 @@ use gpui_kit::{
     px,
 };
 use stocktake::{
-    Lookup, ProductId, Stocktake,
+    Filter, Lookup, ProductId, Stocktake,
     recent::{self, RecentStockLists},
     store,
 };
-use ui::{SidebarHeading, SidebarItem, WindowBar, prelude::*};
+use ui::{
+    Sidebar, SidebarBody, SidebarFooter, SidebarHeader, SidebarHeading, SidebarItem,
+    SidebarSection, WindowBar, prelude::*,
+};
 
 use crate::{
     APP_NAME, CONTEXT, ExportStocktake, FocusNext, FocusPrevious, FocusSearch, ImportStockList,
@@ -80,6 +84,8 @@ pub struct StocktakeView {
     /// The stock lists imported before, offered on the welcome.
     recent: RecentStockLists,
     search: Entity<InputState>,
+    /// What the sidebar leaves out of the table, besides the search.
+    filter: Filter,
     /// The quantity field of the count dialog.
     count_input: Entity<InputState>,
     /// The product the count dialog is open for.
@@ -105,7 +111,7 @@ impl StocktakeView {
 
         let subscriptions = vec![
             cx.subscribe_in(&search, window, |this, _, event, window, cx| match event {
-                InputEvent::Change => this.on_search_changed(cx),
+                InputEvent::Change => this.update_rows(cx),
                 InputEvent::PressEnter { .. } => this.find_product(window, cx),
                 _ => {}
             }),
@@ -137,6 +143,7 @@ impl StocktakeView {
             recent_path,
             recent,
             search,
+            filter: Filter::default(),
             count_input,
             counting: None,
             save_state: SaveState::Saved,
@@ -173,6 +180,7 @@ impl StocktakeView {
             table,
             _table_events: table_events,
         });
+        self.filter = Filter::default();
         self.fit_columns(window, cx);
         self.resume_error = None;
         self.search.update(cx, |search, cx| {
@@ -238,6 +246,7 @@ impl StocktakeView {
             self.focus_handle.focus(window, cx);
         }
         self.session = None;
+        self.filter = Filter::default();
         self.counting = None;
         self.save_state = SaveState::Saved;
         self.search
@@ -249,17 +258,26 @@ impl StocktakeView {
         self.search.read(cx).value().trim().to_string()
     }
 
-    fn on_search_changed(&mut self, cx: &mut Context<Self>) {
+    /// Shows the products the search and the filter leave.
+    fn update_rows(&mut self, cx: &mut Context<Self>) {
         let Some(session) = &self.session else {
             return;
         };
-        let rows = session.stocktake.read(cx).search(&self.query(cx));
+        let rows = session
+            .stocktake
+            .read(cx)
+            .search_filtered(&self.query(cx), &self.filter);
         session.table.update(cx, |table, cx| {
             table.delegate_mut().set_rows(rows, cx);
             // Row indices now point at different products.
             table.clear_selection(cx);
         });
         cx.notify();
+    }
+
+    fn set_aisle_shown(&mut self, aisle: &str, shown: bool, cx: &mut Context<Self>) {
+        self.filter.set_aisle_shown(aisle, shown);
+        self.update_rows(cx);
     }
 
     /// Enter in the search field: a scan or a typed search picks one product.
@@ -462,7 +480,7 @@ impl StocktakeView {
             search.set_value("", window, cx);
             search.focus(window, cx);
         });
-        self.on_search_changed(cx);
+        self.update_rows(cx);
     }
 
     /// Tab and Shift-Tab, skipping the table. Rows are reached by scanning,
@@ -510,40 +528,71 @@ impl StocktakeView {
         cx.notify();
     }
 
-    /// The pane along the leading edge, full height, in four sections: the
-    /// top bar with the traffic lights and the button that hides the
-    /// sidebar, a header, a body that takes the remaining height, and a
-    /// footer. Each is padded by 1rem, and holds its content as
-    /// [`SidebarItem`]s. Rules set the top bar and the footer apart.
+    /// The pane along the leading edge: the top bar with the traffic lights
+    /// and the button that hides the sidebar, set apart by a rule, then the
+    /// app's name, the filters and the way to start over. Each section holds
+    /// its content as [`SidebarItem`]s.
     fn render_sidebar(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let toggle = Self::render_sidebar_toggle(true, cx);
-        let theme = cx.theme();
-        v_flex()
-            .id("sidebar")
-            .flex_none()
+        let aisle_filter = self.render_aisle_filter(cx);
+        Sidebar::new()
             .w(SIDEBAR_WIDTH)
-            .h_full()
-            .bg(theme.sidebar)
-            .text_color(theme.sidebar_foreground)
-            .border_r_1()
-            .border_color(theme.sidebar_border)
             .child(WindowBar::new().justify_end().child(toggle))
-            .child(Separator::horizontal().color(theme.sidebar_border))
-            .child(Self::render_sidebar_header())
+            .child(Separator::horizontal().color(cx.theme().sidebar_border))
+            .child(SidebarHeader::new().child(SidebarSection::new().child(Self::render_app_name())))
+            .child(SidebarBody::new().children(aisle_filter))
             .child(
-                v_flex()
-                    .flex_1()
-                    .min_h_0()
-                    .p_4()
-                    .child(SidebarHeading::new("Tellinger")),
+                SidebarFooter::new()
+                    .child(SidebarSection::new().child(self.render_clear_button(cx))),
             )
-            .child(Separator::horizontal().color(theme.sidebar_border))
-            .child(
-                v_flex()
-                    .flex_none()
-                    .p_4()
-                    .child(self.render_clear_button(cx)),
+    }
+
+    /// A checkbox per aisle, beside how many products it holds, so the table
+    /// can be narrowed to the part of the storage being counted. Only while
+    /// there's a stock list, and one spanning more than one aisle.
+    fn render_aisle_filter(&self, cx: &mut Context<Self>) -> Option<impl IntoElement + use<>> {
+        let session = self.session.as_ref()?;
+        let aisles: Vec<(SharedString, usize)> = session
+            .stocktake
+            .read(cx)
+            .aisles()
+            .into_iter()
+            .map(|(aisle, len)| (aisle.to_string().into(), len))
+            .collect();
+        if aisles.len() < 2 {
+            return None;
+        }
+        let muted = cx.theme().muted_foreground;
+        let items = aisles.into_iter().map(|(aisle, len)| {
+            let label = if aisle.is_empty() {
+                "Uten reol".into()
+            } else {
+                SharedString::from(format!("Reol {aisle}"))
+            };
+            let id = format!("aisle-{aisle}");
+            let checked = self.filter.shows_aisle(&aisle);
+            let checkbox = Checkbox::new(id)
+                .small()
+                .flex_1()
+                .min_w_0()
+                .label(label)
+                .checked(checked)
+                .on_click(cx.listener(move |this, shown: &bool, _, cx| {
+                    this.set_aisle_shown(&aisle, *shown, cx)
+                }));
+            SidebarItem::new().child(checkbox).child(
+                div()
+                    .text_xs()
+                    .tabular_nums()
+                    .text_color(muted)
+                    .child(len.to_string()),
             )
+        });
+        Some(
+            SidebarSection::new()
+                .child(SidebarHeading::new("Lokasjoner"))
+                .children(items),
+        )
     }
 
     /// Starts over without the stocktake in progress. For testing.
@@ -561,16 +610,14 @@ impl StocktakeView {
     }
 
     /// The app's name.
-    fn render_sidebar_header() -> impl IntoElement {
-        v_flex().flex_none().p_4().child(
-            SidebarItem::new().child(
-                div()
-                    .min_w_0()
-                    .truncate()
-                    .text_sm()
-                    .font_semibold()
-                    .child(APP_NAME),
-            ),
+    fn render_app_name() -> impl IntoElement {
+        SidebarItem::new().child(
+            div()
+                .min_w_0()
+                .truncate()
+                .text_sm()
+                .font_semibold()
+                .child(APP_NAME),
         )
     }
 

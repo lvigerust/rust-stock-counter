@@ -9,6 +9,7 @@ pub mod stock_list;
 pub mod store;
 
 use std::cmp::Ordering;
+use std::collections::BTreeSet;
 
 use serde::{Deserialize, Serialize};
 
@@ -69,6 +70,16 @@ impl Product {
         &self.location
     }
 
+    /// The letters the location starts with, such as `C` for `C4-7`. Empty
+    /// when the location is, or when it starts with something else.
+    pub fn aisle(&self) -> &str {
+        let end = self
+            .location
+            .find(|c: char| !c.is_alphabetic())
+            .unwrap_or(self.location.len());
+        &self.location[..end]
+    }
+
     /// The EAN on the packaging, empty when the product has none.
     pub fn barcode(&self) -> &str {
         &self.barcode
@@ -102,6 +113,33 @@ impl Product {
         [&self.item_number, &self.name, &self.location, &self.barcode]
             .iter()
             .any(|field| field.to_lowercase().contains(needle))
+    }
+}
+
+/// Which products the table shows, besides those the search leaves out. The
+/// default shows every product.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Filter {
+    /// Stored as the aisles left out, so an aisle shows until the counter
+    /// hides it.
+    hidden_aisles: BTreeSet<String>,
+}
+
+impl Filter {
+    pub fn shows_aisle(&self, aisle: &str) -> bool {
+        !self.hidden_aisles.contains(aisle)
+    }
+
+    pub fn set_aisle_shown(&mut self, aisle: &str, shown: bool) {
+        if shown {
+            self.hidden_aisles.remove(aisle);
+        } else {
+            self.hidden_aisles.insert(aisle.to_string());
+        }
+    }
+
+    fn shows(&self, product: &Product) -> bool {
+        self.shows_aisle(product.aisle())
     }
 }
 
@@ -159,13 +197,36 @@ impl Stocktake {
         self.products[id.0].counted_quantity = Some(quantity);
     }
 
+    /// Every aisle in the stock list and how many products it holds, in the
+    /// order the storage is walked, with products without one last.
+    pub fn aisles(&self) -> Vec<(&str, usize)> {
+        let mut aisles: Vec<(&str, usize)> = Vec::new();
+        for product in &self.products {
+            match aisles
+                .iter_mut()
+                .find(|(aisle, _)| *aisle == product.aisle())
+            {
+                Some((_, len)) => *len += 1,
+                None => aisles.push((product.aisle(), 1)),
+            }
+        }
+        aisles.sort_by(|(a, _), (b, _)| compare_locations(a, b));
+        aisles
+    }
+
     /// Products matching the search text, ordered by location so the table
     /// follows the counter's walk through the storage. An empty search
     /// matches everything.
     pub fn search(&self, query: &str) -> Vec<ProductId> {
+        self.search_filtered(query, &Filter::default())
+    }
+
+    /// Like [`Self::search`], keeping only the products the filter shows.
+    pub fn search_filtered(&self, query: &str, filter: &Filter) -> Vec<ProductId> {
         let needle = query.trim().to_lowercase();
         let mut ids: Vec<_> = self
             .products()
+            .filter(|(_, product)| filter.shows(product))
             .filter(|(_, product)| needle.is_empty() || product.contains(&needle))
             .map(|(id, _)| id)
             .collect();
@@ -281,6 +342,31 @@ mod tests {
             .map(|id| stocktake.product(id).item_number())
             .collect();
         assert_eq!(items, ["150766", "152062", "152066", "150765"]);
+    }
+
+    #[test]
+    fn aisle_is_the_leading_letters() {
+        let aisle = |location| Product::new("1", "", location, "", 0).aisle().to_string();
+        assert_eq!(aisle("C4-7"), "C");
+        assert_eq!(aisle("AB12"), "AB");
+        assert_eq!(aisle("12-3"), "");
+        assert_eq!(aisle(""), "");
+    }
+
+    #[test]
+    fn aisles_count_products_with_unlocated_last() {
+        assert_eq!(stocktake().aisles(), [("C", 3), ("", 1)]);
+    }
+
+    #[test]
+    fn filter_hides_aisles() {
+        let stocktake = stocktake();
+        let mut filter = Filter::default();
+        filter.set_aisle_shown("C", false);
+        assert_eq!(stocktake.search_filtered("", &filter), [ProductId(2)]);
+        assert_eq!(stocktake.search_filtered("burano", &filter), []);
+        filter.set_aisle_shown("C", true);
+        assert_eq!(stocktake.search_filtered("", &filter).len(), 4);
     }
 
     #[test]
