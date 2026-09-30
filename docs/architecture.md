@@ -25,7 +25,7 @@ varetelling ──► stocktake_ui ──► ui ──► gpui-kit
 | `stocktake`    | Products, counting rules, import, export, saving                     | Depend on GPUI or know how anything looks  |
 | `ui`           | Motion, typography, small presentational components                  | Know what a stocktake is                   |
 | `stocktake_ui` | The workflow: what happens on scan, Enter, Escape; screens and dialogs | Reach into the shell                       |
-| `varetelling`  | Fonts, window options, calling `init`                                | Contain feature logic                      |
+| `varetelling`  | Theme, window options, calling `init`                                | Contain feature logic                      |
 
 Why split at all?
 

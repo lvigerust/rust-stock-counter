@@ -1,22 +1,13 @@
-//! The application shell: loads fonts, builds the menu bar, opens the window
+//! The application shell: builds the menu bar, sets the theme, opens the window
 //! and hands it to the stocktake feature. Feature logic doesn't belong here.
 
-use std::{borrow::Cow, rc::Rc};
+use std::rc::Rc;
 
 use gpui_kit::component::{Theme, ThemeConfig};
 use gpui_kit::*;
 use stocktake_ui::{
     APP_NAME, ExportStocktake, FocusSearch, ImportStockList, StocktakeView, ToggleSidebar,
 };
-
-/// Font files from `assets/fonts`, embedded by `build.rs`.
-mod fonts {
-    include!(concat!(env!("OUT_DIR"), "/fonts.rs"));
-}
-
-/// Family name of the bundled UI font. It must match the name inside the
-/// font files, or GPUI falls back to another font.
-const UI_FONT_FAMILY: &str = "SF Pro Text";
 
 /// The window background in dark mode.
 const DARK_BACKGROUND: &str = "#18181a";
@@ -52,17 +43,6 @@ fn main() {
         // keymap when it's built.
         set_menus(cx);
 
-        if !fonts::FONTS.is_empty() {
-            cx.text_system()
-                .add_fonts(
-                    fonts::FONTS
-                        .iter()
-                        .map(|font| Cow::Borrowed(*font))
-                        .collect(),
-                )
-                .expect("failed to load bundled fonts");
-            Theme::update(cx, |theme| theme.font_family = UI_FONT_FAMILY.into());
-        }
         set_theme_colors(cx);
 
         // Counting is the only thing done on this laptop while it runs, so
