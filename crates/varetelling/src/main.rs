@@ -19,6 +19,7 @@ const UI_FONT_FAMILY: &str = "SF Pro Text";
 fn main() {
     application().with_assets(assets::AllAssets).run(|cx| {
         gpui_kit::init(cx);
+        ui::init(cx);
         stocktake_ui::init(cx);
 
         if !fonts::FONTS.is_empty() {

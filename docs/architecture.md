@@ -51,7 +51,7 @@ Modelled on Zed's `crates/ui`:
 ui/src/
 ├── ui.rs              the crate root: re-exports everything flat
 ├── prelude.rs         `use ui::prelude::*;` covers most view files
-├── styles.rs          motion, typography
+├── styles.rs          surfaces, motion, typography
 │   └── styles/
 └── components.rs      one module per component
     └── components/
@@ -62,13 +62,23 @@ ui/src/
 - **Styles are code, not constants.** `StyledTypography::tabular_nums()` is an extension trait on any `Styled` element, the same shape as Zed's `StyledTypography`. Colors come from `cx.theme()` and are never hard-coded.
 - **Components are `RenderOnce`**: plain values built fresh every frame, with builder methods. They hold no state between frames, so there's nothing to keep in sync.
 
-| Component       | What it's for                                                           |
+| Item            | What it's for                                                           |
 | --------------- | ----------------------------------------------------------------------- |
+| `Surface`       | The two background levels: a tinted page, and cards on it               |
+| `Card`          | A content region: card surface, hairline border, optional `CardHeader`  |
+| `Stat`          | One key number on a card, counting to its new value when it changes     |
 | `Appear`        | Fades and rises a region in the first time it renders                   |
 | `flash()`       | A 0→1→0 strength for pointing at something that just changed            |
 | `Delta`         | A signed change (`+2`, `−3`), tinted when non-zero                      |
 | `KeyHint`       | A key and what it does, read from the keymap in the platform's notation |
-| `ProgressMeter` | A labelled progress bar with a success state when complete              |
+
+### Surfaces and type scale
+
+The visual hierarchy follows the Shadcn dashboard pattern: a faintly tinted page, with content on plain cards above it. Separation comes from the contrast between those two layers and a hairline border, not from heavy lines or shadows. The GPUI Kit design guide keeps shadows for things that really float, such as dialogs and menus.
+
+`Surface::Page` isn't a hand-picked color. It's the theme's `background` mixed with its `muted` color, so it follows light, dark and custom themes.
+
+`ui::init` sets the base font to 17px, one step above gpui-kit's default. The base font is also the `rem` that all spacing and control sizes scale from, so text, padding and controls grow together and keep their proportions.
 
 ### Motion
 
@@ -87,7 +97,7 @@ stocktake_ui/src/
 ├── stocktake_view.rs      state and the counting workflow
 │   └── stocktake_view/
 │       ├── files.rs       importing and exporting
-│       └── regions.rs     toolbar, hint, completion banner, status bar
+│       └── regions.rs     header, stat cards, products card, status bar
 ├── product_table.rs       the table delegate: how rows render
 ├── recount_dialog.rs      counting an already-counted product again
 ├── welcome.rs             the screen before any stock list is imported

@@ -200,8 +200,10 @@ impl TableDelegate for ProductTable {
                 .text_color(cx.theme().muted_foreground)
                 .child(product.item_number().to_string())
                 .into_any_element(),
+            // The row's focal point: what the counter reads off the shelf.
             ProductColumn::Name => div()
                 .truncate()
+                .font_medium()
                 .child(product.name().to_string())
                 .into_any_element(),
             ProductColumn::SystemQuantity => {
