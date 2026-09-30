@@ -224,8 +224,9 @@ impl Stocktake {
     }
 }
 
-/// Products without a location sort last.
-fn compare_locations(a: &str, b: &str) -> Ordering {
+/// Orders locations the way the storage is walked: naturally, so `C4-10`
+/// comes after `C4-9`, with products that have no location last.
+pub fn compare_locations(a: &str, b: &str) -> Ordering {
     match (a.is_empty(), b.is_empty()) {
         (true, true) => Ordering::Equal,
         (true, false) => Ordering::Greater,
@@ -235,7 +236,7 @@ fn compare_locations(a: &str, b: &str) -> Ordering {
 }
 
 /// Compares runs of digits by value, so `C4-10` sorts after `C4-9`.
-fn natural_cmp(a: &str, b: &str) -> Ordering {
+pub fn natural_cmp(a: &str, b: &str) -> Ordering {
     let (mut a, mut b) = (a, b);
     loop {
         match (a.chars().next(), b.chars().next()) {

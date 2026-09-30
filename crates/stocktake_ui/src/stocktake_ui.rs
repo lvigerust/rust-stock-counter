@@ -35,6 +35,8 @@ actions!(
         ExportStocktake,
         /// Abandons the count being entered without saving it.
         CancelCount,
+        /// Moves focus to the search field, ready for a scan.
+        FocusSearch,
         FocusNext,
         FocusPrevious
     ]
@@ -55,6 +57,7 @@ pub fn init(cx: &mut App) {
         KeyBinding::new("secondary-o", ImportStockList, Some(CONTEXT)),
         KeyBinding::new("secondary-e", ExportStocktake, Some(CONTEXT)),
         KeyBinding::new("escape", CancelCount, Some(COUNT_CELL_CONTEXT)),
+        KeyBinding::new("secondary-f", FocusSearch, Some(CONTEXT)),
         // The table binds Tab to moving between columns, which traps focus in
         // it. These replace that, and also take precedence over the window's
         // own Tab handling so focus can skip the table.

@@ -51,7 +51,7 @@ Modelled on Zed's `crates/ui`:
 ui/src/
 ├── ui.rs              the crate root: re-exports everything flat
 ├── prelude.rs         `use ui::prelude::*;` covers most view files
-├── styles.rs          surfaces, motion, typography
+├── styles.rs          motion, typography
 │   └── styles/
 └── components.rs      one module per component
     └── components/
@@ -64,21 +64,17 @@ ui/src/
 
 | Item            | What it's for                                                           |
 | --------------- | ----------------------------------------------------------------------- |
-| `Surface`       | The two background levels: a tinted page, and cards on it               |
-| `Card`          | A content region: card surface, hairline border, optional `CardHeader`  |
-| `Stat`          | One key number on a card, counting to its new value when it changes     |
+| `Stat`          | A number and a muted label on one line (`12 gjenstår`), counting to new values |
 | `Appear`        | Fades and rises a region in the first time it renders                   |
-| `flash()`       | A 0→1→0 strength for pointing at something that just changed            |
+| `flash()`       | A 0→1→0 strength, timed from a start the caller stores with the data    |
 | `Delta`         | A signed change (`+2`, `−3`), tinted when non-zero                      |
 | `KeyHint`       | A key and what it does, read from the keymap in the platform's notation |
 
-### Surfaces and type scale
+### Layout
 
-The visual hierarchy follows the Shadcn dashboard pattern: a faintly tinted page, with content on plain cards above it. Separation comes from the contrast between those two layers and a hairline border, not from heavy lines or shadows. The GPUI Kit design guide keeps shadows for things that really float, such as dialogs and menus.
+The counting screen is flat and runs edge to edge, like a pane in an editor (the layout takes after [tty7](https://github.com/l0ng-ai/tty7)): horizontal bands separated by hairlines, with no cards and no gaps between them. The numbers a counter checks between scans sit inline in the toolbar as metadata (`12 gjenstår`), not as headline figures, so the table gets the height.
 
-`Surface::Page` isn't a hand-picked color. It's the theme's `background` mixed with its `muted` color, so it follows light, dark and custom themes.
-
-`ui::init` sets the base font to 17px, one step above gpui-kit's default. The base font is also the `rem` that all spacing and control sizes scale from, so text, padding and controls grow together and keep their proportions.
+The window opens full screen. The product column takes whatever width the fixed columns leave, and is refitted when the window changes size.
 
 ### Motion
 
@@ -88,6 +84,8 @@ All motion is built on gpui-base's motion primitives (`Presence`, `animate_keyfr
 2. They honour the system's reduced-motion setting: with it on, things appear in their final state.
 
 Motion is only used where it explains a change: a region arriving (`Appear`), or the row you just counted (`flash`). Because the flash disappears under reduced motion, it's never the only sign that something changed. The table's count and status update too.
+
+The flash's start time is stored with the product in the table delegate, not in element state. GPUI drops element state when an element leaves the screen, so a flash keyed to the row would replay each time the row scrolled back into view.
 
 ## The feature crate
 

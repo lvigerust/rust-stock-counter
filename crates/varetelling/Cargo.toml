@@ -8,4 +8,3 @@ publish.workspace = true
 [dependencies]
 gpui-kit.workspace = true
 stocktake_ui.workspace = true
-ui.workspace = true

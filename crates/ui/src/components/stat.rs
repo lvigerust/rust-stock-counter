@@ -1,64 +1,26 @@
 use gpui_kit::base::motion::{Transition, transition};
 
-use crate::{Card, prelude::*};
+use crate::prelude::*;
 
-/// One key number on its own card: a muted label, the number large, and a
-/// line of context beneath. Like the metric cards on a Shadcn dashboard.
+/// A number followed by a muted label on one line, such as `12 gjenstår`.
+/// Compact enough to sit several in a toolbar, separated by dividers.
 ///
 /// When the number changes it counts to the new value instead of jumping,
 /// so a change is noticed without being announced.
-///
-/// ```ignore
-/// Stat::new("remaining", "Gjenstår", 12)
-///     .icon(IconName::CircleDashed)
-///     .detail("varer er ikke telt")
-/// ```
 #[derive(IntoElement)]
 pub struct Stat {
     id: ElementId,
-    label: SharedString,
     value: usize,
-    suffix: Option<SharedString>,
-    detail: Option<SharedString>,
-    icon: Option<IconName>,
-    footer: Option<AnyElement>,
+    label: SharedString,
 }
 
 impl Stat {
-    pub fn new(id: impl Into<ElementId>, label: impl Into<SharedString>, value: usize) -> Self {
+    pub fn new(id: impl Into<ElementId>, value: usize, label: impl Into<SharedString>) -> Self {
         Self {
             id: id.into(),
-            label: label.into(),
             value,
-            suffix: None,
-            detail: None,
-            icon: None,
-            footer: None,
+            label: label.into(),
         }
-    }
-
-    /// Small text right after the number, such as `%` or `av 43`.
-    pub fn suffix(mut self, suffix: impl Into<SharedString>) -> Self {
-        self.suffix = Some(suffix.into());
-        self
-    }
-
-    /// A line of context under the number.
-    pub fn detail(mut self, detail: impl Into<SharedString>) -> Self {
-        self.detail = Some(detail.into());
-        self
-    }
-
-    /// A muted icon at the trailing edge of the label row.
-    pub fn icon(mut self, icon: IconName) -> Self {
-        self.icon = Some(icon);
-        self
-    }
-
-    /// Content at the bottom of the card, such as a progress bar.
-    pub fn footer(mut self, footer: impl IntoElement) -> Self {
-        self.footer = Some(footer.into_any_element());
-        self
     }
 }
 
@@ -73,44 +35,23 @@ impl RenderOnce for Stat {
             cx,
         )
         .round() as usize;
-        let muted = cx.theme().muted_foreground;
 
-        Card::new().child(
-            v_flex()
-                .id(self.id)
-                .p_5()
-                .gap_1()
-                .child(
-                    h_flex()
-                        .justify_between()
-                        .gap_2()
-                        .text_sm()
-                        .font_medium()
-                        .text_color(muted)
-                        .child(self.label)
-                        .children(self.icon.map(|icon| Icon::new(icon).small())),
-                )
-                .child(
-                    h_flex()
-                        .items_baseline()
-                        .gap_1p5()
-                        .child(
-                            div()
-                                .text_3xl()
-                                .font_semibold()
-                                .tabular_nums()
-                                .child(shown.to_string()),
-                        )
-                        .when_some(self.suffix, |this, suffix| {
-                            this.child(div().text_sm().text_color(muted).child(suffix))
-                        }),
-                )
-                .when_some(self.detail, |this, detail| {
-                    this.child(div().text_xs().text_color(muted).child(detail))
-                })
-                .when_some(self.footer, |this, footer| {
-                    this.child(div().pt_3().child(footer))
-                }),
-        )
+        h_flex()
+            .id(self.id)
+            .items_baseline()
+            .gap_1p5()
+            .whitespace_nowrap()
+            .child(
+                div()
+                    .font_semibold()
+                    .tabular_nums()
+                    .child(shown.to_string()),
+            )
+            .child(
+                div()
+                    .text_sm()
+                    .text_color(cx.theme().muted_foreground)
+                    .child(self.label),
+            )
     }
 }

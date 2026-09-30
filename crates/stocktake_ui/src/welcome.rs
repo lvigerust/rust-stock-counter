@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use gpui_kit::component::{alert::Alert, button::Button};
 use gpui_kit::rems;
-use ui::{Card, KeyHint, Surface, prelude::*};
+use ui::{KeyHint, prelude::*};
 
 use crate::{CONTEXT, ImportStockList};
 
@@ -42,13 +42,12 @@ impl RenderOnce for Welcome {
             .size_full()
             .p_6()
             .gap_4()
-            .bg(Surface::Page.bg(cx))
             .when_some(self.resume_error, |this, error| {
                 this.child(Alert::error("resume-error", error))
             })
             .child(
                 v_flex().flex_1().items_center().justify_center().child(
-                    Card::new().w(rems(30.)).child(
+                    v_flex().w(rems(30.)).child(
                         v_flex()
                             .items_center()
                             .gap_6()

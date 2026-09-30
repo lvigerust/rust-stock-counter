@@ -25,7 +25,7 @@ use stocktake::{Lookup, ProductId, Stocktake, store};
 use ui::prelude::*;
 
 use crate::{
-    CONTEXT, CancelCount, ExportStocktake, FocusNext, FocusPrevious, ImportStockList,
+    CONTEXT, CancelCount, ExportStocktake, FocusNext, FocusPrevious, FocusSearch, ImportStockList,
     product_table::{LastCounted, ProductTable},
     quantity::{parse_quantity, quantity_input},
     recount_dialog::{self, Recount},
@@ -64,7 +64,6 @@ pub struct StocktakeView {
     hints_shown: usize,
     /// The already-counted product the recount dialog is open for.
     pending_recount: Option<ProductId>,
-    counts_confirmed: usize,
     save_state: SaveState,
     /// Why the saved stocktake couldn't be resumed.
     resume_error: Option<SharedString>,
@@ -105,6 +104,8 @@ impl StocktakeView {
                     window.refresh();
                 }
             }),
+            // The product column takes the width the others leave.
+            cx.observe_window_bounds(window, |this, window, cx| this.fit_columns(window, cx)),
             cx.observe_window_appearance(window, |_, window, cx| {
                 Theme::sync_system_appearance(Some(window), cx);
             }),
@@ -121,7 +122,6 @@ impl StocktakeView {
             search_hint: None,
             hints_shown: 0,
             pending_recount: None,
-            counts_confirmed: 0,
             save_state: SaveState::Saved,
             resume_error: None,
             _subscriptions: subscriptions,
@@ -144,7 +144,7 @@ impl StocktakeView {
             TableState::new(delegate, window, cx)
                 .col_selectable(false)
                 .col_movable(false)
-                .sortable(false)
+                .sortable(true)
         });
         let table_events = cx.subscribe_in(&table, window, |this, _, event, window, cx| {
             if let TableEvent::SelectRow(row_ix) = event {
@@ -158,6 +158,7 @@ impl StocktakeView {
             generation: self.sessions_started,
             _table_events: table_events,
         });
+        self.fit_columns(window, cx);
         self.resume_error = None;
         self.search_hint = None;
         self.search.update(cx, |search, cx| {
@@ -165,6 +166,20 @@ impl StocktakeView {
             search.focus(window, cx);
         });
         cx.notify();
+    }
+
+    /// Gives the product column whatever width the other columns leave, so
+    /// a full-screen window shows long names instead of empty space.
+    fn fit_columns(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(session) = &self.session else {
+            return;
+        };
+        let width = window.viewport_size().width;
+        session.table.update(cx, |table, cx| {
+            table.delegate_mut().set_width(width);
+            table.refresh(cx);
+            cx.notify();
+        });
     }
 
     fn save(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -198,7 +213,7 @@ impl StocktakeView {
         };
         let rows = session.stocktake.read(cx).search(&self.query(cx));
         session.table.update(cx, |table, cx| {
-            table.delegate_mut().set_rows(rows);
+            table.delegate_mut().set_rows(rows, cx);
             // Row indices now point at different products.
             table.clear_selection(cx);
         });
@@ -379,6 +394,16 @@ impl StocktakeView {
         true
     }
 
+    /// Back to the search, with its text selected so typing replaces it.
+    /// Abandons a count being entered, as clicking elsewhere does.
+    fn focus_search(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.cancel_count(window, cx);
+        self.search.update(cx, |search, cx| {
+            search.focus(window, cx);
+            search.select_all(window, cx);
+        });
+    }
+
     fn cancel_count(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.counting(cx).is_none() {
             return;
@@ -447,10 +472,9 @@ impl StocktakeView {
         let Some(session) = &self.session else {
             return;
         };
-        self.counts_confirmed += 1;
         let last_counted = LastCounted {
             id,
-            generation: self.counts_confirmed,
+            at: cx.background_executor().now(),
         };
         session.table.update(cx, |table, cx| {
             table.delegate_mut().set_last_counted(last_counted);
@@ -514,6 +538,9 @@ impl Render for StocktakeView {
             }))
             .on_action(
                 cx.listener(|this, _: &CancelCount, window, cx| this.cancel_count(window, cx)),
+            )
+            .on_action(
+                cx.listener(|this, _: &FocusSearch, window, cx| this.focus_search(window, cx)),
             )
             .on_action(
                 cx.listener(|this, _: &FocusNext, window, cx| this.move_focus(true, window, cx)),

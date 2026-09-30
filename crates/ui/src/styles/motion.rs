@@ -9,10 +9,10 @@
 //! comes into existence and [`flash`] to point at something that just changed
 //! somewhere the eye might not be looking.
 
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use gpui_kit::base::motion::{
-    Easing, Keyframe, Keyframes, Presence, PresencePhase, Timing, Transition, animate_keyframes,
+    Easing, Keyframe, Keyframes, Presence, PresencePhase, Timing, Transition,
 };
 
 use gpui_kit::StyleRefinement;
@@ -100,19 +100,35 @@ impl RenderOnce for Appear {
     }
 }
 
-/// How strongly to highlight something that just changed: rises quickly to 1,
-/// then fades back to 0. Multiply a highlight color's opacity by it.
+/// How strongly to highlight something that changed at `started_at`: rises
+/// quickly to 1, then fades back to 0. Multiply a highlight color's opacity
+/// by it.
 ///
-/// Include a generation in the `id` to flash the same thing again:
-/// `("counted", generation)`. Under reduced motion it is always 0, so the
-/// highlight must not be the only sign of the change.
-pub fn flash(id: impl Into<ElementId>, window: &mut Window, cx: &mut App) -> f32 {
+/// The caller owns `started_at` (read it from `cx.background_executor().now()`)
+/// and keeps it with the thing that changed, not with the element that shows
+/// it. Element state is dropped when an element leaves the screen, so a flash
+/// keyed to a table row would replay every time the row scrolled back in.
+///
+/// Under reduced motion it is always 0, so the highlight must not be the only
+/// sign of the change.
+pub fn flash(started_at: Instant, window: &mut Window, cx: &mut App) -> f32 {
+    if cx.reduce_motion() {
+        return 0.0;
+    }
+    let elapsed = cx
+        .background_executor()
+        .now()
+        .saturating_duration_since(started_at);
+    let sample = Timing::new(FLASH_DURATION).sample(elapsed);
+    if sample.finished {
+        return 0.0;
+    }
+    window.request_animation_frame();
     let keyframes = Keyframes::try_new([
         Keyframe::new(0.0, 0.0_f32),
         Keyframe::new(0.12, 1.0).ease(Easing::EaseOut),
         Keyframe::new(1.0, 0.0),
     ])
     .expect("flash keyframes are ordered and cover 0..=1");
-    let id: ElementId = id.into();
-    animate_keyframes(id, &keyframes, Timing::new(FLASH_DURATION), window, cx).value
+    keyframes.sample(sample.directed_progress)
 }
