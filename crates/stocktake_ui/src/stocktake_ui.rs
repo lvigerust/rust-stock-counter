@@ -59,8 +59,8 @@ pub fn init(cx: &mut App) {
         KeyBinding::new("secondary-o", ImportStockList, Some(CONTEXT)),
         KeyBinding::new("secondary-e", ExportStocktake, Some(CONTEXT)),
         KeyBinding::new("secondary-f", FocusSearch, Some(CONTEXT)),
-        // The standard macOS shortcut for showing and hiding a sidebar.
-        KeyBinding::new("ctrl-cmd-s", ToggleSidebar, Some(CONTEXT)),
+        // The shortcut editors use for showing and hiding a sidebar.
+        KeyBinding::new("secondary-b", ToggleSidebar, Some(CONTEXT)),
         // The table binds Tab to moving between columns, which traps focus in
         // it. These replace that, and also take precedence over the window's
         // own Tab handling so focus can skip the table.

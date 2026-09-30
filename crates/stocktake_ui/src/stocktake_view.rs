@@ -682,10 +682,10 @@ impl StocktakeView {
     /// Hides the sidebar from its own bar, or shows it again from the main
     /// pane's bar once it's hidden.
     fn render_sidebar_toggle(expanded: bool, cx: &mut Context<Self>) -> impl IntoElement + use<> {
-        let (id, icon, tooltip) = if expanded {
-            ("hide-sidebar", IconName::PanelLeftClose, "Skjul sidepanel")
+        let (id, tooltip) = if expanded {
+            ("hide-sidebar", "Skjul sidepanel")
         } else {
-            ("show-sidebar", IconName::PanelLeftOpen, "Vis sidepanel")
+            ("show-sidebar", "Vis sidepanel")
         };
         // A press here is the button's, not the start of a window drag.
         div()
@@ -694,7 +694,7 @@ impl StocktakeView {
                 Button::new(id)
                     .ghost()
                     .small()
-                    .icon(icon)
+                    .icon(IconName::PanelLeft)
                     // Quieter than the content at rest; hover brings it up.
                     .text_color(cx.theme().muted_foreground)
                     // Ghost buttons have no border, and focus only colors
@@ -965,9 +965,9 @@ mod tests {
         assert!(shown(&mut counter));
 
         // The shortcut does the same.
-        counter.press("ctrl-cmd-s");
+        counter.press("cmd-b");
         assert!(!shown(&mut counter));
-        counter.press("ctrl-cmd-s");
+        counter.press("cmd-b");
         assert!(shown(&mut counter));
 
         // From the keyboard, focus survives its button going away: the next
