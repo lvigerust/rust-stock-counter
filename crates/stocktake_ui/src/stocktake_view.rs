@@ -550,7 +550,7 @@ impl StocktakeView {
     /// The pane beside the sidebar: its bar, holding the search, then the
     /// shell the screens' content goes in, then the status bar. For now the
     /// shell holds the stock list, once one is imported.
-    fn render_main(&self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render_main(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let session = self.session.as_ref();
         v_flex()
             .flex_1()
@@ -752,7 +752,7 @@ impl Render for StocktakeView {
                     .when(!self.sidebar_collapsed, |this| {
                         this.child(self.render_sidebar(cx))
                     })
-                    .child(self.render_main(window, cx)),
+                    .child(self.render_main(cx)),
             )
     }
 }
