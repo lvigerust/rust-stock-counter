@@ -10,12 +10,12 @@ use gpui_kit::component::{alert::Alert, kbd::Kbd};
 use gpui_kit::{Div, FocusHandle, MouseButton, Role, Stateful, rems};
 use ui::prelude::*;
 
-use crate::{APP_NAME, CONTEXT, ImportStockList};
+use crate::{CONTEXT, ImportStockList};
 
 /// How far apart the welcome's parts arrive, so they read top to bottom.
 const STAGGER: Duration = Duration::from_millis(70);
 
-/// The app's name over short lists of ways to start, like Zed's welcome:
+/// The logo over short lists of ways to start, like Zed's welcome:
 /// open a stock list, drop one on the window, or reopen a recent one.
 ///
 /// Importing is the owner's job; this only asks for it: through
@@ -72,10 +72,9 @@ impl RenderOnce for Welcome {
                         .gap_8()
                         .child(
                             Appear::new("welcome-title")
-                                .px_2()
-                                .text_2xl()
-                                .font_semibold()
-                                .child(APP_NAME),
+                                .flex()
+                                .justify_center()
+                                .child(ui::Logo::new(rems(3.5))),
                         )
                         .child(
                             Appear::new("welcome-start")

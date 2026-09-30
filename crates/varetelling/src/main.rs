@@ -33,7 +33,7 @@ const TRANSPARENT: &str = "#00000000";
 actions!(varetelling, [Quit]);
 
 fn main() {
-    application().with_assets(assets::AllAssets).run(|cx| {
+    application().with_assets(ui::Assets).run(|cx| {
         gpui_kit::init(cx);
         stocktake_ui::init(cx);
 

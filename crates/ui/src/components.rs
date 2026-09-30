@@ -3,12 +3,14 @@
 //! never breaks an import.
 
 mod delta;
+mod logo;
 mod sidebar;
 mod sidebar_heading;
 mod sidebar_item;
 mod window_bar;
 
 pub use delta::*;
+pub use logo::*;
 pub use sidebar::*;
 pub use sidebar_heading::*;
 pub use sidebar_item::*;
