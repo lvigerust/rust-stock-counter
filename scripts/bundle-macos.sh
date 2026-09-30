@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Builds the release executable and wraps it in `Scala Bad.app`, under
-# target/release/bundle. The bundle's Info.plist is the one build.rs embeds
-# in the executable, with the version taken from the crate.
+# Builds the release executable, wraps it in `Scala Bad.app` under
+# target/release/bundle, and installs the bundle in /Applications. The
+# bundle's Info.plist is the one build.rs embeds in the executable, with the
+# version taken from the crate.
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
@@ -27,4 +28,10 @@ version="${pkgid##*[#@]}"
 # isn't notarized, so another Mac asks before opening it the first time.
 codesign --force --sign - "$app"
 
-echo "Built $app"
+# Replaces rather than copies over an installed bundle, so files dropped
+# from the bundle don't linger in it.
+installed="/Applications/Scala Bad.app"
+rm -rf "$installed"
+cp -R "$app" /Applications/
+
+echo "Installed $installed"
