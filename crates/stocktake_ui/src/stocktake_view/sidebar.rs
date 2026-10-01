@@ -1,5 +1,5 @@
-//! The sidebar: the app's name, the aisle filter, starting over, and the
-//! button that hides it or shows it again.
+//! The sidebar: the app's name, the aisle filter, starting over, the
+//! button that hides it or shows it again, and the edge that resizes it.
 
 use gpui_kit::component::{
     FocusableExt as _,
@@ -8,7 +8,9 @@ use gpui_kit::component::{
     collapsible::Collapsible,
     separator::Separator,
 };
-use gpui_kit::{Focusable as _, MouseButton, Pixels, px};
+use gpui_kit::{
+    ClickEvent, CursorStyle, DragMoveEvent, Empty, Focusable as _, MouseButton, Pixels, px,
+};
 use ui::{
     Sidebar, SidebarBody, SidebarFooter, SidebarHeader, SidebarHeading, SidebarItem,
     SidebarSection, WindowBar, prelude::*,
@@ -17,9 +19,33 @@ use ui::{
 use super::StocktakeView;
 use crate::{APP_NAME, CONTEXT, ToggleSidebar};
 
-/// Wide enough for a product name beside an icon, and a bar that clears the
-/// traffic lights.
-const SIDEBAR_WIDTH: Pixels = px(256.);
+/// The sidebar's width when the window opens, and after a double-click on
+/// its edge: wide enough for an aisle's label beside its count, and a bar
+/// that clears the traffic lights.
+pub(super) const DEFAULT_SIDEBAR_WIDTH: Pixels = px(256.);
+
+/// The narrowest the counter can drag it: the traffic lights and the hide
+/// button still fit in its bar.
+const MIN_SIDEBAR_WIDTH: Pixels = px(200.);
+
+/// The widest the counter can drag it, so the table keeps the room it needs.
+const MAX_SIDEBAR_WIDTH: Pixels = px(400.);
+
+/// How wide the band that grabs the sidebar's edge is. It sits inside the
+/// sidebar against its trailing rule: the main pane is painted after the
+/// sidebar, so any part of the band past the rule would sit under the pane
+/// and never get the pointer.
+const RESIZE_HANDLE_WIDTH: Pixels = px(6.);
+
+/// What's dragged while the counter resizes the sidebar. It draws nothing:
+/// the sidebar itself follows the pointer.
+pub(super) struct DraggedSidebar;
+
+impl Render for DraggedSidebar {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        Empty
+    }
+}
 
 impl StocktakeView {
     /// Whether the sidebar is on screen: only with a stocktake, and only
@@ -28,13 +54,41 @@ impl StocktakeView {
         self.open.is_some() && !self.sidebar_collapsed
     }
 
-    /// How much of the window's width the sidebar takes.
-    pub(super) fn sidebar_width(&self) -> Pixels {
+    /// How much of the window's width the sidebar takes: nothing while
+    /// it's hidden.
+    pub(super) fn shown_sidebar_width(&self) -> Pixels {
         if self.sidebar_shown() {
-            SIDEBAR_WIDTH
+            self.sidebar_width
         } else {
             px(0.)
         }
+    }
+
+    /// Sets the sidebar's width, kept between the narrowest and widest it
+    /// can be, and refits the table to the room left.
+    fn resize_sidebar(&mut self, width: Pixels, window: &mut Window, cx: &mut Context<Self>) {
+        let width = width.max(MIN_SIDEBAR_WIDTH).min(MAX_SIDEBAR_WIDTH);
+        if width == self.sidebar_width {
+            return;
+        }
+        self.sidebar_width = width;
+        self.fit_columns(window, cx);
+        cx.notify();
+    }
+
+    /// The pointer moved while dragging the sidebar's edge: the edge
+    /// follows it. Registered on the whole window, since a quick drag
+    /// leaves the edge's narrow band behind.
+    pub(super) fn drag_sidebar_edge(
+        &mut self,
+        event: &DragMoveEvent<DraggedSidebar>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        // Without this the cursor falls back to an arrow once the pointer
+        // leaves the band.
+        cx.set_active_drag_cursor_style(CursorStyle::ResizeColumn, window);
+        self.resize_sidebar(event.event.position.x - event.bounds.left(), window, cx);
     }
 
     /// The button that was pressed goes away with its bar and its twin
@@ -72,7 +126,8 @@ impl StocktakeView {
         let toggle = Self::render_sidebar_toggle(true, false, cx);
         let aisle_filter = self.render_aisle_filter(cx);
         Sidebar::new()
-            .w(SIDEBAR_WIDTH)
+            .relative()
+            .w(self.sidebar_width)
             .child(WindowBar::new().justify_end().child(toggle))
             .child(Separator::horizontal().color(cx.theme().sidebar_border))
             .child(SidebarHeader::new().child(SidebarSection::new().child(render_app_name())))
@@ -80,6 +135,41 @@ impl StocktakeView {
             .child(
                 SidebarFooter::new()
                     .child(SidebarSection::new().child(Self::render_discard_button(cx))),
+            )
+            .child(Self::render_resize_handle(cx))
+    }
+
+    /// A band over the sidebar's trailing rule that resizes it: dragging it
+    /// moves the edge, and a double-click puts it back at its default width.
+    /// Hovering it draws the rule in the focus color, to show it can be
+    /// grabbed.
+    fn render_resize_handle(cx: &mut Context<Self>) -> impl IntoElement + use<> {
+        let line = cx.theme().ring;
+        div()
+            .id("sidebar-resize-handle")
+            .group("sidebar-resize-handle")
+            .absolute()
+            .top_0()
+            .bottom_0()
+            .right_0()
+            .w(RESIZE_HANDLE_WIDTH)
+            .flex()
+            .justify_end()
+            // Over the sidebar's bar and its scrolling body, the band is the
+            // one the pointer is on.
+            .occlude()
+            .cursor_col_resize()
+            .on_drag(DraggedSidebar, |_, _, _, cx| cx.new(|_| DraggedSidebar))
+            .on_click(cx.listener(|this, event: &ClickEvent, window, cx| {
+                if event.click_count() == 2 {
+                    this.resize_sidebar(DEFAULT_SIDEBAR_WIDTH, window, cx);
+                }
+            }))
+            .child(
+                div()
+                    .w(px(2.))
+                    .h_full()
+                    .group_hover("sidebar-resize-handle", move |style| style.bg(line)),
             )
     }
 

@@ -31,7 +31,8 @@ use gpui_kit::component::{
     table::{DataTable, TableEvent, TableState},
 };
 use gpui_kit::{
-    DefiniteLength, ExternalPaths, FocusHandle, Focusable, MouseButton, Rems, Subscription, Task,
+    DefiniteLength, DragMoveEvent, ExternalPaths, FocusHandle, Focusable, MouseButton, Pixels,
+    Rems, Subscription, Task,
 };
 use stocktake::{
     Filter, ProductId,
@@ -48,6 +49,7 @@ use crate::{
     welcome::Welcome,
 };
 use files::ImportSource;
+use sidebar::DraggedSidebar;
 
 /// Padding around the content of the main pane.
 const MAIN_PADDING: Rems = Rems(3.);
@@ -76,6 +78,9 @@ pub struct StocktakeView {
     /// Whether the counter hid the sidebar. Without a stocktake it's hidden
     /// anyway, having nothing to act on; see [`Self::sidebar_shown`].
     sidebar_collapsed: bool,
+    /// How wide the counter made the sidebar, kept while it's hidden so it
+    /// comes back the same. For as long as the window is open.
+    sidebar_width: Pixels,
     /// Whether the counter closed the aisle filter in the sidebar, leaving
     /// only its heading.
     aisle_filter_collapsed: bool,
@@ -156,6 +161,7 @@ impl StocktakeView {
             open: None,
             resume_error: None,
             sidebar_collapsed: false,
+            sidebar_width: sidebar::DEFAULT_SIDEBAR_WIDTH,
             aisle_filter_collapsed: false,
             import_task: None,
             _subscriptions: subscriptions,
@@ -261,7 +267,7 @@ impl StocktakeView {
             return;
         };
         // The table spans the main pane.
-        let width = window.viewport_size().width - self.sidebar_width();
+        let width = window.viewport_size().width - self.shown_sidebar_width();
         open.table.update(cx, |table, cx| {
             table.delegate_mut().set_width(width);
             table.refresh(cx);
@@ -485,6 +491,11 @@ impl Render for StocktakeView {
             .on_drop(cx.listener(|this, paths: &ExternalPaths, window, cx| {
                 this.on_drop_files(paths, window, cx)
             }))
+            .on_drag_move(
+                cx.listener(|this, event: &DragMoveEvent<DraggedSidebar>, window, cx| {
+                    this.drag_sidebar_edge(event, window, cx)
+                }),
+            )
             .drag_over::<ExternalPaths>(|style, _, _, cx| style.bg(cx.theme().drop_target))
             .bg(cx.theme().background)
             .text_color(cx.theme().foreground)

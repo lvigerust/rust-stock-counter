@@ -55,7 +55,7 @@ crates/stocktake_ui/src/
 │   └── stocktake_view/
 │       ├── counting.rs    scan → count dialog → saved count → next scan
 │       ├── files.rs       import (file dialog, drop, recent), export
-│       ├── sidebar.rs     aisle filter, starting over, hiding the sidebar
+│       ├── sidebar.rs     aisle filter, starting over, hiding and resizing the sidebar
 │       └── tests.rs       UI integration tests of the window
 ├── product_table.rs       ProductTable: the DataTable delegate (rows, sorting, cells)
 ├── count_dialog.rs        the count dialog, and what counts as a quantity
@@ -78,6 +78,7 @@ crates/stocktake_ui/src/
 | The product being counted and its quantity field | `OpenStocktake::count` (`Count`) | One open count dialog |
 | Recent stock lists | `StocktakeView::recent` | The window |
 | Sidebar hidden | `StocktakeView::sidebar_collapsed` | The window |
+| Sidebar width | `StocktakeView::sidebar_width` | The window (not saved between launches) |
 | Aisle filter closed | `StocktakeView::aisle_filter_collapsed` | The window |
 | Read in progress | `StocktakeView::import_task` | One import |
 | Hover/focus of a row button | GPUI keyed element state (`RowButton`) | The element |
@@ -177,7 +178,7 @@ Root (gpui-kit; added by open_window: dialogs, notifications)
 - **Async work** runs on the background executor and returns through a `WeakEntity`, so a closed window just drops the result. `import_task` holds the read in progress, and starting another import replaces (cancels) it, so the last file chosen wins.
 - **Focus.** The view's own `FocusHandle` keeps shortcuts working when no control has focus. Opening a stocktake focuses the search. The count dialog's field is focused with `defer_in` because the dialog takes focus for itself first. Tab skips the table (`move_focus`), and hiding the sidebar moves focus off the button that disappears. A row that's a button (`ui::RowButton`) keys its focus handle by element id and builds it with `.tab_stop(true)`: GPUI ignores an element's `tab_index` when a handle is passed to `track_focus`.
 - **Identity.** Table rows are keyed by `ProductId::line()` and recent files by their path, never by position, so animation and focus follow the item through filtering and reordering.
-- **Layout.** The window opens maximized. The layout is flat and edge to edge (a visual reference to [tty7](https://github.com/l0ng-ai/tty7)), and the product column takes whatever width the fixed columns leave (`fit_columns`).
+- **Layout.** The window opens maximized. The layout is flat and edge to edge (a visual reference to [tty7](https://github.com/l0ng-ai/tty7)), and the product column takes whatever width the fixed columns leave (`fit_columns`). The sidebar can be resized by dragging its trailing edge, between 200 and 400 px, and a double-click on the edge resets it to 256 px. Its width is a fixed number of pixels the view owns, not a share of the window, so maximizing the window doesn't widen it. The drag uses GPUI's own `on_drag` and `on_drag_move` (`DraggedSidebar` in `sidebar.rs`) rather than gpui-kit's `h_resizable`, which rescales panels by percentage when the window resizes and emits no event the product column could be refitted on.
 
 ### Motion
 
