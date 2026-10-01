@@ -192,6 +192,7 @@ impl StocktakeView {
                 InputEvent::Change => {
                     if let Some(open) = &this.open {
                         open.refresh_rows(cx);
+                        cx.notify();
                     }
                 }
                 InputEvent::PressEnter { .. } => this.find_product(window, cx),
