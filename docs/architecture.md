@@ -213,7 +213,7 @@ Errors are never only logged: each reaches the counter in the window.
 | UI integration | `crates/stocktake_ui/src/stocktake_view/tests.rs` | The real window, headless: importing a workbook (rejected, then accepted, saved and remembered); scan → count → saved → back to search; a scan into the count dialog; cancelling; Tab reaching the welcome's rows; hiding and showing the sidebar by click, shortcut and keyboard |
 | Pure helpers | `count_dialog.rs`, `product_table.rs`, `path_display.rs` | Quantity parsing, uncounted-last sorting, folder display |
 
-Run everything with `cargo test --workspace`; a plain `cargo test` only runs the default member (the shell). The UI tests use gpui-kit's `test-support` feature, enabled for `stocktake_ui`'s tests. `ui::RowButton` registers itself for them with `.test_support()`, which does nothing in normal builds. On Linux, the GPUI test binaries link against `libxkbcommon` and `libxkbcommon-x11` (install the `-dev` packages).
+Run everything with `cargo test --workspace`; a plain `cargo test` only runs the default member (the shell). The UI tests use gpui-kit's `test-support` feature, enabled for `stocktake_ui`'s tests. `ui::RowButton` registers itself for them with `.test_support()`, which does nothing in normal builds.
 
 `stock_list::tests::reads_the_sample_export` reads the real MultiCase export from the untracked `data/` directory. It's `#[ignore]`d so a fresh checkout passes; run it with `cargo test -p stocktake -- --ignored`.
 
