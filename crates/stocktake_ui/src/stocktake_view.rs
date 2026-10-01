@@ -25,7 +25,7 @@ use std::path::{Path, PathBuf};
 use gpui_kit::component::{
     Size, WindowExt as _,
     button::Button,
-    input::{Input, InputEvent, InputGroup, InputGroupAddon, InputState},
+    input::{InputEvent, InputGroup, InputGroupAddon, InputGroupInput, InputState},
     menu::{DropdownMenu as _, PopupMenuItem},
     notification::Notification,
     progress::Progress,
@@ -396,14 +396,9 @@ impl StocktakeView {
             .h(SEARCH_HEIGHT)
             .bg(theme.muted)
             .border_color(theme.border)
-            .addon(
-                InputGroupAddon::new("search-icon").child(
-                    Icon::new(IconName::ScanBarcode)
-                        .small()
-                        .text_color(theme.muted_foreground),
-                ),
-            )
-            .input(Input::new(search).id("search").cleanable(true))
+            // The addon sizes and mutes the icon itself.
+            .addon(InputGroupAddon::new("search-icon").child(Icon::new(IconName::ScanBarcode)))
+            .input(InputGroupInput::new(search).id("search").cleanable(true))
     }
 
     /// Beside the search, the same height: which of the table's columns to
