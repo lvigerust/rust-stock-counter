@@ -4,7 +4,7 @@ Scala Bad is a desktop app for the year-end stocktake (see [CONTEXT.md](../CONTE
 
 It's written in Rust on [GPUI](https://www.gpui.rs/) through [gpui-kit](https://gpui-kit.com) 0.7, and follows the gpui-kit Coding Guides in `.agents/skills/gpui-kit`. There's no server or network: the only inputs are local files.
 
-**Contents:** [From file to table](#from-file-to-table) · [Crates](#crates) · [State](#where-state-lives) · [Actions](#how-user-actions-change-state) · [Excel and files](#excel-and-other-files) · [Views, lifecycle and focus](#views-lifecycle-and-focus) · [Errors](#where-errors-are-handled) · [Adding a feature](#where-to-add-a-feature) · [Tests](#tests) · [Borrowed patterns](#patterns-borrowed-from-other-projects)
+**Contents:** [From file to table](#from-file-to-table) · [Crates](#crates) · [State](#where-state-lives) · [Actions](#how-user-actions-change-state) · [Excel and files](#excel-and-other-files) · [Views, lifecycle and focus](#views-lifecycle-and-focus) · [Motion](#motion) · [Errors](#where-errors-are-handled) · [Adding a feature](#where-to-add-a-feature) · [Tests](#tests) · [Borrowed patterns](#patterns-borrowed-from-other-projects)
 
 ## From file to table
 
@@ -176,7 +176,23 @@ Root (gpui-kit; added by open_window: dialogs, notifications)
 - **Async work** runs on the background executor and returns through a `WeakEntity`, so a closed window just drops the result. `import_task` holds the read in progress, and starting another import replaces (cancels) it, so the last file chosen wins.
 - **Focus.** The view's own `FocusHandle` keeps shortcuts working when no control has focus. Opening a stocktake focuses the search. The count dialog's field is focused with `defer_in` because the dialog takes focus for itself first. Tab skips the table (`move_focus`), and hiding the sidebar moves focus off the button that disappears. A row that's a button (`ui::RowButton`) keys its focus handle by element id and builds it with `.tab_stop(true)`: GPUI ignores an element's `tab_index` when a handle is passed to `track_focus`.
 - **Identity.** Table rows are keyed by `ProductId::line()` and recent files by their path, never by position, so animation and focus follow the item through filtering and reordering.
-- **Motion and layout.** Motion is built on gpui-base's primitives (`ui::Appear`, `ui::flash`), which read the theme's timing and honour reduced motion. The flash's start time is stored in the table delegate (`LastCounted`), not in element state, because GPUI drops element state when a row scrolls away. The window opens maximized. The layout is flat and edge to edge (a visual reference to [tty7](https://github.com/l0ng-ai/tty7)), and the product column takes whatever width the fixed columns leave (`fit_columns`).
+- **Layout.** The window opens maximized. The layout is flat and edge to edge (a visual reference to [tty7](https://github.com/l0ng-ai/tty7)), and the product column takes whatever width the fixed columns leave (`fit_columns`).
+
+### Motion
+
+The app animates only to explain a change, and nothing runs at rest. Its own code has two animations, both in `crates/ui/src/styles/motion.rs`:
+
+| Animation | Where | When it runs | How long |
+| --- | --- | --- | --- |
+| `ui::Appear`: fades and rises a region into place | The welcome's logo, "Kom igang" and "Nylig åpnet" (`welcome.rs`), 70 ms apart | The first time the welcome renders | The theme's `duration_slow` |
+| `ui::flash`: a green pulse behind a row that fades out | The counted product's row (`ProductTable::render_tr`) | Right after a count is saved | 1.4 s (`FLASH_DURATION`) |
+
+- **No idle redraws.** Both ask GPUI for another frame (`request_animation_frame`) only while they're running. Once the welcome has arrived or the flash has faded, the window stops redrawing until something changes.
+- **Built on gpui-base's motion primitives** (`Presence`, `Timing`, `Keyframes`), not raw `with_animation`. They read durations and easing from the theme's motion tokens, so every animation shares one timing.
+- **Reduced motion.** With the system's Reduce motion setting on, the welcome appears in its final state and rows don't flash. The flash is therefore never the only sign of a count: the row's counted quantity, difference and status change too.
+- **The flash survives scrolling.** Its start time is stored in the table delegate (`LastCounted`), not in element state, because GPUI drops element state when a row scrolls away. A flash keyed to the row would replay each time it scrolled back in.
+
+gpui-kit's components (dialogs, notifications, hover states) have their own small transitions. Those are the library's defaults, not something this app adds.
 
 ## Where errors are handled
 
