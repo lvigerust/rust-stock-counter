@@ -24,14 +24,17 @@ use std::path::{Path, PathBuf};
 
 use gpui_kit::component::{
     Size, WindowExt as _,
+    button::Button,
     input::{Input, InputEvent, InputState},
+    menu::{DropdownMenu as _, PopupMenuItem},
     notification::Notification,
     progress::Progress,
     status_bar::StatusBar,
     table::{DataTable, TableEvent, TableState},
 };
 use gpui_kit::{
-    DefiniteLength, ExternalPaths, FocusHandle, Focusable, MouseButton, Rems, Subscription, Task,
+    Anchor, DefiniteLength, ExternalPaths, FocusHandle, Focusable, MouseButton, Rems, Subscription,
+    Task,
 };
 use stocktake::{
     Filter, ProductId,
@@ -316,14 +319,21 @@ impl StocktakeView {
                         this.child(Self::render_sidebar_toggle(false, open.is_none(), cx))
                     })
                     .when_some(open, |this, open| {
-                        // A press here is the field's, not the start of a
-                        // window drag.
+                        // A press here is the field's or the menu's, not
+                        // the start of a window drag.
                         this.child(
-                            div()
+                            h_flex()
                                 .flex_1()
                                 .min_w_0()
+                                .gap_3()
                                 .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                                .child(Self::render_search(&open.search, cx)),
+                                .child(
+                                    div()
+                                        .flex_1()
+                                        .min_w_0()
+                                        .child(Self::render_search(&open.search, cx)),
+                                )
+                                .child(Self::render_columns_menu()),
                         )
                     }),
             )
@@ -391,6 +401,23 @@ impl StocktakeView {
             // Focus doesn't recolor the border: the caret is enough, and
             // the field is focused nearly all the time anyway.
             .focus_bordered(false)
+    }
+
+    /// Beside the search, the same height: which of the table's columns to
+    /// show. A placeholder for now; the menu has nothing to choose yet.
+    fn render_columns_menu() -> impl IntoElement {
+        Button::new("columns")
+            .outline()
+            .icon(IconName::Columns3Cog)
+            .label("Kolonner")
+            .dropdown_caret(true)
+            .h(SEARCH_HEIGHT)
+            // Under the button, lined up with its trailing edge, since it
+            // sits against the end of the bar.
+            .dropdown_menu_with_anchor(Anchor::TopRight, |menu, _, _| {
+                menu.label("Vis kolonner")
+                    .item(PopupMenuItem::new("Kommer snart").disabled(true))
+            })
     }
 
     /// Along the bottom of the main pane, while there's a stock list: how
