@@ -311,7 +311,7 @@ impl StocktakeView {
                     // gpui-kit would recolor a border for focus; this draws
                     // a faint ring around the button instead.
                     .focus_ring(false)
-                    .subtle_focus_ring(cx)
+                    .subtle_focus_ring()
                     .map(|button| {
                         if disabled {
                             button.tooltip("Åpne en fil for å vise sidepanelet")

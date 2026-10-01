@@ -106,7 +106,7 @@ impl RenderOnce for RowButton {
             .track_focus(&focus_handle)
             .rounded(theme.radius)
             .hover(move |style| style.bg(hover_bg).text_color(hover_fg))
-            .subtle_focus_ring(cx)
+            .subtle_focus_ring()
             // A click shouldn't leave the focus ring behind.
             .on_mouse_down(MouseButton::Left, |_, window, _| window.prevent_default())
             .on_click(move |event, window, cx| on_click(event, window, cx))
