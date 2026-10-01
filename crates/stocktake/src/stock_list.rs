@@ -464,11 +464,9 @@ mod tests {
         assert!(!is_supported(Path::new("Vareliste")));
     }
 
-    /// The real export lives in the workspace's untracked `data`
-    /// directory, so this only runs where it's present:
-    /// `cargo test -p stocktake -- --ignored`.
+    /// A real export from the business system, kept in the workspace's
+    /// `data` directory.
     #[test]
-    #[ignore = "needs the untracked sample export in data/"]
     fn reads_the_sample_export() {
         let path =
             Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data/Vareliste - varetelling.xlsx");
