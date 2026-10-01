@@ -24,7 +24,7 @@ use std::path::{Path, PathBuf};
 
 use gpui_kit::component::{
     Size, WindowExt as _,
-    input::{Input, InputEvent, InputState},
+    input::{Input, InputEvent, InputGroup, InputGroupAddon, InputState},
     notification::Notification,
     progress::Progress,
     status_bar::StatusBar,
@@ -376,21 +376,19 @@ impl StocktakeView {
     /// A filled field, quieter than the table below it.
     fn render_search(search: &Entity<InputState>, cx: &App) -> impl IntoElement {
         let theme = cx.theme();
-        Input::new(search)
-            .id("search")
-            .prefix(
-                Icon::new(IconName::ScanBarcode)
-                    .small()
-                    .text_color(theme.muted_foreground),
-            )
-            .cleanable(true)
-            // `Input::h` sizes multi-line inputs only; this sets the field.
-            .map(|input| Styled::h(input, SEARCH_HEIGHT))
+        // Focus takes the group's own border color.
+        InputGroup::new("search-group")
+            .h(SEARCH_HEIGHT)
             .bg(theme.muted)
             .border_color(theme.border)
-            // Focus doesn't recolor the border: the caret is enough, and
-            // the field is focused nearly all the time anyway.
-            .focus_bordered(false)
+            .addon(
+                InputGroupAddon::new("search-icon").child(
+                    Icon::new(IconName::ScanBarcode)
+                        .small()
+                        .text_color(theme.muted_foreground),
+                ),
+            )
+            .input(Input::new(search).id("search").cleanable(true))
     }
 
     /// Along the bottom of the main pane, while there's a stock list: how
