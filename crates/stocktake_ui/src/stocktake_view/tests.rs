@@ -313,3 +313,30 @@ fn hides_and_shows_the_sidebar(cx: &mut TestAppContext) {
     counter.press("tab");
     assert!(counter.is_focused("hide-sidebar"));
 }
+
+#[gpui_kit::test]
+fn tab_skips_lagre_while_it_is_disabled(cx: &mut TestAppContext) {
+    let mut counter = Counter::resume(cx, "tab-lagre");
+    counter.input(BURANO.0);
+    counter.press("enter");
+
+    // With no quantity, Lagre is disabled, and a full round of Tab never
+    // lands on it: the field and Avbryt are the only stops.
+    for _ in 0..2 {
+        counter.press("tab");
+        assert!(!counter.is_focused("save-count"));
+    }
+    assert!(counter.is_focused("count"));
+    // Nor does a round of Shift-Tab.
+    for _ in 0..2 {
+        counter.press("shift-tab");
+        assert!(!counter.is_focused("save-count"));
+    }
+    assert!(counter.is_focused("count"));
+
+    // A quantity enables it, and Tab reaches it again.
+    counter.input("12");
+    counter.press("tab");
+    counter.press("tab");
+    assert!(counter.is_focused("save-count"));
+}
