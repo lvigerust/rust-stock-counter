@@ -129,10 +129,9 @@ fn a_scan_counts_the_product_and_saves_it(cx: &mut TestAppContext) {
     counter.input(BURANO.0);
     counter.press("enter");
 
-    // The count dialog offers the system quantity, selected, so Enter
-    // confirms it and typing replaces it.
+    // The count dialog opens with an empty quantity, ready for typing.
     assert!(counter.is_focused("count"));
-    assert_eq!(counter.value("count").as_deref(), Some(BURANO.1));
+    assert_eq!(counter.value("count").as_deref(), Some(""));
     counter.input("47");
     counter.press("enter");
 
@@ -145,11 +144,12 @@ fn a_scan_counts_the_product_and_saves_it(cx: &mut TestAppContext) {
     assert!(counter.is_focused("search"));
     assert_eq!(counter.value("search").as_deref(), Some(""));
 
-    // Enter alone confirms what the dialog offers, here the earlier count.
+    // Counting it again starts empty too, and Enter alone saves nothing.
     counter.input(BURANO.0);
     counter.press("enter");
-    assert_eq!(counter.value("count").as_deref(), Some("47"));
+    assert_eq!(counter.value("count").as_deref(), Some(""));
     counter.press("enter");
+    assert!(counter.is_focused("count"));
     assert_eq!(counter.counted(BURANO.0), Some(47));
 }
 
@@ -167,7 +167,8 @@ fn a_scan_into_the_count_dialog_counts_the_scanned_product_next(cx: &mut TestApp
     // Nothing is saved for the first, and the second is up for counting.
     assert_eq!(counter.counted(BURANO.0), None);
     assert!(counter.is_focused("count"));
-    assert_eq!(counter.value("count").as_deref(), Some(VENETO.1));
+    assert_eq!(counter.value("count").as_deref(), Some(""));
+    counter.input(VENETO.1);
     counter.press("enter");
     assert_eq!(counter.counted(VENETO.0), Some(3));
 }

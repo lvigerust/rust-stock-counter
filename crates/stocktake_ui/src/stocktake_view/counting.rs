@@ -77,10 +77,8 @@ impl StocktakeView {
         }
     }
 
-    /// Opens the count dialog for the product, with its quantity field
-    /// filled in and selected: Enter keeps what's there, typing replaces it.
-    /// That's the earlier count if there is one, or else the system quantity,
-    /// so confirming it takes a single Enter.
+    /// Opens the count dialog for the product, with its quantity field empty
+    /// and focused.
     fn begin_count(&mut self, id: ProductId, window: &mut Window, cx: &mut Context<Self>) {
         let Some(open) = &mut self.open else {
             return;
@@ -89,13 +87,7 @@ impl StocktakeView {
             return;
         }
         let product = open.session.read(cx).stocktake().product(id).clone();
-        let prefill = product
-            .counted_quantity()
-            .unwrap_or(product.system_quantity());
         let input = cx.new(|cx| quantity_input(window, cx));
-        input.update(cx, |input, cx| {
-            input.set_value(prefill.to_string(), window, cx)
-        });
         // The dialog enables Lagre from the field. Enter reaches the dialog
         // as its confirm action, so it isn't handled here.
         let input_events = cx.subscribe_in(&input, window, |_, _, event, window, _| {
@@ -128,10 +120,7 @@ impl StocktakeView {
         );
         // After the dialog has taken focus for itself.
         cx.defer_in(window, move |_, window, cx| {
-            input.update(cx, |input, cx| {
-                input.focus(window, cx);
-                input.select_all(window, cx);
-            });
+            input.update(cx, |input, cx| input.focus(window, cx));
         });
     }
 
