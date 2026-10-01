@@ -6,4 +6,12 @@ When using the grilling skill, ask questions with the AskUserQuestion tool inste
 
 ## Building and testing
 
-Don't build or run the application to verify changes. When you're done with the changes, say so, and the user will build and test.
+Never launch the application. Don't run `cargo run`, `cargo build`, `scripts/bundle-macos.sh` (it also installs into `/Applications`), or open the built app. The user builds and runs it themselves; when you're done, say so.
+
+Do check the code you write, with commands that compile and test it without opening the app:
+
+- `cargo fmt --all -- --check`
+- `cargo clippy --workspace --all-targets -- -D warnings`
+- `cargo test --workspace` (a plain `cargo test` only runs the shell crate). The UI tests use headless windows, so nothing appears on screen.
+
+Report which of these passed, and show the output of any that failed.
