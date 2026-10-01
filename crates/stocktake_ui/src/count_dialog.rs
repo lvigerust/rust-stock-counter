@@ -1,6 +1,5 @@
 //! Counting one product: the dialog a scan, a search or a click on a row
-//! opens. It shows what the system and any earlier count say, and takes the
-//! counted quantity.
+//! opens. It takes the counted quantity.
 //!
 //! The dialog only collects the quantity. What saving or cancelling does is
 //! the caller's, passed in as callbacks, so this module knows nothing about
@@ -12,6 +11,7 @@ use gpui_kit::ClickEvent;
 use gpui_kit::component::{
     WindowExt as _,
     button::{Button, ButtonVariants as _},
+    description_list::DescriptionList,
     dialog::{DialogClose, DialogFooter},
     input::{Input, InputState},
 };
@@ -51,14 +51,16 @@ pub(crate) fn open(
     cx: &mut App,
 ) {
     let title: SharedString = product.name().to_string().into();
-    let details: SharedString = [product.item_number(), product.location()]
-        .into_iter()
-        .filter(|part| !part.is_empty())
-        .collect::<Vec<_>>()
-        .join(" · ")
-        .into();
-    let system = product.system_quantity();
-    let counted = product.counted_quantity();
+    // A dash rather than an empty value, for a product the list leaves blank.
+    let or_dash = |text: &str| -> SharedString {
+        match text {
+            "" => "–".into(),
+            text => text.to_string().into(),
+        }
+    };
+    let location = or_dash(product.location());
+    let item_number = or_dash(product.item_number());
+    let system_quantity: SharedString = product.system_quantity().to_string().into();
     let on_save: Callback = Rc::new(on_save);
     let on_cancel: Callback = Rc::new(on_cancel);
 
@@ -87,21 +89,26 @@ pub(crate) fn open(
 
         dialog
             .title(title.clone())
-            .w(window.rem_size() * 28.)
+            // Just over a fifth of the way down the window, worked out each
+            // frame so it follows a resize.
+            .margin_top(window.viewport_size().height / 4.5)
             .on_ok(on_ok)
             .on_cancel(on_cancel)
             .child(
                 v_flex()
-                    .gap_4()
+                    .mt_6()
+                    .gap_6()
                     .child(
-                        div()
-                            .text_color(cx.theme().muted_foreground)
-                            .child(details.clone()),
+                        DescriptionList::new()
+                            .bordered(false)
+                            .columns(1)
+                            .item("Varenummer", item_number.clone(), 1)
+                            .item("Lokasjon", location.clone(), 1)
+                            .item("På lager", system_quantity.clone(), 1),
                     )
-                    .child(render_quantities(system, counted, cx))
                     .child(
                         v_flex()
-                            .gap_1p5()
+                            .gap_3()
                             .child(div().text_sm().font_medium().child("Telt antall"))
                             .child(Input::new(&input).id("count")),
                     ),
@@ -111,9 +118,9 @@ pub(crate) fn open(
                     // `DialogClose` fills its container; this keeps Avbryt
                     // as wide as its label, like the button beside it.
                     .child(
-                        div()
-                            .flex_none()
-                            .child(DialogClose::new().trigger(|button| button.label("Avbryt"))),
+                        div().flex_none().child(
+                            DialogClose::new().trigger(|button| button.ghost().label("Avbryt")),
+                        ),
                     )
                     .child(
                         Button::new("save-count")
@@ -123,30 +130,12 @@ pub(crate) fn open(
                             .on_click(on_click_save),
                     ),
             )
+            .p_8()
+            .rounded_2xl()
+            // Never wider than the window, less a margin; the dialog sees to
+            // that itself.
+            .w(window.rem_size() * 32.)
     });
-}
-
-/// The system quantity, and the earlier count if there is one.
-fn render_quantities(system: i64, counted: Option<i64>, cx: &App) -> impl IntoElement {
-    let line = |label: &'static str, value: String| {
-        h_flex()
-            .justify_between()
-            .child(div().text_color(cx.theme().muted_foreground).child(label))
-            .child(div().font_medium().child(value))
-    };
-
-    v_flex()
-        .gap_1p5()
-        .p_3()
-        .rounded(cx.theme().radius)
-        .bg(cx.theme().muted)
-        .text_sm()
-        .tabular_nums()
-        .child(line("På lager", system.to_string()))
-        .child(line(
-            "Telt",
-            counted.map_or_else(|| "–".to_string(), |counted| counted.to_string()),
-        ))
 }
 
 #[cfg(test)]
