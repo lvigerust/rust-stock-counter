@@ -442,7 +442,7 @@ mod tests {
 
     #[test]
     fn rejects_missing_unsupported_and_damaged_files() {
-        let missing = temp_path("missing.xlsx");
+        let missing = temp_path("does-not-exist.xlsx");
         assert!(matches!(read(&missing), Err(ImportError::NotFound)));
 
         let csv = temp_path("stock-list.csv");

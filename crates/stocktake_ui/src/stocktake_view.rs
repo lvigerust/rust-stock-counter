@@ -76,8 +76,9 @@ pub struct StocktakeView {
     /// Whether the counter hid the sidebar. Without a stocktake it's hidden
     /// anyway, having nothing to act on; see [`Self::sidebar_shown`].
     sidebar_collapsed: bool,
-    /// Reading a stock list in the background. A newer import replaces it,
-    /// which cancels it, so only the last file chosen is opened.
+    /// The last stock list read in the background. A newer import replaces
+    /// it, which cancels it if it's still reading, so only the last file
+    /// chosen is opened.
     import_task: Option<Task<()>>,
     _subscriptions: Vec<Subscription>,
 }

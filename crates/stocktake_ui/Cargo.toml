@@ -16,3 +16,5 @@ ui.workspace = true
 
 [dev-dependencies]
 gpui-kit = { workspace = true, features = ["test-support"] }
+# Writes stock list fixtures for the import tests.
+rust_xlsxwriter.workspace = true

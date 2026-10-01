@@ -6488,6 +6488,7 @@ version = "0.1.0"
 dependencies = [
  "dirs 7.0.0",
  "gpui-kit",
+ "rust_xlsxwriter",
  "stocktake",
  "ui",
 ]

@@ -187,6 +187,63 @@ fn cancelling_a_count_saves_nothing(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn importing_a_stock_list_starts_a_saved_stocktake(cx: &mut TestAppContext) {
+    let store = store_path("import");
+    let dir = store.parent().unwrap().to_path_buf();
+    std::fs::create_dir_all(&dir).unwrap();
+
+    // A MultiCase-shaped export, and a workbook that isn't one.
+    let stock_list = dir.join("Vareliste.xlsx");
+    let mut workbook = rust_xlsxwriter::Workbook::new();
+    let sheet = workbook.add_worksheet();
+    let header = [
+        "VareNR",
+        "ProduktDesc1",
+        "PrdEAN",
+        "Lokasjon",
+        "FysiskPaaLager",
+    ];
+    for (col, name) in (0u16..).zip(header) {
+        sheet.write_string(0, col, name).unwrap();
+    }
+    sheet.write_string(1, 0, "152062").unwrap();
+    sheet.write_string(1, 1, "Burano 120 Sort").unwrap();
+    sheet.write_string(1, 2, BURANO.0).unwrap();
+    sheet.write_string(1, 3, "C4-7").unwrap();
+    sheet.write_number(1, 4, 49.).unwrap();
+    workbook.save(&stock_list).unwrap();
+    let other = dir.join("Annet.xlsx");
+    let mut workbook = rust_xlsxwriter::Workbook::new();
+    workbook.add_worksheet().write_string(0, 0, "Navn").unwrap();
+    workbook.save(&other).unwrap();
+
+    let mut counter = Counter::open(cx, store.clone());
+    let view = counter.view.clone();
+    let import = |counter: &mut Counter, path: &PathBuf| {
+        let path = path.clone();
+        counter.step(|window, cx| {
+            view.update(cx, |view, cx| {
+                view.import_stock_list(ImportSource::File(path), window, cx)
+            })
+        });
+    };
+
+    // A file without the export's columns is turned away.
+    import(&mut counter, &other);
+    assert!(counter.find("search").is_none());
+    assert_eq!(store::load(&store).unwrap(), None);
+
+    // The export opens for counting, already saved and remembered.
+    counter.press("escape");
+    import(&mut counter, &stock_list);
+    assert!(counter.is_focused("search"));
+    assert_eq!(counter.counted(BURANO.0), None);
+    assert_eq!(store::load(&store).unwrap().unwrap().len(), 1);
+    let recent = recent::load(&recent::path_beside(&store)).unwrap();
+    assert_eq!(recent.iter().next(), Some(stock_list.as_path()));
+}
+
+#[gpui_kit::test]
 fn tab_reaches_the_welcome_buttons(cx: &mut TestAppContext) {
     let path = store_path("welcome");
     let mut recent = RecentStockLists::default();

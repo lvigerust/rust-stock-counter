@@ -118,7 +118,6 @@ impl StocktakeView {
         self.import_task = Some(cx.spawn_in(window, async move |this, cx| {
             let products = products.await;
             this.update_in(cx, |this, window, cx| {
-                this.import_task = None;
                 this.finish_import(path, products, window, cx)
             })
             .ok();
