@@ -1,6 +1,6 @@
 # Stocktake app: specification
 
-A desktop app for the year-end stocktake at Scala Bad: going through the storage and verifying that the number of units of each product matches what MultiCase says. Terminology follows [CONTEXT.md](../CONTEXT.md).
+A desktop app for the year-end stocktake at Scala Bad: going through the storage and verifying that the number of units of each product matches what the business system says. Terminology follows [CONTEXT.md](../CONTEXT.md).
 
 ## Context
 
@@ -12,7 +12,7 @@ Today the stocktake is done in a spreadsheet on a laptop with a USB barcode scan
 ## Import
 
 - A clean, minimal but good-looking button to import the stock list.
-- The input is the MultiCase `.xlsx` export as-is (see `data/Vareliste - varetelling.xlsx`); no manual preparation.
+- The input is the business system's `.xlsx` export as-is (see `data/Vareliste - varetelling.xlsx`); no manual preparation.
 - Columns are read by header name, not position.
 - Per the storage owner: "Når det gjelder hva som er interessant så er det kolonne C, D, H og N" (the interesting columns are C, D, H and N). These are the columns shown to the counter:
 
@@ -71,7 +71,7 @@ Today the stocktake is done in a spreadsheet on a laptop with a USB barcode scan
 
 - Exports an `.xlsx` of the stock list with two added columns: **Counted quantity** and **Difference** (counted minus system quantity).
 - If any products are uncounted, the app warns before exporting, and uncounted products are marked in the file.
-- Adjustments are entered into MultiCase by hand from the exported file.
+- Adjustments are entered into the business system by hand from the exported file.
 
 ## Out of scope for v1
 
@@ -79,7 +79,7 @@ Today the stocktake is done in a spreadsheet on a laptop with a USB barcode scan
 - Recording products that aren't on the stock list.
 - Several laptops counting the same stocktake, whether merged or synced.
 - Keeping past stocktakes.
-- Importing results directly into MultiCase.
+- Importing results directly into the business system.
 
 ## Undecided
 
@@ -90,4 +90,4 @@ Today the stocktake is done in a spreadsheet on a laptop with a USB barcode scan
 - **Barcode column.** The storage owner listed C, D, H and N as the interesting columns, which doesn't include the barcode (F). The spec still reads F so scanning works. Confirm this is fine, or whether they scan something else, such as the item number.
 - **Export columns.** Whether the exported `.xlsx` should keep every original column, or only C, D, H and N plus Counted quantity and Difference.
 - **Scanning into an open count cell.** If a counter scans the next product instead of pressing Enter first, the barcode is typed into the counted-quantity cell (or the "count again" field) and the scanner's Enter submits it. The app now guards the case where the text is exactly the barcode of a listed product: nothing is saved, the scanned product is counted next, and a hint says the previous count wasn't saved. A barcode that isn't on the list is still accepted as a quantity. Not yet checked with the real scanner; a maximum quantity could close that gap.
-- **MultiCase import.** Whether MultiCase can import stocktake results directly, which would make a matching export format worthwhile.
+- **Importing results.** Whether the business system can import stocktake results directly, which would make a matching export format worthwhile.

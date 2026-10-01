@@ -173,7 +173,7 @@ impl StocktakeView {
         match stock_list {
             Some(path) => self.import_stock_list(ImportSource::File(path.clone()), window, cx),
             None => window.push_notification(
-                Notification::warning("Slipp vareliste-eksporten fra MultiCase, en .xlsx-fil."),
+                Notification::warning("Slipp varelisten her. Den må være en Excel-fil (.xlsx)."),
                 cx,
             ),
         }
@@ -296,11 +296,11 @@ fn import_error_message(error: &ImportError) -> String {
             "Filen finnes ikke lenger. Den kan være flyttet eller slettet.".into()
         }
         ImportError::UnsupportedFormat => {
-            "Filen er ikke en Excel-fil. Bruk vareliste-eksporten fra MultiCase.".into()
+            "Filen er ikke en Excel-fil. Velg varelisten fra lagersystemet.".into()
         }
         ImportError::Unreadable(reason) => format!("Filen kunne ikke leses: {reason}"),
         ImportError::MissingColumns(columns) => format!(
-            "Filen mangler kolonnene {}. Bruk vareliste-eksporten fra MultiCase.",
+            "Filen ser ikke ut som en vareliste. Den mangler kolonnene {}.",
             columns.join(", ")
         ),
         ImportError::InvalidQuantity { row, value } => format!(

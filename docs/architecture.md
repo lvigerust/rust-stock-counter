@@ -1,6 +1,6 @@
 # Architecture
 
-Scala Bad is a desktop app for the year-end stocktake (see [CONTEXT.md](../CONTEXT.md) for the vocabulary and [spec.md](spec.md) for the product). A counter imports MultiCase's stock list (an Excel export), scans each product's barcode, confirms or corrects how many units are on the shelf, and exports the counted list back to Excel. Every count is saved the moment it's made, so closing the app loses nothing.
+Scala Bad is a desktop app for the year-end stocktake (see [CONTEXT.md](../CONTEXT.md) for the vocabulary and [spec.md](spec.md) for the product). A counter imports the stock list exported from the business system (MultiCase, at Scala Bad) as an Excel file, scans each product's barcode, confirms or corrects how many units are on the shelf, and exports the counted list back to Excel. Every count is saved the moment it's made, so closing the app loses nothing.
 
 It's written in Rust on [GPUI](https://www.gpui.rs/) through [gpui-kit](https://gpui-kit.com) 0.7, and follows the gpui-kit Coding Guides in `.agents/skills/gpui-kit`. There's no server or network: the only inputs are local files.
 
@@ -85,7 +85,7 @@ The central rule is that **everything tied to one stocktake lives in `OpenStockt
 
 `Session` (`session.rs`) is the model. It's an `Entity` because more than one party reads it: the view, the table delegate and the status bar. Its methods are the only way counts change, and every change is saved before the method returns, so **a stocktake that looks saved is saved**. Views read it with `session.read(cx).stocktake()`. `StocktakeView` observes it (`cx.observe`), so a count re-renders the table and status bar, and subscribes to `SessionEvent::SaveFailed` to show a notification.
 
-`Stocktake` itself (`crates/stocktake/src/stocktake.rs`) is a plain value with no GPUI in it. `ProductId` is a product's line in the stock list. It's stable for the whole stocktake, so it keys UI state such as row identity and the flash. Item numbers aren't used because MultiCase can list one item number on several lines.
+`Stocktake` itself (`crates/stocktake/src/stocktake.rs`) is a plain value with no GPUI in it. `ProductId` is a product's line in the stock list. It's stable for the whole stocktake, so it keys UI state such as row identity and the flash. Item numbers aren't used because the business system can list one item number on several lines.
 
 ## How user actions change state
 
@@ -124,7 +124,7 @@ All file formats live in the `stocktake` crate. Its functions are synchronous an
 
 ### Reading the stock list (`crates/stocktake/src/stock_list.rs`)
 
-The input is MultiCase's export, used as-is:
+The input is the business system's export, used as-is:
 
 - **Format:** `.xlsx`, `.xlsm` or `.xls` (`stock_list::EXTENSIONS`, checked with `is_supported`). The same check decides which dropped file is accepted.
 - **Sheet:** the first sheet. Its first row is the header row.
@@ -155,7 +155,7 @@ Validation failures are `ImportError` variants: `NotFound`, `UnsupportedFormat`,
 
 ### Exporting (`export.rs`)
 
-`export::write` writes the stock list in walking order with MultiCase's own headers, plus `Telt antall` and `Differanse`. Uncounted products are marked `Ikke telt` and highlighted. The view exports a clone of the stocktake taken when the save dialog opens, so counting can continue while the file is written.
+`export::write` writes the stock list in walking order with the business system's own headers, plus `Telt antall` and `Differanse`. Uncounted products are marked `Ikke telt` and highlighted. The view exports a clone of the stocktake taken when the save dialog opens, so counting can continue while the file is written.
 
 ## Views, lifecycle and focus
 
@@ -215,7 +215,7 @@ Errors are never only logged: each reaches the counter in the window.
 
 Run everything with `cargo test --workspace`; a plain `cargo test` only runs the default member (the shell). The UI tests use gpui-kit's `test-support` feature, enabled for `stocktake_ui`'s tests. `ui::RowButton` registers itself for them with `.test_support()`, which does nothing in normal builds.
 
-`stock_list::tests::reads_the_sample_export` reads the real MultiCase export from the untracked `data/` directory. It's `#[ignore]`d so a fresh checkout passes; run it with `cargo test -p stocktake -- --ignored`.
+`stock_list::tests::reads_the_sample_export` reads the real export from the untracked `data/` directory. It's `#[ignore]`d so a fresh checkout passes; run it with `cargo test -p stocktake -- --ignored`.
 
 ## Patterns borrowed from other projects
 

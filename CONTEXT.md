@@ -1,6 +1,6 @@
 # Stocktake
 
-Year-end verification that the number of units of each product physically in the storage matches what the business system (MultiCase) says.
+Year-end verification that the number of units of each product physically in the storage matches what the business system says. At Scala Bad, the business system is MultiCase; the interface calls it _lagersystemet_ where it needs to name it at all.
 
 The terms below are the canonical language for code and discussion. The people doing the stocktake see a Norwegian interface; Norwegian words listed under _Avoid_ belong in the interface, not the code.
 
@@ -11,7 +11,7 @@ The year-end event of going through the storage and verifying every product's qu
 _Avoid_: Inventory, count (as a noun for the whole event), varetelling
 
 **Stock list**:
-The list of products exported from MultiCase that a stocktake starts from, one line per product.
+The list of products exported from the business system that a stocktake starts from, one line per product.
 _Avoid_: Vareliste, spreadsheet, export
 
 **Product**:
@@ -19,7 +19,7 @@ A kind of item held in the storage, identified by its item number.
 _Avoid_: Vare, article, SKU
 
 **Item number**:
-MultiCase's identifier for a product (VareNR).
+The business system's identifier for a product (VareNR).
 _Avoid_: Product ID, article number
 
 **Barcode**:
@@ -35,7 +35,7 @@ The letters a location starts with, such as `C` in `C4-7`. The table can be filt
 _Avoid_: Reol, zone, rack
 
 **System quantity**:
-The number of units MultiCase says is in the storage for a product (FysiskPaaLager).
+The number of units the business system says is in the storage for a product (FysiskPaaLager).
 _Avoid_: Expected quantity, on hand, stock level
 
 **Counted quantity**:
@@ -43,7 +43,7 @@ The number of units a counter has verified are physically in the storage for a p
 _Avoid_: Actual, physical quantity
 
 **Difference**:
-Counted quantity minus system quantity for a product; positive means more units on the shelf than MultiCase says.
+Counted quantity minus system quantity for a product; positive means more units on the shelf than the business system says.
 _Avoid_: Variance, discrepancy, avvik
 
 **Confirm**:

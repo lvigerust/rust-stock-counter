@@ -192,7 +192,7 @@ fn importing_a_stock_list_starts_a_saved_stocktake(cx: &mut TestAppContext) {
     let dir = store.parent().unwrap().to_path_buf();
     std::fs::create_dir_all(&dir).unwrap();
 
-    // A MultiCase-shaped export, and a workbook that isn't one.
+    // A stock list shaped like the business system's export, and a workbook that isn't one.
     let stock_list = dir.join("Vareliste.xlsx");
     let mut workbook = rust_xlsxwriter::Workbook::new();
     let sheet = workbook.add_worksheet();

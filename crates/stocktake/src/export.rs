@@ -1,4 +1,4 @@
-//! Writes the counted stock list for entering adjustments into MultiCase.
+//! Writes the counted stock list for entering adjustments into the business system.
 
 use std::path::Path;
 

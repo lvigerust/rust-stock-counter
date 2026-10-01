@@ -1,7 +1,7 @@
-//! Reads the stock list exported from MultiCase.
+//! Reads the stock list exported from the business system.
 //!
 //! The export is used as-is: the first sheet, headers in the first row, and
-//! columns found by header name rather than position, so MultiCase can add,
+//! columns found by header name rather than position, so the business system can add,
 //! drop or reorder other columns without breaking the import.
 
 use std::{error::Error, fmt, path::Path};
@@ -10,7 +10,7 @@ use calamine::{Data, Reader as _, open_workbook_auto};
 
 use crate::Product;
 
-/// The headers the import reads, as MultiCase names them.
+/// The headers the import reads, as the business system names them.
 pub mod column {
     pub const ITEM_NUMBER: &str = "VareNR";
     pub const NAME: &str = "ProduktDesc1";
@@ -19,7 +19,7 @@ pub mod column {
     pub const SYSTEM_QUANTITY: &str = "FysiskPaaLager";
 }
 
-/// The file extensions [`read`] accepts: Excel's formats, which MultiCase
+/// The file extensions [`read`] accepts: Excel's formats, which the business system
 /// exports to.
 pub const EXTENSIONS: [&str; 3] = ["xlsx", "xlsm", "xls"];
 
@@ -90,7 +90,7 @@ impl Error for ImportError {
     }
 }
 
-/// Reads the products from a MultiCase stock list export.
+/// Reads the products from the business system's stock list export.
 ///
 /// Rows without an item number are skipped, since exports can end in blank
 /// lines. Every other row must have a whole-number system quantity; an empty
@@ -213,7 +213,7 @@ fn text(cell: &Data) -> String {
 }
 
 /// A cell as a whole number of units. An empty cell means nothing in stock.
-/// Negative quantities are kept: MultiCase can show more units out than in.
+/// Negative quantities are kept: the business system can show more units out than in.
 fn quantity(cell: &Data) -> Option<i64> {
     match cell {
         Data::Empty => Some(0),
@@ -273,7 +273,7 @@ mod tests {
         result
     }
 
-    /// The headers in the order MultiCase exports them, with columns the
+    /// The headers in the order the business system exports them, with columns the
     /// import ignores in between.
     const HEADER: &[Cell] = &[
         Text("Firma"),
@@ -464,7 +464,7 @@ mod tests {
         assert!(!is_supported(Path::new("Vareliste")));
     }
 
-    /// The real MultiCase export lives in the workspace's untracked `data`
+    /// The real export lives in the workspace's untracked `data`
     /// directory, so this only runs where it's present:
     /// `cargo test -p stocktake -- --ignored`.
     #[test]
