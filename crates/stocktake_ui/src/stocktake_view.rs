@@ -398,7 +398,17 @@ impl StocktakeView {
             .border_color(theme.border)
             // The addon sizes and mutes the icon itself.
             .addon(InputGroupAddon::new("search-icon").child(Icon::new(IconName::ScanBarcode)))
-            .input(InputGroupInput::new(search).id("search").cleanable(true))
+            // 12px of inline padding on both sides, a little roomier than
+            // the defaults. The input takes the leading side (8px beside the
+            // icon by default). It resets its trailing side to 10px whenever
+            // the clear button shows, so the group adds the other 2px there.
+            .pr_0p5()
+            .input(
+                InputGroupInput::new(search)
+                    .id("search")
+                    .cleanable(true)
+                    .pl_3(),
+            )
     }
 
     /// Beside the search, the same height: which of the table's columns to
