@@ -134,6 +134,8 @@ pub struct Filter {
     /// Stored as the aisles left out, so an aisle shows until the counter
     /// hides it.
     hidden_aisles: BTreeSet<String>,
+    hides_counted: bool,
+    hides_uncounted: bool,
 }
 
 impl Filter {
@@ -149,8 +151,26 @@ impl Filter {
         }
     }
 
+    /// Whether counted products show, or uncounted ones if `counted` is
+    /// false.
+    pub fn shows_counted(&self, counted: bool) -> bool {
+        if counted {
+            !self.hides_counted
+        } else {
+            !self.hides_uncounted
+        }
+    }
+
+    pub fn set_counted_shown(&mut self, counted: bool, shown: bool) {
+        if counted {
+            self.hides_counted = !shown;
+        } else {
+            self.hides_uncounted = !shown;
+        }
+    }
+
     fn shows(&self, product: &Product) -> bool {
-        self.shows_aisle(product.aisle())
+        self.shows_aisle(product.aisle()) && self.shows_counted(product.is_counted())
     }
 }
 
@@ -378,6 +398,20 @@ mod tests {
         assert_eq!(stocktake.search_filtered("burano", &filter), []);
         filter.set_aisle_shown("C", true);
         assert_eq!(stocktake.search_filtered("", &filter).len(), 4);
+    }
+
+    #[test]
+    fn filter_hides_counted_or_uncounted_products() {
+        let mut stocktake = stocktake();
+        stocktake.set_counted_quantity(ProductId(0), 33);
+        let mut filter = Filter::default();
+        filter.set_counted_shown(true, false);
+        assert_eq!(stocktake.search_filtered("", &filter).len(), 3);
+        filter.set_counted_shown(true, true);
+        filter.set_counted_shown(false, false);
+        assert_eq!(stocktake.search_filtered("", &filter), [ProductId(0)]);
+        filter.set_aisle_shown("C", false);
+        assert_eq!(stocktake.search_filtered("", &filter), []);
     }
 
     #[test]

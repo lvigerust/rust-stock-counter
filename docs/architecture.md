@@ -55,7 +55,7 @@ crates/stocktake_ui/src/
 │   └── stocktake_view/
 │       ├── counting.rs    scan → count dialog → saved count → next scan
 │       ├── files.rs       import (file dialog, drop, recent), export
-│       ├── sidebar.rs     aisle filter, starting over, hiding and resizing the sidebar
+│       ├── sidebar.rs     status and aisle filters, starting over, hiding and resizing the sidebar
 │       └── tests.rs       UI integration tests of the window
 ├── product_table.rs       ProductTable: the DataTable delegate (rows, sorting, cells)
 ├── count_dialog.rs        the count dialog, and what counts as a quantity
@@ -73,7 +73,7 @@ crates/stocktake_ui/src/
 | Products and counts | `Stocktake` (domain value) inside `Session` | The stocktake |
 | Whether the last save succeeded | `Session::save_state` | The stocktake |
 | Search text | `OpenStocktake::search` (`Entity<InputState>`) | The stocktake |
-| Aisle filter | `OpenStocktake::filter` (`stocktake::Filter`) | The stocktake |
+| Status and aisle filters | `OpenStocktake::filter` (`stocktake::Filter`) | The stocktake |
 | Rows shown, sort, column widths, last-counted flash | `ProductTable` inside `OpenStocktake::table` | The stocktake |
 | The product being counted and its quantity field | `OpenStocktake::count` (`Count`) | One open count dialog |
 | Recent stock lists | `StocktakeView::recent` | The window |
@@ -146,7 +146,7 @@ Validation failures are `ImportError` variants: `NotFound`, `UnsupportedFormat`,
 
 ### Searching and ordering (`crates/stocktake/src/stocktake.rs`)
 
-- `Stocktake::search_filtered` returns products matching the search and the aisle filter, ordered the way the storage is walked: by location with natural number order (`C4-9` before `C4-10`), unlocated products last.
+- `Stocktake::search_filtered` returns products matching the search and the status and aisle filters, ordered the way the storage is walked: by location with natural number order (`C4-9` before `C4-10`), unlocated products last.
 - `Stocktake::lookup` resolves a scan or typed text to one product. An exact barcode or item number wins over partial matches, so a scan never lands on a product that merely contains the digits.
 - Column sorting in the table is presentation, so it lives in `ProductTable::apply_sort`. Uncounted products stay at the bottom of the counted and difference columns in both directions.
 
@@ -165,7 +165,7 @@ Validation failures are `ImportError` variants: `NotFound`, `UnsupportedFormat`,
 Root (gpui-kit; added by open_window: dialogs, notifications)
 └── StocktakeView                         key context "Stocktake", the window's focus handle
     ├── Sidebar (only with a stocktake)   ui::Sidebar parts, sidebar.rs
-    │   └── WindowBar · app name · aisle checkboxes · "Tøm varetelling" (SidebarItem → RowButton)
+    │   └── WindowBar · app name · status and aisle checkboxes · "Tøm varetelling" (SidebarItem → RowButton)
     └── main pane
         ├── WindowBar                     traffic lights when the sidebar is hidden, search field
         ├── DataTable(ProductTable)       with a stocktake
