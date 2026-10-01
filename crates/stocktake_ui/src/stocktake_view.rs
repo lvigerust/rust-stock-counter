@@ -428,6 +428,7 @@ impl StocktakeView {
     /// show. A placeholder for now; the menu has nothing to choose yet.
     fn render_columns_menu() -> impl IntoElement {
         Button::new("columns")
+            .small()
             .outline()
             .icon(IconName::Columns3Cog)
             .label("Kolonner")
