@@ -155,12 +155,17 @@ container!(
     /// A group of items in a sidebar's header, body or footer, usually
     /// under a [`SidebarHeading`](crate::SidebarHeading). Its items sit
     /// almost touching, so their hover fills read as one column.
+    ///
+    /// As wide as its container, even where nothing stretches it: inside a
+    /// `Collapsible` the reveal lays its content out on its own, and a
+    /// section there would shrink to its widest item.
     SidebarSection
 );
 
 impl RenderOnce for SidebarSection {
     fn render(self, _: &mut Window, _: &mut App) -> impl IntoElement {
         v_flex()
+            .w_full()
             .gap_0p5()
             .children(self.children)
             .refine_style(&self.style)

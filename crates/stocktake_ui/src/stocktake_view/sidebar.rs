@@ -5,6 +5,7 @@ use gpui_kit::component::{
     FocusableExt as _,
     button::{Button, ButtonVariants as _},
     checkbox::Checkbox,
+    collapsible::Collapsible,
     separator::Separator,
 };
 use gpui_kit::{Focusable as _, MouseButton, Pixels, px};
@@ -82,9 +83,15 @@ impl StocktakeView {
             )
     }
 
+    fn toggle_aisle_filter(&mut self, cx: &mut Context<Self>) {
+        self.aisle_filter_collapsed = !self.aisle_filter_collapsed;
+        cx.notify();
+    }
+
     /// A checkbox per aisle, beside how many products it holds, so the table
     /// can be narrowed to the part of the storage being counted. Only while
-    /// there's a stock list, and one spanning more than one aisle.
+    /// there's a stock list, and one spanning more than one aisle. Its
+    /// heading opens and closes it.
     fn render_aisle_filter(&self, cx: &mut Context<Self>) -> Option<impl IntoElement + use<>> {
         let open = self.open.as_ref()?;
         let aisles: Vec<(SharedString, usize)> = open
@@ -122,10 +129,19 @@ impl StocktakeView {
                     .child(len.to_string()),
             )
         });
+        let open = !self.aisle_filter_collapsed;
+        let heading = SidebarHeading::new("Lokasjoner").on_toggle(
+            "toggle-aisle-filter",
+            open,
+            cx.listener(|this, _, _, cx| this.toggle_aisle_filter(cx)),
+        );
         Some(
-            SidebarSection::new()
-                .child(SidebarHeading::new("Lokasjoner"))
-                .children(items),
+            Collapsible::new()
+                .motion_id("aisle-filter")
+                .open(open)
+                .gap_0p5()
+                .child(heading)
+                .content(SidebarSection::new().children(items)),
         )
     }
 

@@ -76,6 +76,9 @@ pub struct StocktakeView {
     /// Whether the counter hid the sidebar. Without a stocktake it's hidden
     /// anyway, having nothing to act on; see [`Self::sidebar_shown`].
     sidebar_collapsed: bool,
+    /// Whether the counter closed the aisle filter in the sidebar, leaving
+    /// only its heading.
+    aisle_filter_collapsed: bool,
     /// The last stock list read in the background. A newer import replaces
     /// it, which cancels it if it's still reading, so only the last file
     /// chosen is opened.
@@ -153,6 +156,7 @@ impl StocktakeView {
             open: None,
             resume_error: None,
             sidebar_collapsed: false,
+            aisle_filter_collapsed: false,
             import_task: None,
             _subscriptions: subscriptions,
         };

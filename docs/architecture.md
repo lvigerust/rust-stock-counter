@@ -78,6 +78,7 @@ crates/stocktake_ui/src/
 | The product being counted and its quantity field | `OpenStocktake::count` (`Count`) | One open count dialog |
 | Recent stock lists | `StocktakeView::recent` | The window |
 | Sidebar hidden | `StocktakeView::sidebar_collapsed` | The window |
+| Aisle filter closed | `StocktakeView::aisle_filter_collapsed` | The window |
 | Read in progress | `StocktakeView::import_task` | One import |
 | Hover/focus of a row button | GPUI keyed element state (`RowButton`) | The element |
 
