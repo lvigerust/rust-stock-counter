@@ -1,5 +1,5 @@
-//! The sidebar: the app's name, the aisle filter, starting over, and the
-//! button that hides it or shows it again.
+//! The sidebar: the app's name, the status and aisle filters, starting over,
+//! and the button that hides it or shows it again.
 
 use gpui_kit::component::{
     FocusableExt as _,
@@ -10,11 +10,12 @@ use gpui_kit::component::{
 };
 use gpui_kit::{Focusable as _, MouseButton, Pixels, px};
 use ui::{
-    Sidebar, SidebarBody, SidebarFooter, SidebarHeader, SidebarHeading, SidebarItem,
-    SidebarSection, WindowBar, prelude::*,
+    Sidebar, SidebarBody, SidebarFooter, SidebarHeading, SidebarItem, SidebarSection, WindowBar,
+    prelude::*,
 };
 
 use super::StocktakeView;
+use crate::count_status::CountStatus;
 use crate::{APP_NAME, CONTEXT, ToggleSidebar};
 
 /// Wide enough for a product name beside an icon, and a bar that clears the
@@ -55,6 +56,15 @@ impl StocktakeView {
         cx.notify();
     }
 
+    fn set_counted_shown(&mut self, counted: bool, shown: bool, cx: &mut Context<Self>) {
+        let Some(open) = &mut self.open else {
+            return;
+        };
+        open.filter.set_counted_shown(counted, shown);
+        open.refresh_rows(cx);
+        cx.notify();
+    }
+
     fn set_aisle_shown(&mut self, aisle: &str, shown: bool, cx: &mut Context<Self>) {
         let Some(open) = &mut self.open else {
             return;
@@ -66,17 +76,21 @@ impl StocktakeView {
 
     /// The pane along the leading edge: the top bar with the traffic lights
     /// and the button that hides the sidebar, set apart by a rule, then the
-    /// app's name, the filters and the way to start over. Each section holds
-    /// its content as [`SidebarItem`]s.
+    /// filters and the way to start over. Each section holds its content as
+    /// [`SidebarItem`]s.
     pub(super) fn render_sidebar(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let toggle = Self::render_sidebar_toggle(true, false, cx);
+        let status_filter = self.render_status_filter(cx);
         let aisle_filter = self.render_aisle_filter(cx);
         Sidebar::new()
             .w(SIDEBAR_WIDTH)
             .child(WindowBar::new().justify_end().child(toggle))
             .child(Separator::horizontal().color(cx.theme().sidebar_border))
-            .child(SidebarHeader::new().child(SidebarSection::new().child(render_app_name())))
-            .child(SidebarBody::new().children(aisle_filter))
+            .child(
+                SidebarBody::new()
+                    .children(status_filter)
+                    .children(aisle_filter),
+            )
             .child(
                 SidebarFooter::new()
                     .child(SidebarSection::new().child(Self::render_discard_button(cx))),
@@ -86,6 +100,37 @@ impl StocktakeView {
     fn toggle_aisle_filter(&mut self, cx: &mut Context<Self>) {
         self.aisle_filter_collapsed = !self.aisle_filter_collapsed;
         cx.notify();
+    }
+
+    /// A checkbox each for uncounted and counted products, beside how many
+    /// there are, so the table can be narrowed to what's left to count.
+    /// Only while there's a stock list.
+    fn render_status_filter(&self, cx: &mut Context<Self>) -> Option<impl IntoElement + use<>> {
+        let open = self.open.as_ref()?;
+        let stocktake = open.session.read(cx).stocktake();
+        let statuses = [
+            (true, stocktake.counted_len()),
+            (false, stocktake.uncounted_len()),
+        ];
+        let items = statuses.map(|(counted, len)| {
+            let id = if counted {
+                "status-counted"
+            } else {
+                "status-uncounted"
+            };
+            let checkbox = Checkbox::new(id)
+                .label(CountStatus::label(counted))
+                .checked(open.filter.shows_counted(counted))
+                .on_click(cx.listener(move |this, shown: &bool, _, cx| {
+                    this.set_counted_shown(counted, *shown, cx)
+                }));
+            render_filter_item(checkbox, len, cx)
+        });
+        Some(
+            SidebarSection::new()
+                .child(SidebarHeading::new("Status"))
+                .children(items),
+        )
     }
 
     /// A checkbox per aisle, beside how many products it holds, so the table
@@ -105,7 +150,6 @@ impl StocktakeView {
         if aisles.len() < 2 {
             return None;
         }
-        let muted = cx.theme().muted_foreground;
         let items = aisles.into_iter().map(|(aisle, len)| {
             let label = if aisle.is_empty() {
                 "Uten reol".into()
@@ -113,21 +157,12 @@ impl StocktakeView {
                 SharedString::from(format!("Reol {aisle}"))
             };
             let checkbox = Checkbox::new(format!("aisle-{aisle}"))
-                .small()
-                .flex_1()
-                .min_w_0()
                 .label(label)
                 .checked(open.filter.shows_aisle(&aisle))
                 .on_click(cx.listener(move |this, shown: &bool, _, cx| {
                     this.set_aisle_shown(&aisle, *shown, cx)
                 }));
-            SidebarItem::new().child(checkbox).child(
-                div()
-                    .text_xs()
-                    .tabular_nums()
-                    .text_color(muted)
-                    .child(len.to_string()),
-            )
+            render_filter_item(checkbox, len, cx)
         });
         let open = !self.aisle_filter_collapsed;
         let heading = SidebarHeading::new("Lokasjoner").on_toggle(
@@ -199,7 +234,24 @@ impl StocktakeView {
     }
 }
 
+/// One choice in a filter: its checkbox, then how many products it covers.
+fn render_filter_item(checkbox: Checkbox, len: usize, cx: &App) -> SidebarItem {
+    SidebarItem::new()
+        .child(checkbox.small().flex_1().min_w_0())
+        .child(
+            div()
+                .text_xs()
+                .tabular_nums()
+                .text_color(cx.theme().muted_foreground)
+                .child(len.to_string()),
+        )
+}
+
 /// The app's name, atop the sidebar.
+#[expect(
+    dead_code,
+    reason = "taken out of the sidebar for now; restore it in a SidebarHeader"
+)]
 fn render_app_name() -> impl IntoElement {
     SidebarItem::new().child(
         div()

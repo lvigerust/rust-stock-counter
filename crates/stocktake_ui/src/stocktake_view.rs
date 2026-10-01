@@ -14,7 +14,7 @@
 //! | this file     | State, lifecycle, focus, actions, the main pane's layout |
 //! | `counting.rs` | Scan or search → count dialog → saved count               |
 //! | `files.rs`    | Importing stock lists, recent ones, exporting to Excel    |
-//! | `sidebar.rs`  | The sidebar: aisle filter, starting over, hiding it       |
+//! | `sidebar.rs`  | The sidebar: filters, starting over, hiding it            |
 
 mod counting;
 mod files;
