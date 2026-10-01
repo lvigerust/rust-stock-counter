@@ -209,12 +209,11 @@ impl StocktakeView {
                 "status-uncounted"
             };
             let checkbox = Checkbox::new(id)
-                .label(CountStatus::label(counted))
                 .checked(open.filter.shows_counted(counted))
                 .on_click(cx.listener(move |this, shown: &bool, _, cx| {
                     this.set_counted_shown(counted, *shown, cx)
                 }));
-            render_filter_item(checkbox, len, cx)
+            render_filter_item(checkbox, CountStatus::label(counted).into(), len, cx)
         });
         Some(
             SidebarSection::new()
@@ -247,12 +246,11 @@ impl StocktakeView {
                 SharedString::from(format!("Reol {aisle}"))
             };
             let checkbox = Checkbox::new(format!("aisle-{aisle}"))
-                .label(label)
                 .checked(open.filter.shows_aisle(&aisle))
                 .on_click(cx.listener(move |this, shown: &bool, _, cx| {
                     this.set_aisle_shown(&aisle, *shown, cx)
                 }));
-            render_filter_item(checkbox, len, cx)
+            render_filter_item(checkbox, label, len, cx)
         });
         let open = !self.aisle_filter_collapsed;
         let heading = SidebarHeading::new("Lokasjoner").on_toggle(
@@ -324,17 +322,45 @@ impl StocktakeView {
     }
 }
 
-/// One choice in a filter: its checkbox, then how many products it covers.
-fn render_filter_item(checkbox: Checkbox, len: usize, cx: &App) -> SidebarItem {
-    SidebarItem::new()
-        .child(checkbox.small().flex_1().min_w_0())
+/// One choice in a filter: its checkbox and label, then how many products
+/// it covers.
+///
+/// The checkbox is the whole row, the count inside it beside the label, so
+/// its focus ring goes around the row and a click anywhere on it toggles
+/// it. It takes the item's padding for that.
+fn render_filter_item(
+    checkbox: Checkbox,
+    label: SharedString,
+    len: usize,
+    cx: &App,
+) -> SidebarItem {
+    let theme = cx.theme();
+    // With the theme's ring off, gpui-kit marks focus by recoloring a
+    // border the checkbox doesn't have, so it showed none; this draws a
+    // faint ring around the row instead.
+    let checkbox = checkbox
+        .small()
+        .accessibility_label(label.clone())
+        .flex_1()
+        .min_w_0()
+        .p_2()
+        .rounded(theme.radius)
+        .focus_ring(false)
+        .subtle_focus_ring()
         .child(
-            div()
-                .text_xs()
-                .tabular_nums()
-                .text_color(cx.theme().muted_foreground)
-                .child(len.to_string()),
-        )
+            h_flex()
+                .gap_2()
+                .child(div().flex_1().min_w_0().truncate().child(label))
+                .child(
+                    div()
+                        .flex_shrink_0()
+                        .text_xs()
+                        .tabular_nums()
+                        .text_color(theme.muted_foreground)
+                        .child(len.to_string()),
+                ),
+        );
+    SidebarItem::new().p_0().child(checkbox)
 }
 
 /// The app's name, atop the sidebar.
