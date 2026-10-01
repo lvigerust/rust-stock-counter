@@ -391,23 +391,36 @@ impl StocktakeView {
     /// A filled field, quieter than the table below it.
     fn render_search(search: &Entity<InputState>, cx: &App) -> impl IntoElement {
         let theme = cx.theme();
-        // Focus takes the group's own border color.
-        InputGroup::new("search-group")
+        // The border sits on a wrapper: the group recolors its own border
+        // on focus, after any style set here, so it draws none.
+        div()
             .h(SEARCH_HEIGHT)
-            .bg(theme.muted)
+            .rounded(theme.radius)
+            .border_1()
             .border_color(theme.border)
-            // The addon sizes and mutes the icon itself.
-            .addon(InputGroupAddon::new("search-icon").child(Icon::new(IconName::ScanBarcode)))
-            // 12px of inline padding on both sides, a little roomier than
-            // the defaults. The input takes the leading side (8px beside the
-            // icon by default). It resets its trailing side to 10px whenever
-            // the clear button shows, so the group adds the other 2px there.
-            .pr_0p5()
-            .input(
-                InputGroupInput::new(search)
-                    .id("search")
-                    .cleanable(true)
-                    .pl_3(),
+            .child(
+                InputGroup::new("search-group")
+                    .size_full()
+                    .border_0()
+                    .bg(theme.muted)
+                    // The addon sizes and mutes the icon itself.
+                    .addon(
+                        InputGroupAddon::new("search-icon")
+                            .child(Icon::new(IconName::ScanBarcode))
+                            .pl_3(),
+                    )
+                    // 12px of inline padding on both sides, a little roomier
+                    // than the defaults. The input takes the leading side (8px
+                    // beside the icon by default). It resets its trailing side
+                    // to 10px whenever the clear button shows, so the group
+                    // adds the other 2px there.
+                    .pr_4()
+                    .input(
+                        InputGroupInput::new(search)
+                            .id("search")
+                            .cleanable(true)
+                            .pl_2(),
+                    ),
             )
     }
 
