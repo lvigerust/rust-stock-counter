@@ -4,10 +4,10 @@ use std::{cmp::Ordering, time::Instant};
 
 use gpui_kit::component::table::{Column, ColumnSort, TableDelegate, TableState};
 use gpui_kit::{Div, Edges, Pixels, Stateful, px};
-use stocktake::{ProductId, Stocktake, compare_locations, natural_cmp};
+use stocktake::{ProductId, compare_locations, natural_cmp};
 use ui::{Delta, flash, prelude::*};
 
-use crate::count_status::CountStatus;
+use crate::{count_status::CountStatus, session::Session};
 
 /// How tall each row is: a 1.5rem line and [`ROW_PADDING`] above and below
 /// it. Table geometry is in pixels.
@@ -109,8 +109,10 @@ pub struct LastCounted {
     pub at: Instant,
 }
 
+/// How the stock list renders as rows: which products show, in what order,
+/// and how each cell looks. The data itself is read from the [`Session`].
 pub struct ProductTable {
-    stocktake: Entity<Stocktake>,
+    session: Entity<Session>,
     /// The products matching the search, in the storage's walking order.
     matches: Vec<ProductId>,
     /// `matches` in display order: sorted when the counter picked a column.
@@ -123,10 +125,10 @@ pub struct ProductTable {
 }
 
 impl ProductTable {
-    pub fn new(stocktake: Entity<Stocktake>, cx: &App) -> Self {
-        let matches = stocktake.read(cx).search("");
+    pub fn new(session: Entity<Session>, cx: &App) -> Self {
+        let matches = session.read(cx).stocktake().search("");
         Self {
-            stocktake,
+            session,
             rows: matches.clone(),
             matches,
             sort: None,
@@ -135,6 +137,7 @@ impl ProductTable {
         }
     }
 
+    /// Shows these products, sorted by the column the counter picked.
     pub fn set_rows(&mut self, matches: Vec<ProductId>, cx: &App) {
         self.matches = matches;
         self.apply_sort(cx);
@@ -173,7 +176,7 @@ impl ProductTable {
         let Some((column, direction)) = self.sort else {
             return;
         };
-        let stocktake = self.stocktake.read(cx);
+        let stocktake = self.session.read(cx).stocktake();
         // Stable, so equal values keep the walking order.
         self.rows.sort_by(|a, b| {
             let (a, b) = (stocktake.product(*a), stocktake.product(*b));
@@ -196,7 +199,13 @@ impl ProductTable {
     }
 
     fn render_counted_quantity(&self, id: ProductId, cx: &App) -> AnyElement {
-        match self.stocktake.read(cx).product(id).counted_quantity() {
+        match self
+            .session
+            .read(cx)
+            .stocktake()
+            .product(id)
+            .counted_quantity()
+        {
             Some(quantity) => quantity.to_string().into_any_element(),
             None => div()
                 .text_color(cx.theme().muted_foreground)
@@ -357,7 +366,7 @@ impl TableDelegate for ProductTable {
             return div().into_any_element();
         };
         let column = ProductColumn::ALL[col_ix];
-        let product = self.stocktake.read(cx).product(id);
+        let product = self.session.read(cx).stocktake().product(id);
         let content = match column {
             ProductColumn::Location => product.location().to_string().into_any_element(),
             ProductColumn::ItemNumber => div()
@@ -408,7 +417,7 @@ impl TableDelegate for ProductTable {
         let Some(id) = self.product_at(row_ix) else {
             return String::new();
         };
-        let product = self.stocktake.read(cx).product(id);
+        let product = self.session.read(cx).stocktake().product(id);
         match ProductColumn::ALL[col_ix] {
             ProductColumn::Location => product.location().to_string(),
             ProductColumn::ItemNumber => product.item_number().to_string(),
@@ -422,12 +431,7 @@ impl TableDelegate for ProductTable {
                 .difference()
                 .map(|difference| difference.to_string())
                 .unwrap_or_default(),
-            ProductColumn::Status => if product.is_counted() {
-                "Telt"
-            } else {
-                "Ikke telt"
-            }
-            .to_string(),
+            ProductColumn::Status => CountStatus::label(product.is_counted()).to_string(),
         }
     }
 }

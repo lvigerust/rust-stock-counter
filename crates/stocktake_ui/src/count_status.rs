@@ -16,18 +16,19 @@ impl CountStatus {
     pub fn new(counted: bool) -> Self {
         Self { counted }
     }
+
+    /// The status in words, as shown and as copied from the table.
+    pub fn label(counted: bool) -> &'static str {
+        if counted { "Telt" } else { "Ikke telt" }
+    }
 }
 
 impl RenderOnce for CountStatus {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
-        let (icon, color, label) = if self.counted {
-            (IconName::CircleCheck, cx.theme().success, "Telt")
+        let (icon, color) = if self.counted {
+            (IconName::CircleCheck, cx.theme().success)
         } else {
-            (
-                IconName::CircleDashed,
-                cx.theme().muted_foreground,
-                "Ikke telt",
-            )
+            (IconName::CircleDashed, cx.theme().muted_foreground)
         };
         h_flex()
             .gap_2p5()
@@ -35,6 +36,6 @@ impl RenderOnce for CountStatus {
                 this.text_color(cx.theme().muted_foreground)
             })
             .child(Icon::new(icon).small().text_color(color))
-            .child(label)
+            .child(Self::label(self.counted))
     }
 }

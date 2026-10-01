@@ -1,24 +1,27 @@
 //! The counting window: importing a stock list, counting it and exporting
 //! the result.
 //!
-//! This crate is one feature, kept together: the view that owns the workflow,
-//! the table and dialogs it opens, and the small components that only make
-//! sense with stocktake words in them. Its public seam is [`init`] and
-//! [`StocktakeView`]; the shell needs nothing else.
+//! This crate is one feature, kept together: the model that keeps the counts,
+//! the view that owns the workflow, the table and dialogs it opens, and the
+//! small components that only make sense with stocktake words in them. Its
+//! public seam is [`init`], the actions, and [`StocktakeView`]; the shell
+//! needs nothing else.
 //!
 //! | Module           | Owns                                                   |
 //! | ---------------- | ------------------------------------------------------ |
-//! | `stocktake_view` | The workflow: session, focus, commands, the layout     |
+//! | `session`        | The stocktake in progress and saving it (the model)    |
+//! | `stocktake_view` | The workflow: focus, commands, files, the layout       |
 //! | `product_table`  | How the stock list renders as rows                     |
-//! | `count_dialog`   | Counting one product                                   |
+//! | `count_dialog`   | Counting one product, and what a quantity is           |
 //! | `welcome`        | The screen before any stock list is imported           |
 //! | `count_status`   | A product's counted/uncounted marker                   |
-//! | `quantity`       | Parsing and entering a quantity                        |
+//! | `path_display`   | Showing file paths to the counter                      |
 
 mod count_dialog;
 mod count_status;
+mod path_display;
 mod product_table;
-mod quantity;
+mod session;
 mod stocktake_view;
 mod welcome;
 
@@ -35,7 +38,9 @@ actions!(
         ExportStocktake,
         /// Moves focus to the search field, ready for a scan.
         FocusSearch,
+        /// Moves focus to the next control, skipping the table.
         FocusNext,
+        /// Moves focus to the previous control, skipping the table.
         FocusPrevious,
         /// Hides the sidebar, or shows it again.
         ToggleSidebar

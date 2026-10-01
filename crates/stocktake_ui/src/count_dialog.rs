@@ -1,8 +1,14 @@
 //! Counting one product: the dialog a scan, a search or a click on a row
 //! opens. It shows what the system and any earlier count say, and takes the
-//! counted quantity, which replaces the earlier count.
+//! counted quantity.
+//!
+//! The dialog only collects the quantity. What saving or cancelling does is
+//! the caller's, passed in as callbacks, so this module knows nothing about
+//! the view that opens it.
 
-use gpui_kit::WeakEntity;
+use std::rc::Rc;
+
+use gpui_kit::ClickEvent;
 use gpui_kit::component::{
     WindowExt as _,
     button::{Button, ButtonVariants as _},
@@ -12,14 +18,35 @@ use gpui_kit::component::{
 use stocktake::Product;
 use ui::prelude::*;
 
-use crate::{quantity::parse_quantity, stocktake_view::StocktakeView};
+/// A single-line input that accepts whole, non-negative numbers.
+pub(crate) fn quantity_input(window: &mut Window, cx: &mut Context<InputState>) -> InputState {
+    InputState::new(window, cx)
+        .placeholder("Antall")
+        .validate(|text, _| text.chars().all(|c| c.is_ascii_digit()))
+}
 
-/// Opens the dialog for `product`. `input` is the retained quantity field,
-/// owned by the view so it survives re-renders, and already filled in.
+/// The quantity typed into a [`quantity_input`], `None` while it's empty or
+/// too large to be a quantity.
+pub(crate) fn parse_quantity(text: &str) -> Option<i64> {
+    text.trim().parse().ok()
+}
+
+/// What the dialog's buttons and keys do.
+type Callback = Rc<dyn Fn(&mut Window, &mut App)>;
+
+/// Opens the dialog for `product`, with `input` (a [`quantity_input`], filled
+/// in by the caller) as its quantity field.
+///
+/// `on_save` runs for Enter and Lagre. It decides what the field's text
+/// means (a quantity, or perhaps a scan that landed in the wrong field) and
+/// closes the dialog itself once it's done with it; Lagre is only enabled
+/// while the field holds a quantity. `on_cancel` runs when Escape, × or
+/// Avbryt close the dialog.
 pub(crate) fn open(
-    view: WeakEntity<StocktakeView>,
-    input: Entity<InputState>,
     product: &Product,
+    input: Entity<InputState>,
+    on_save: impl Fn(&mut Window, &mut App) + 'static,
+    on_cancel: impl Fn(&mut Window, &mut App) + 'static,
     window: &mut Window,
     cx: &mut App,
 ) {
@@ -32,31 +59,28 @@ pub(crate) fn open(
         .into();
     let system = product.system_quantity();
     let counted = product.counted_quantity();
+    let on_save: Callback = Rc::new(on_save);
+    let on_cancel: Callback = Rc::new(on_cancel);
 
     window.open_dialog(cx, move |dialog, window, cx| {
         // Built again every frame, so Lagre follows the typing.
         let valid = parse_quantity(&input.read(cx).value()).is_some();
-        // Enter and Lagre. `save_count` closes the dialog itself once
-        // there's a valid quantity, so the dialog must not close on its own.
         let on_ok = {
-            let view = view.clone();
-            move |_: &gpui_kit::ClickEvent, window: &mut Window, cx: &mut App| {
-                view.update(cx, |this, cx| this.save_count(window, cx)).ok();
+            let on_save = on_save.clone();
+            move |_: &ClickEvent, window: &mut Window, cx: &mut App| {
+                on_save(window, cx);
+                // `on_save` closes the dialog when it's done with it.
                 false
             }
         };
-        let on_save = {
-            let view = view.clone();
-            move |_: &gpui_kit::ClickEvent, window: &mut Window, cx: &mut App| {
-                view.update(cx, |this, cx| this.save_count(window, cx)).ok();
-            }
+        let on_click_save = {
+            let on_save = on_save.clone();
+            move |_: &ClickEvent, window: &mut Window, cx: &mut App| on_save(window, cx)
         };
-        // Escape, × and Avbryt.
         let on_cancel = {
-            let view = view.clone();
-            move |_: &gpui_kit::ClickEvent, window: &mut Window, cx: &mut App| {
-                view.update(cx, |this, cx| this.dismiss_count(window, cx))
-                    .ok();
+            let on_cancel = on_cancel.clone();
+            move |_: &ClickEvent, window: &mut Window, cx: &mut App| {
+                on_cancel(window, cx);
                 true
             }
         };
@@ -96,7 +120,7 @@ pub(crate) fn open(
                             .primary()
                             .label("Lagre")
                             .disabled(!valid)
-                            .on_click(on_save),
+                            .on_click(on_click_save),
                     ),
             )
     });
@@ -123,4 +147,18 @@ fn render_quantities(system: i64, counted: Option<i64>, cx: &App) -> impl IntoEl
             "Telt",
             counted.map_or_else(|| "–".to_string(), |counted| counted.to_string()),
         ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_whole_quantities_only() {
+        assert_eq!(parse_quantity("12"), Some(12));
+        assert_eq!(parse_quantity(" 0 "), Some(0));
+        assert_eq!(parse_quantity(""), None);
+        // A scanned barcode can be longer than any quantity.
+        assert_eq!(parse_quantity("99999999999999999999"), None);
+    }
 }

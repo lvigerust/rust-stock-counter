@@ -1,14 +1,21 @@
 //! Getting stock lists in and results out: importing (chosen, dropped or
 //! opened again from the recent ones), and exporting to Excel.
+//!
+//! Files are read and written on the background executor, so a large or
+//! slow file never stalls the window; the results come back to the view.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use gpui_kit::component::{WindowExt as _, button::ButtonVariant, notification::Notification};
-use gpui_kit::{ExternalPaths, PathPromptOptions, WeakEntity};
-use stocktake::{Stocktake, export, recent, stock_list};
+use gpui_kit::{ExternalPaths, PathPromptOptions};
+use stocktake::{
+    Product, Stocktake, export, recent,
+    stock_list::{self, ImportError},
+};
 use ui::prelude::*;
 
 use super::StocktakeView;
+use crate::{path_display::file_name, session::Session};
 
 /// Where a new stock list comes from.
 #[derive(Clone)]
@@ -29,9 +36,9 @@ impl StocktakeView {
         cx: &mut Context<Self>,
     ) {
         let in_progress = self
-            .session
+            .open
             .as_ref()
-            .map(|session| session.stocktake.read(cx))
+            .map(|open| open.session.read(cx).stocktake())
             .filter(|stocktake| stocktake.counted_len() > 0)
             .map(|stocktake| (stocktake.counted_len(), stocktake.len()));
         let Some((counted, total)) = in_progress else {
@@ -75,9 +82,9 @@ impl StocktakeView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let path = match source {
+        let prompt = match source {
             ImportSource::File(path) => {
-                Self::spawn_read(cx.entity().downgrade(), path, window, cx);
+                self.read_file(path, window, cx);
                 return;
             }
             ImportSource::Choose => cx.prompt_for_paths(PathPromptOptions {
@@ -88,50 +95,70 @@ impl StocktakeView {
             }),
         };
         cx.spawn_in(window, async move |this, cx| {
-            let Ok(Ok(Some(paths))) = path.await else {
+            // Cancelled, or the dialog couldn't open: nothing to import.
+            let Ok(Ok(Some(paths))) = prompt.await else {
                 return;
             };
             let Some(path) = paths.into_iter().next() else {
                 return;
             };
-            this.update_in(cx, |_, window, cx| {
-                Self::spawn_read(cx.entity().downgrade(), path, window, cx)
-            })
-            .ok();
+            this.update_in(cx, |this, window, cx| this.read_file(path, window, cx))
+                .ok();
         })
         .detach();
     }
 
-    /// Reads the stock list off the UI thread, then starts the stocktake and
-    /// remembers the file among the recent ones.
-    fn spawn_read(this: WeakEntity<Self>, path: PathBuf, window: &mut Window, cx: &mut App) {
+    /// Reads the stock list off the UI thread, then starts the stocktake.
+    /// Replaces any read still under way, so the last file chosen wins.
+    fn read_file(&mut self, path: PathBuf, window: &mut Window, cx: &mut Context<Self>) {
         let products = cx.background_spawn({
             let path = path.clone();
             async move { stock_list::read(&path) }
         });
-        window
-            .spawn(cx, async move |cx| {
-                let products = products.await;
-                this.update_in(cx, |this, window, cx| match products {
-                    Ok(products) => {
-                        this.start_session(Stocktake::new(products), window, cx);
-                        this.save(window, cx);
-                        this.recent.add(path);
-                        this.save_recent();
-                    }
-                    Err(error) => {
-                        let description: SharedString = error.to_string().into();
-                        window.open_alert_dialog(cx, move |dialog, _, _| {
-                            dialog
-                                .title("Varelisten kunne ikke importeres")
-                                .description(description.clone())
-                                .ok_text("OK")
-                        });
-                    }
-                })
-                .ok();
+        self.import_task = Some(cx.spawn_in(window, async move |this, cx| {
+            let products = products.await;
+            this.update_in(cx, |this, window, cx| {
+                this.import_task = None;
+                this.finish_import(path, products, window, cx)
             })
-            .detach();
+            .ok();
+        }));
+    }
+
+    /// Starts a new stocktake from what was read, saved at once, and
+    /// remembers the file among the recent ones; or says why it couldn't.
+    fn finish_import(
+        &mut self,
+        path: PathBuf,
+        products: Result<Vec<Product>, ImportError>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        match products {
+            Ok(products) => {
+                let stocktake = Stocktake::new(products);
+                let session = cx.new(|_| Session::new(stocktake, self.store_path.clone()));
+                self.open_stocktake(session.clone(), window, cx);
+                // After opening, so a failed save is reported like any other.
+                session.update(cx, |session, cx| session.save(cx));
+                self.recent.add(path);
+                self.save_recent();
+            }
+            Err(error) => {
+                if matches!(error, ImportError::NotFound) {
+                    self.recent.remove(&path);
+                    self.save_recent();
+                    cx.notify();
+                }
+                let description: SharedString = import_error_message(&error).into();
+                window.open_alert_dialog(cx, move |dialog, _, _| {
+                    dialog
+                        .title("Varelisten kunne ikke importeres")
+                        .description(description.clone())
+                        .ok_text("OK")
+                });
+            }
+        }
     }
 
     pub(super) fn on_drop_files(
@@ -140,8 +167,11 @@ impl StocktakeView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let spreadsheet = paths.paths().iter().find(|path| is_spreadsheet(path));
-        match spreadsheet {
+        let stock_list = paths
+            .paths()
+            .iter()
+            .find(|path| stock_list::is_supported(path));
+        match stock_list {
             Some(path) => self.import_stock_list(ImportSource::File(path.clone()), window, cx),
             None => window.push_notification(
                 Notification::warning("Slipp vareliste-eksporten fra MultiCase, en .xlsx-fil."),
@@ -151,7 +181,8 @@ impl StocktakeView {
     }
 
     /// Imports a stock list from the recent ones. One that has been moved or
-    /// deleted since is dropped from the list instead.
+    /// deleted since is dropped from the list instead, without first asking
+    /// to discard the stocktake in progress for it.
     pub(super) fn open_recent(
         &mut self,
         path: PathBuf,
@@ -180,11 +211,13 @@ impl StocktakeView {
         recent::save(&self.recent_path, &self.recent).ok();
     }
 
+    /// Writes the counted stock list to a file the counter picks, first
+    /// warning if anything is uncounted.
     pub(super) fn export_stocktake(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(session) = &self.session else {
+        let Some(open) = &self.open else {
             return;
         };
-        let uncounted = session.stocktake.read(cx).uncounted_len();
+        let uncounted = open.session.read(cx).stocktake().uncounted_len();
         if uncounted == 0 {
             self.choose_export_path(window, cx);
             return;
@@ -214,11 +247,13 @@ impl StocktakeView {
         });
     }
 
+    /// Asks where to save, then writes a snapshot of the stocktake as it is
+    /// now; counts made while the dialog is open aren't in the file.
     fn choose_export_path(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(session) = &self.session else {
+        let Some(open) = &self.open else {
             return;
         };
-        let stocktake = session.stocktake.read(cx).clone();
+        let stocktake = open.session.read(cx).stocktake().clone();
         let directory = dirs::download_dir()
             .or_else(dirs::home_dir)
             .unwrap_or_default();
@@ -239,7 +274,8 @@ impl StocktakeView {
                     cx,
                 ),
                 Err(error) => {
-                    let description: SharedString = error.to_string().into();
+                    let description: SharedString =
+                        format!("Filen kunne ikke skrives: {error}").into();
                     window.open_alert_dialog(cx, move |dialog, _, _| {
                         dialog
                             .title("Varetellingen kunne ikke eksporteres")
@@ -254,20 +290,24 @@ impl StocktakeView {
     }
 }
 
-/// Whether a dropped file looks like a stock list export.
-fn is_spreadsheet(path: &Path) -> bool {
-    path.extension()
-        .and_then(|extension| extension.to_str())
-        .is_some_and(|extension| {
-            matches!(
-                extension.to_ascii_lowercase().as_str(),
-                "xlsx" | "xlsm" | "xls"
-            )
-        })
-}
-
-fn file_name(path: &Path) -> String {
-    path.file_name()
-        .map(|name| name.to_string_lossy().into_owned())
-        .unwrap_or_else(|| path.display().to_string())
+/// Why the import failed, in the counter's words.
+fn import_error_message(error: &ImportError) -> String {
+    match error {
+        ImportError::NotFound => {
+            "Filen finnes ikke lenger. Den kan være flyttet eller slettet.".into()
+        }
+        ImportError::UnsupportedFormat => {
+            "Filen er ikke en Excel-fil. Bruk vareliste-eksporten fra MultiCase.".into()
+        }
+        ImportError::Unreadable(reason) => format!("Filen kunne ikke leses: {reason}"),
+        ImportError::MissingColumns(columns) => format!(
+            "Filen mangler kolonnene {}. Bruk vareliste-eksporten fra MultiCase.",
+            columns.join(", ")
+        ),
+        ImportError::InvalidQuantity { row, value } => format!(
+            "Rad {row} har «{value}» i {}, som ikke er et helt antall.",
+            stock_list::column::SYSTEM_QUANTITY
+        ),
+        ImportError::Empty => "Varelisten inneholder ingen varer.".into(),
+    }
 }

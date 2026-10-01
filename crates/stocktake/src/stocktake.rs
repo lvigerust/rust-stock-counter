@@ -2,6 +2,17 @@
 //!
 //! This crate is the domain model. It has no UI dependency, so it builds and
 //! tests in seconds and can't accidentally depend on how things look.
+//!
+//! | Module         | Owns                                                      |
+//! | -------------- | --------------------------------------------------------- |
+//! | this root      | [`Product`], [`Stocktake`], searching, lookup, ordering   |
+//! | [`stock_list`] | Reading and validating the MultiCase export               |
+//! | [`export`]     | Writing the counted stock list back out as `.xlsx`        |
+//! | [`store`]      | Keeping the stocktake in progress on disk                 |
+//! | [`recent`]     | Remembering which stock lists were imported               |
+//!
+//! Every file operation here is synchronous and returns its own error type;
+//! the UI decides what runs in the background and how errors are worded.
 
 pub mod export;
 pub mod recent;
@@ -18,7 +29,7 @@ use serde::{Deserialize, Serialize};
 /// The stock list never changes during a stocktake, so the line is stable.
 /// Item numbers are not used because MultiCase can list one item number on
 /// several lines (one per batch).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct ProductId(usize);
 
 impl ProductId {

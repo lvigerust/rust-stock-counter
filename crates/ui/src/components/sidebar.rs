@@ -6,9 +6,7 @@
 //!     .child(SidebarHeader::new().child(SidebarSection::new().child(title)))
 //!     .child(
 //!         SidebarBody::new()
-//!             .child(SidebarSection::new().child(SidebarHeading::new("Lokasjoner")).children(items))
-//!             .child(SidebarSpacer::new())
-//!             .child(SidebarSection::new().child(help)),
+//!             .child(SidebarSection::new().child(SidebarHeading::new("Lokasjoner")).children(items)),
 //!     )
 //!     .child(SidebarFooter::new().child(SidebarSection::new().child(clear_button)))
 //! ```
@@ -21,7 +19,6 @@
 //! [`SidebarHeading`]: crate::SidebarHeading
 
 use gpui_kit::StyleRefinement;
-use gpui_kit::component::separator::Separator;
 
 use crate::prelude::*;
 
@@ -167,59 +164,5 @@ impl RenderOnce for SidebarSection {
             .gap_0p5()
             .children(self.children)
             .refine_style(&self.style)
-    }
-}
-
-/// A rule between sections, reaching across the 1rem padding to the
-/// sidebar's edges. It keeps the gap its container gives any child on
-/// either side.
-#[derive(IntoElement)]
-pub struct SidebarDivider {
-    style: StyleRefinement,
-}
-
-impl SidebarDivider {
-    pub fn new() -> Self {
-        Self {
-            style: StyleRefinement::default(),
-        }
-    }
-}
-
-impl Default for SidebarDivider {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl Styled for SidebarDivider {
-    fn style(&mut self) -> &mut StyleRefinement {
-        &mut self.style
-    }
-}
-
-impl RenderOnce for SidebarDivider {
-    fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
-        div()
-            .mx_neg_4()
-            .child(Separator::horizontal().color(cx.theme().sidebar_border))
-            .refine_style(&self.style)
-    }
-}
-
-/// Empty space that takes the height its container leaves, pushing what
-/// follows to the bottom, such as a last section in the body.
-#[derive(IntoElement, Default)]
-pub struct SidebarSpacer;
-
-impl SidebarSpacer {
-    pub fn new() -> Self {
-        Self
-    }
-}
-
-impl RenderOnce for SidebarSpacer {
-    fn render(self, _: &mut Window, _: &mut App) -> impl IntoElement {
-        div().flex_1()
     }
 }

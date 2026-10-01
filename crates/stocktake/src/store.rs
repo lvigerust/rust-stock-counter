@@ -84,4 +84,15 @@ mod tests {
         clear(&path).unwrap();
         fs::remove_dir_all(dir).ok();
     }
+
+    #[test]
+    fn a_damaged_save_is_an_error_not_a_missing_one() {
+        let dir = std::env::temp_dir().join(format!("stocktake-damaged-{}", std::process::id()));
+        let path = dir.join("varetelling.json");
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(&path, "{\"products\": [").unwrap();
+
+        assert!(load(&path).is_err());
+        fs::remove_dir_all(dir).ok();
+    }
 }

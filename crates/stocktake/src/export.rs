@@ -5,6 +5,7 @@ use std::path::Path;
 use rust_xlsxwriter::{Color, Format, FormatBorder, Workbook, XlsxError};
 
 use crate::Stocktake;
+use crate::stock_list::column;
 
 /// Written in place of a counted quantity for uncounted products.
 pub const UNCOUNTED_MARK: &str = "Ikke telt";
@@ -22,12 +23,14 @@ pub fn write(stocktake: &Stocktake, path: &Path) -> Result<(), XlsxError> {
         .set_border_bottom(FormatBorder::Thin);
     let uncounted = Format::new().set_background_color(Color::RGB(0xFFF2CC));
 
+    // The stock list's own headers, so the file reads like the export it
+    // came from.
     let columns = [
-        ("Lokasjon", 12.0),
-        ("VareNR", 12.0),
-        ("ProduktDesc1", 36.0),
-        ("PrdEAN", 16.0),
-        ("FysiskPaaLager", 16.0),
+        (column::LOCATION, 12.0),
+        (column::ITEM_NUMBER, 12.0),
+        (column::NAME, 36.0),
+        (column::BARCODE, 16.0),
+        (column::SYSTEM_QUANTITY, 16.0),
         ("Telt antall", 12.0),
         ("Differanse", 12.0),
     ];
