@@ -138,9 +138,6 @@ pub(crate) fn open(
             // Avbryt and Escape already cancel. The × would be one more Tab
             // stop, and gpui-kit gives it no way to show focus here.
             .close_button(false)
-            // Just over a fifth of the way down the window, worked out each
-            // frame so it follows a resize.
-            .margin_top(window.viewport_size().height / 4.5)
             .on_ok(on_ok)
             .on_cancel(on_cancel)
             .child(
