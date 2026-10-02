@@ -33,8 +33,8 @@ use gpui_kit::component::{
     table::{DataTable, TableEvent, TableState},
 };
 use gpui_kit::{
-    Anchor, ClickEvent, DefiniteLength, DragMoveEvent, ExternalPaths, FocusHandle, Focusable, MouseButton,
-    Pixels, Subscription, Task,
+    Anchor, ClickEvent, DefiniteLength, DragMoveEvent, ExternalPaths, FocusHandle, Focusable,
+    MouseButton, Pixels, Subscription, Task,
 };
 use stocktake::{
     Filter, ProductId,

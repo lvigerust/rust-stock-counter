@@ -519,12 +519,12 @@ fn the_columns_menu_hides_and_shows_columns(cx: &mut TestAppContext) {
     counter.click("columns");
     assert_eq!(checked(&mut counter, "menu-item:Varenummer"), Some(false));
 
-    // The product name always shows.
+    // The product name always shows: picking it does nothing, and the menu
+    // stays open.
     counter.click("menu-item:Produkt");
     assert_eq!(columns_count(&mut counter), 6);
 
-    // Picking it again shows it.
-    counter.click("columns");
+    // Picking the hidden column again shows it.
     counter.click("menu-item:Varenummer");
     assert_eq!(columns_count(&mut counter), 7);
 }
