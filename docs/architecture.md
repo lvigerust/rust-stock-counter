@@ -248,5 +248,6 @@ Each pattern below was checked in the source of the project named. They were ado
 | Actions namespaced per crate, bound in the feature's `init` | Zed's `actions!(project_panel, […])` and `project_panel::init` | `stocktake::ImportStockList` etc. are bound once and reused by the menu, keys and buttons |
 | Shell modules for the menu bar and theme | Coco MCP's `apps/desktop/src/menus.rs` and `theme.rs` | `main.rs` stays a short bootstrap |
 | Crate root named after the crate; `ui` with a prelude and flat re-exports; `styles/typography.rs` | Zed's `crates/ui` (`[lib] path = "src/ui.rs"`, `prelude`, `styles/typography.rs`) | Editor tabs say `ui.rs`, and moving a component never breaks an import |
+| Components composed from named blocks, styled after Catalyst's (`Sidebar`, `SidebarHeader`, `SidebarItem`, `Dropdown`, `DropdownItem`, …) | [Catalyst](https://catalyst.tailwindui.com), Tailwind Plus's React kit (licensed, read from a local copy; not copied into this repo) | Call sites read like the layout they build. GPUI has no sibling selectors or subgrid, so containers space their children with a gap and rows use flex |
 
 Zed's dock/pane/workspace machinery, settings system and global registries were deliberately not adopted. They solve problems of many windows, panels and plugins that this app doesn't have.
