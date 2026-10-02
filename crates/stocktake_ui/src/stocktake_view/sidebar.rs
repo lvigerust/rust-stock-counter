@@ -1,5 +1,5 @@
-//! The sidebar: the status and aisle filters, starting over, the button
-//! that hides it or shows it again, and the edge that resizes it.
+//! The sidebar: the status and aisle filters, starting over, exporting, the
+//! button that hides it or shows it again, and the edge that resizes it.
 
 use gpui_kit::component::{
     FocusableExt as _,
@@ -13,7 +13,8 @@ use gpui_kit::{
 };
 use ui::{
     Dropdown, DropdownButton, DropdownItem, DropdownMenu, Sidebar, SidebarBody, SidebarFooter,
-    SidebarHeader, SidebarHeading, SidebarItem, SidebarSection, Spacing, WindowBar, prelude::*,
+    SidebarHeader, SidebarHeading, SidebarItem, SidebarSection, SidebarSpacer, Spacing, WindowBar,
+    prelude::*,
 };
 
 use super::{Mode, StocktakeView};
@@ -130,8 +131,8 @@ impl StocktakeView {
 
     /// The pane along the leading edge: the top bar with the traffic lights
     /// and the button that hides the sidebar, set apart by a rule, then the
-    /// filters and the way to start over. Each section holds its content as
-    /// [`SidebarItem`]s.
+    /// filters with the way to start over below them, against the footer and
+    /// its way to export. Each section holds its content as [`SidebarItem`]s.
     pub(super) fn render_sidebar(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let toggle = Self::render_sidebar_toggle(true, false, cx);
         let status_filter = self.render_status_filter(cx);
@@ -142,14 +143,17 @@ impl StocktakeView {
             .child(WindowBar::new().justify_end().child(toggle))
             .child(Separator::horizontal().color(cx.theme().sidebar_border))
             .child(SidebarHeader::new().child(render_mode_menu(self.mode, cx)))
-            .child(SidebarBody::new().map(|body| match self.mode {
-                Mode::Counting => body.children(status_filter).children(aisle_filter),
-                Mode::Differences => body,
+            .child(SidebarBody::new().map(|body| {
+                match self.mode {
+                    Mode::Counting => body
+                        .children(status_filter)
+                        .children(aisle_filter)
+                        .child(SidebarSpacer::new())
+                        .child(SidebarSection::new().child(Self::render_discard_button(cx))),
+                    Mode::Differences => body,
+                }
             }))
-            .child(
-                SidebarFooter::new()
-                    .child(SidebarSection::new().child(Self::render_discard_button(cx))),
-            )
+            .child(SidebarFooter::new().child(Self::render_export_button(cx)))
             .child(Self::render_resize_handle(cx))
     }
 
@@ -279,6 +283,15 @@ impl StocktakeView {
             .text_color(cx.theme().muted_foreground)
             .child(Icon::new(IconName::Trash).small())
             .child(div().min_w_0().truncate().child("Tøm varetelling"))
+    }
+
+    /// Writes the stocktake to a file, as the menu's Eksporter telling… does.
+    fn render_export_button(cx: &mut Context<Self>) -> impl IntoElement + use<> {
+        Button::new("export-stocktake")
+            .w_full()
+            .icon(IconName::Share)
+            .label("Eksporter telling")
+            .on_click(cx.listener(|this, _, window, cx| this.export_stocktake(window, cx)))
     }
 
     /// Hides the sidebar from its own bar, or shows it again from the main

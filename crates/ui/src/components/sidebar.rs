@@ -129,6 +129,25 @@ impl RenderOnce for SidebarBody {
     }
 }
 
+/// Empty room in a [`SidebarBody`] that takes the height its sections leave,
+/// so the sections after it sit at the bottom, against the footer. Never
+/// less than the 2rem between two sections: it takes back one of the two
+/// gaps around it.
+#[derive(IntoElement, Default)]
+pub struct SidebarSpacer;
+
+impl SidebarSpacer {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl RenderOnce for SidebarSpacer {
+    fn render(self, _: &mut Window, _: &mut App) -> impl IntoElement {
+        div().flex_1().mt_neg_8()
+    }
+}
+
 container!(
     /// The bottom of a [`Sidebar`], set apart from the body by a rule: as
     /// tall as its content, padded by 1rem. Its sections sit close together.
