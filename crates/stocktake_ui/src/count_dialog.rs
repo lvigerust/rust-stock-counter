@@ -184,11 +184,11 @@ pub(crate) fn open(
                     .child(
                         v_flex()
                             .gap_3()
-                            .child(div().text_sm().font_medium().child("Telt antall"))
+                            .child(div().text_sm().font_medium().child("Talt antall"))
                             .child(Input::new(&input).id("count"))
                             .when_some(earlier, |this, earlier| {
                                 this.child(div().text_sm().text_color(muted).child(format!(
-                                    "Allerede telt {earlier} her. Enter legger til."
+                                    "Allerede talt {earlier} her. Enter legger til."
                                 )))
                             }),
                     ),

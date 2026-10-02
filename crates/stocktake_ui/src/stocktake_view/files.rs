@@ -47,7 +47,7 @@ impl StocktakeView {
         };
 
         let description: SharedString = format!(
-            "{counted} av {total} varer er telt. En ny vareliste starter en ny varetelling, og tellingen som pågår forkastes."
+            "{counted} av {total} varer er talt. En ny vareliste starter en ny varetelling, og tellingen som pågår forkastes."
         )
         .into();
         // Choosing a file needs more input; a given file doesn't.
@@ -223,8 +223,8 @@ impl StocktakeView {
         }
 
         let title: SharedString = match uncounted {
-            1 => "1 vare er ikke telt".into(),
-            n => format!("{n} varer er ikke telt").into(),
+            1 => "1 vare er ikke talt".into(),
+            n => format!("{n} varer er ikke talt").into(),
         };
         let view = cx.entity().downgrade();
         window.open_alert_dialog(cx, move |dialog, _, _| {

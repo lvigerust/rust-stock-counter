@@ -35,7 +35,7 @@ impl Mode {
     pub(super) fn description(self) -> &'static str {
         match self {
             Mode::Counting => "Tell varene på lageret.",
-            Mode::Differences => "Varer der telt antall ikke stemmer.",
+            Mode::Differences => "Varer der talt antall ikke stemmer.",
         }
     }
 
@@ -73,6 +73,6 @@ pub(super) fn render_differences(cx: &App) -> impl IntoElement + use<> {
             div()
                 .text_sm()
                 .text_color(cx.theme().muted_foreground)
-                .child("Her kommer en oversikt over varene der telt antall ikke stemmer med lagersystemet."),
+                .child("Her kommer en oversikt over varene der talt antall ikke stemmer med lagersystemet."),
         )
 }

@@ -60,7 +60,7 @@ crates/stocktake_ui/src/
 ├── product_table.rs       ProductTable: the DataTable delegate (rows, sorting, cells)
 ├── count_dialog.rs        the count dialog, and what counts as a quantity
 ├── welcome.rs             Welcome: the screen before a stock list is imported
-├── count_status.rs        CountStatus: "Telt" / "Ikke telt" marker
+├── count_status.rs        CountStatus: "Talt" / "Ikke talt" marker
 └── path_display.rs        file names and ~-shortened folders
 ```
 
@@ -157,7 +157,7 @@ Validation failures are `ImportError` variants: `NotFound`, `UnsupportedFormat`,
 
 ### Exporting (`export.rs`)
 
-`export::write` writes the stock list in walking order with the business system's own headers, plus `Telt antall` and `Differanse`. Uncounted products are marked `Ikke telt` and highlighted. The view exports a clone of the stocktake taken when the save dialog opens, so counting can continue while the file is written.
+`export::write` writes the stock list in walking order with the business system's own headers, plus `Talt antall` and `Differanse`. Uncounted products are marked `Ikke talt` and highlighted. The view exports a clone of the stocktake taken when the save dialog opens, so counting can continue while the file is written.
 
 ## Views, lifecycle and focus
 

@@ -19,7 +19,7 @@ impl CountStatus {
 
     /// The status in words, as shown and as copied from the table.
     pub fn label(counted: bool) -> &'static str {
-        if counted { "Telt" } else { "Ikke telt" }
+        if counted { "Talt" } else { "Ikke talt" }
     }
 }
 

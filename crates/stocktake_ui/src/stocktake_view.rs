@@ -519,7 +519,7 @@ impl StocktakeView {
                     .child(
                         div()
                             .tabular_nums()
-                            .child(format!("{counted} / {total} varer telt")),
+                            .child(format!("{counted} / {total} varer talt")),
                     )
                     .child(
                         h_flex()
@@ -531,7 +531,7 @@ impl StocktakeView {
                                         .color(theme.muted_foreground)
                                         .value(percent as f32)
                                         .accessibility_label(format!(
-                                            "{counted} av {total} varer telt"
+                                            "{counted} av {total} varer talt"
                                         )),
                                 ),
                             )

@@ -96,7 +96,7 @@ impl ProductColumn {
             Self::ItemNumber => ("item-number", "Varenummer"),
             Self::Name => ("name", "Produkt"),
             Self::SystemQuantity => ("system-quantity", "På lager"),
-            Self::CountedQuantity => ("counted-quantity", "Telt"),
+            Self::CountedQuantity => ("counted-quantity", "Talt"),
             Self::Difference => ("difference", "Differanse"),
             Self::Status => ("status", "Status"),
         }

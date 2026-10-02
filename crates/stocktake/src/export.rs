@@ -8,7 +8,7 @@ use crate::Stocktake;
 use crate::stock_list::column;
 
 /// Written in place of a counted quantity for uncounted products.
-pub const UNCOUNTED_MARK: &str = "Ikke telt";
+pub const UNCOUNTED_MARK: &str = "Ikke talt";
 
 /// Marks a location on the locations sheet as the product's pick location.
 pub const PICK_LOCATION_MARK: &str = "Plukklokasjon";
@@ -56,7 +56,7 @@ fn write_counts(
         (column::NAME, 36.0),
         (column::BARCODE, 16.0),
         (column::SYSTEM_QUANTITY, 16.0),
-        ("Telt antall", 12.0),
+        ("Talt antall", 12.0),
         ("Differanse", 12.0),
     ];
     for (col, (name, width)) in (0u16..).zip(columns) {
@@ -102,7 +102,7 @@ fn write_locations(
         (column::NAME, 36.0),
         (column::LOCATION, 12.0),
         ("Lokasjonstype", 16.0),
-        ("Telt antall", 12.0),
+        ("Talt antall", 12.0),
     ];
     for (col, (name, width)) in (0u16..).zip(columns) {
         sheet.write_string_with_format(0, col, name, header)?;
