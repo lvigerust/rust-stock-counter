@@ -133,30 +133,40 @@ impl RenderOnce for Dropdown {
 
         let state = state.downgrade();
         let button = self.button.into_button(self.id, open, cx);
-        div().track_focus(&context).child(
-            button
-                .dropdown_menu_with_anchor(anchor, {
-                    let state = state.clone();
-                    move |menu, _, cx| {
-                        let open_menu = cx.weak_entity();
+        div()
+            .track_focus(&context)
+            // A press on the open button closes the menu as it goes down, and
+            // the button, no longer open but still held, would take
+            // gpui-kit's darker pressed fill until it's let go. Keeping the
+            // press from counting as one keeps the hover fill instead; the
+            // menu still closes, as gpui-kit doesn't check.
+            .when(open, |this| {
+                this.capture_any_mouse_down(|_, window, _| window.prevent_default())
+            })
+            .child(
+                button
+                    .dropdown_menu_with_anchor(anchor, {
+                        let state = state.clone();
+                        move |menu, _, cx| {
+                            let open_menu = cx.weak_entity();
+                            state
+                                .update(cx, |state, _| {
+                                    state.open_menu = open_menu;
+                                    state.built_from = looks.clone();
+                                })
+                                .ok();
+                            build_menu(menu, &entries, min_width, &context)
+                        }
+                    })
+                    .on_open_change(move |open, _, cx| {
                         state
-                            .update(cx, |state, _| {
-                                state.open_menu = open_menu;
-                                state.built_from = looks.clone();
+                            .update(cx, |state, cx| {
+                                state.open = *open;
+                                cx.notify();
                             })
                             .ok();
-                        build_menu(menu, &entries, min_width, &context)
-                    }
-                })
-                .on_open_change(move |open, _, cx| {
-                    state
-                        .update(cx, |state, cx| {
-                            state.open = *open;
-                            cx.notify();
-                        })
-                        .ok();
-                }),
-        )
+                    }),
+            )
     }
 }
 
