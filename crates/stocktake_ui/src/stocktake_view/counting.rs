@@ -2,13 +2,16 @@
 //! dialog takes the quantity, the count is saved, and focus returns to the
 //! search for the next scan.
 
-use gpui_kit::component::{WindowExt as _, input::InputEvent};
+use gpui_kit::component::{
+    WindowExt as _,
+    input::{InputEvent, InputState},
+};
 use stocktake::{Lookup, ProductId};
 use ui::prelude::*;
 
 use super::{Count, Mode, StocktakeView};
 use crate::{
-    count_dialog::{self, parse_quantity, quantity_input},
+    count_dialog::{self, Save, location_input, parse_quantity, quantity_input},
     product_table::LastCounted,
 };
 
@@ -77,8 +80,9 @@ impl StocktakeView {
         }
     }
 
-    /// Opens the count dialog for the product, with its quantity field empty
-    /// and focused.
+    /// Opens the count dialog for the product, with its location field
+    /// filled in with the pick location and its quantity field empty and
+    /// focused.
     fn begin_count(&mut self, id: ProductId, window: &mut Window, cx: &mut Context<Self>) {
         let Some(open) = &mut self.open else {
             return;
@@ -87,28 +91,39 @@ impl StocktakeView {
             return;
         }
         let product = open.session.read(cx).stocktake().product(id).clone();
+        let location = cx.new(|cx| location_input(&product, window, cx));
         let input = cx.new(|cx| quantity_input(window, cx));
-        // The dialog enables Lagre from the field. Enter reaches the dialog
+        // The dialog's buttons follow both fields. Enter reaches the dialog
         // as its confirm action, so it isn't handled here.
-        let input_events = cx.subscribe_in(&input, window, |_, _, event, window, _| {
+        let refresh = |_: &mut Self,
+                       _: &Entity<InputState>,
+                       event: &InputEvent,
+                       window: &mut Window,
+                       _: &mut Context<Self>| {
             if let InputEvent::Change = event {
                 window.refresh();
             }
-        });
+        };
         open.count = Some(Count {
             product: id,
+            location: location.clone(),
             input: input.clone(),
-            _input_events: input_events,
+            _input_events: [
+                cx.subscribe_in(&location, window, refresh),
+                cx.subscribe_in(&input, window, refresh),
+            ],
         });
 
         let view = cx.entity().downgrade();
         count_dialog::open(
             &product,
+            location,
             input.clone(),
             {
                 let view = view.clone();
-                move |window, cx| {
-                    view.update(cx, |this, cx| this.save_count(window, cx)).ok();
+                move |save, window, cx| {
+                    view.update(cx, |this, cx| this.save_count(save, window, cx))
+                        .ok();
                 }
             },
             move |window, cx| {
@@ -124,16 +139,20 @@ impl StocktakeView {
         });
     }
 
-    /// Enter or Lagre in the count dialog: saves the quantity, replacing any
-    /// earlier count.
-    fn save_count(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    /// Enter or a save button in the count dialog: saves the quantity at
+    /// the location, replacing or adding to any earlier count there.
+    fn save_count(&mut self, save: Save, window: &mut Window, cx: &mut Context<Self>) {
         let Some(open) = &self.open else {
             return;
         };
         let Some(count) = &open.count else {
             return;
         };
-        let (id, text) = (count.product, count.input.read(cx).value());
+        let (id, location, text) = (
+            count.product,
+            count.location.read(cx).value(),
+            count.input.read(cx).value(),
+        );
         if self.take_scan_from_quantity(&text, window, cx) {
             return;
         }
@@ -143,12 +162,23 @@ impl StocktakeView {
         let Some(open) = &mut self.open else {
             return;
         };
+        let earlier = open
+            .session
+            .read(cx)
+            .stocktake()
+            .product(id)
+            .count_at(&location);
+        let quantity = match (save, earlier) {
+            (Save::Add, Some(earlier)) => earlier + quantity,
+            _ => quantity,
+        };
         // Taken before closing, so the dialog's own cancel finds nothing to
         // dismiss.
         open.count = None;
         window.close_dialog(cx);
-        open.session
-            .update(cx, |session, cx| session.record_count(id, quantity, cx));
+        open.session.update(cx, |session, cx| {
+            session.record_count(id, &location, quantity, cx)
+        });
         self.finish_count(window, cx);
         self.reveal_counted(id, cx);
     }

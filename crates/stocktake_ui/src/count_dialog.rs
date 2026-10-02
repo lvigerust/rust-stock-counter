@@ -1,9 +1,9 @@
 //! Counting one product: the dialog a scan, a search or a click on a row
-//! opens. It takes the counted quantity.
+//! opens. It takes the location and the quantity counted there.
 //!
-//! The dialog only collects the quantity. What saving or cancelling does is
-//! the caller's, passed in as callbacks, so this module knows nothing about
-//! the view that opens it.
+//! The dialog only collects them. What saving or cancelling does is the
+//! caller's, passed in as callbacks, so this module knows nothing about the
+//! view that opens it.
 
 use std::rc::Rc;
 
@@ -11,7 +11,7 @@ use gpui_kit::ClickEvent;
 use gpui_kit::component::{
     FocusableExt as _, WindowExt as _,
     button::{Button, ButtonVariants as _},
-    description_list::DescriptionList,
+    description_list::{DescriptionItem, DescriptionList},
     dialog::{DialogClose, DialogFooter},
     input::{Input, InputState},
 };
@@ -31,55 +31,85 @@ pub(crate) fn parse_quantity(text: &str) -> Option<i64> {
     text.trim().parse().ok()
 }
 
+/// A single-line input for the location a count was made at, filled in with
+/// the product's pick location.
+pub(crate) fn location_input(
+    product: &Product,
+    window: &mut Window,
+    cx: &mut Context<InputState>,
+) -> InputState {
+    InputState::new(window, cx)
+        .placeholder("Lokasjon")
+        .default_value(product.location().to_string())
+}
+
+/// What a save does with a count already made at the same location.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Save {
+    /// The new quantity takes the earlier one's place.
+    Replace,
+    /// The new quantity is added to the earlier one.
+    Add,
+}
+
 /// What the dialog's buttons and keys do.
 type Callback = Rc<dyn Fn(&mut Window, &mut App)>;
+type SaveCallback = Rc<dyn Fn(Save, &mut Window, &mut App)>;
 
-/// Opens the dialog for `product`, with `input` (a [`quantity_input`], filled
-/// in by the caller) as its quantity field.
+/// Opens the dialog for `product`, with `location` (a [`location_input`])
+/// and `input` (a [`quantity_input`], filled in by the caller) as its
+/// fields.
 ///
-/// `on_save` runs for Enter and Lagre. It decides what the field's text
-/// means (a quantity, or perhaps a scan that landed in the wrong field) and
-/// closes the dialog itself once it's done with it; Lagre is only enabled
-/// while the field holds a quantity. `on_cancel` runs when Escape or Avbryt
-/// close the dialog.
+/// `on_save` runs for Enter and the save buttons. It decides what the
+/// quantity field's text means (a quantity, or perhaps a scan that landed in
+/// the wrong field) and closes the dialog itself once it's done with it; the
+/// buttons are only enabled while the field holds a quantity. While the
+/// location already has a count, Enter adds to it, and a second button
+/// replaces it instead. `on_cancel` runs when Escape or Avbryt close the
+/// dialog.
 pub(crate) fn open(
     product: &Product,
+    location: Entity<InputState>,
     input: Entity<InputState>,
-    on_save: impl Fn(&mut Window, &mut App) + 'static,
+    on_save: impl Fn(Save, &mut Window, &mut App) + 'static,
     on_cancel: impl Fn(&mut Window, &mut App) + 'static,
     window: &mut Window,
     cx: &mut App,
 ) {
+    let product = product.clone();
     let title: SharedString = product.name().to_string().into();
-    // A dash rather than an empty value, for a product the list leaves blank.
-    let or_dash = |text: &str| -> SharedString {
-        match text {
-            "" => "–".into(),
-            text => text.to_string().into(),
-        }
-    };
-    let location = or_dash(product.location());
     let item_number = or_dash(product.item_number());
     let system_quantity: SharedString = product.system_quantity().to_string().into();
-    let on_save: Callback = Rc::new(on_save);
+    let on_save: SaveCallback = Rc::new(on_save);
     let on_cancel: Callback = Rc::new(on_cancel);
 
     window.open_dialog(cx, move |dialog, window, cx| {
-        // Built again every frame, so Lagre follows the typing.
+        // Built again every frame, so the buttons follow the typing.
         let valid = parse_quantity(&input.read(cx).value()).is_some();
+        let earlier = product.count_at(&location.read(cx).value());
         let ring = cx.theme().ring;
         let surface = cx.theme().background;
+        let muted = cx.theme().muted_foreground;
         let on_ok = {
             let on_save = on_save.clone();
             move |_: &ClickEvent, window: &mut Window, cx: &mut App| {
-                on_save(window, cx);
+                on_save(Save::Add, window, cx);
                 // `on_save` closes the dialog when it's done with it.
                 false
             }
         };
-        let on_click_save = {
+        let on_click = |save: Save| {
             let on_save = on_save.clone();
-            move |_: &ClickEvent, window: &mut Window, cx: &mut App| on_save(window, cx)
+            move |_: &ClickEvent, window: &mut Window, cx: &mut App| on_save(save, window, cx)
+        };
+        let save_button = |id: &'static str, label: &'static str| {
+            Button::new(id)
+                .rounded_lg()
+                .accessibility_label(label)
+                .child(div().text_sm().font_medium().child(label))
+                .focus_ring(false)
+                .solid_focus_ring(ring, surface)
+                .disabled(!valid)
         };
         let on_cancel = {
             let on_cancel = on_cancel.clone();
@@ -108,14 +138,40 @@ pub(crate) fn open(
                             .bordered(false)
                             .columns(1)
                             .item("Varenummer", item_number.clone(), 1)
-                            .item("Lokasjon", location.clone(), 1)
                             .item("På lager", system_quantity.clone(), 1),
+                    )
+                    .when(product.is_counted(), |this| {
+                        this.child(
+                            v_flex()
+                                .gap_3()
+                                .child(div().text_sm().font_medium().child("Telt så langt"))
+                                .child(DescriptionList::new().bordered(false).columns(1).children(
+                                    product.counts().map(|(location, quantity)| {
+                                        DescriptionItem::Item {
+                                            label: or_dash(location).into(),
+                                            value: SharedString::from(quantity.to_string()).into(),
+                                            span: 1,
+                                        }
+                                    }),
+                                )),
+                        )
+                    })
+                    .child(
+                        v_flex()
+                            .gap_3()
+                            .child(div().text_sm().font_medium().child("Lokasjon"))
+                            .child(Input::new(&location).id("location")),
                     )
                     .child(
                         v_flex()
                             .gap_3()
                             .child(div().text_sm().font_medium().child("Telt antall"))
-                            .child(Input::new(&input).id("count")),
+                            .child(Input::new(&input).id("count"))
+                            .when_some(earlier, |this, earlier| {
+                                this.child(div().text_sm().text_color(muted).child(format!(
+                                    "Allerede telt {earlier} her. Enter legger til."
+                                )))
+                            }),
                     ),
             )
             .footer(
@@ -138,17 +194,24 @@ pub(crate) fn open(
                                     .solid_focus_ring(ring, surface)
                             })),
                     )
-                    .child(
-                        Button::new("save-count")
-                            .primary()
-                            .rounded_lg()
-                            .accessibility_label("Lagre")
-                            .child(div().text_sm().font_medium().child("Lagre"))
-                            .focus_ring(false)
-                            .solid_focus_ring(ring, surface)
-                            .disabled(!valid)
-                            .on_click(on_click_save),
-                    ),
+                    .map(|footer| match earlier {
+                        None => footer.child(
+                            save_button("save-count", "Lagre")
+                                .primary()
+                                .on_click(on_click(Save::Replace)),
+                        ),
+                        Some(_) => footer
+                            .child(
+                                save_button("replace-count", "Erstatt")
+                                    .outline()
+                                    .on_click(on_click(Save::Replace)),
+                            )
+                            .child(
+                                save_button("add-count", "Legg til")
+                                    .primary()
+                                    .on_click(on_click(Save::Add)),
+                            ),
+                    }),
             )
             .p_8()
             .rounded_2xl()
@@ -156,6 +219,14 @@ pub(crate) fn open(
             // that itself.
             .w(Spacing(128.).to_pixels(window.rem_size()))
     });
+}
+
+/// A dash rather than an empty value, for a product the list leaves blank.
+fn or_dash(text: &str) -> SharedString {
+    match text {
+        "" => "–".into(),
+        text => text.to_string().into(),
+    }
 }
 
 #[cfg(test)]

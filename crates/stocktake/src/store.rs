@@ -73,7 +73,7 @@ mod tests {
 
         let mut stocktake = Stocktake::new(vec![Product::new("1", "Vare", "A1", "", 5)]);
         let id = stocktake.search("")[0];
-        stocktake.set_counted_quantity(id, 0);
+        stocktake.set_count(id, "", 0);
         save(&path, &stocktake).unwrap();
 
         assert_eq!(load(&path).unwrap(), Some(stocktake));
@@ -94,5 +94,15 @@ mod tests {
 
         assert!(load(&path).is_err());
         fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn a_save_from_before_locations_resumes_at_the_pick_location() {
+        let saved = r#"{"products":[{"item_number":"1","name":"Vare","location":"A1",
+            "barcode":"","system_quantity":5,"counted_quantity":4}]}"#;
+        let stocktake: Stocktake = serde_json::from_str(saved).unwrap();
+        let (_, product) = stocktake.products().next().unwrap();
+        assert_eq!(product.count_at("A1"), Some(4));
+        assert_eq!(product.counted_quantity(), Some(4));
     }
 }

@@ -47,7 +47,28 @@ pub struct Product {
     location: String,
     barcode: String,
     system_quantity: i64,
-    counted_quantity: Option<i64>,
+    /// What was counted at the pick location. Saved under its name from
+    /// before counts were kept per location, so an older save resumes with
+    /// its counts at the pick location.
+    #[serde(rename = "counted_quantity")]
+    pick_count: Option<i64>,
+    /// What was counted at each overflow location, in location order. None
+    /// holds zero: a count of zero removes the location.
+    #[serde(default)]
+    overflow_counts: Vec<OverflowCount>,
+}
+
+/// Units of a product counted at one of its overflow locations.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+struct OverflowCount {
+    location: String,
+    quantity: i64,
+}
+
+/// A location as the counter typed it, trimmed and upper-cased so one shelf
+/// isn't recorded twice.
+pub fn normalize_location(location: &str) -> String {
+    location.trim().to_uppercase()
 }
 
 impl Product {
@@ -64,7 +85,8 @@ impl Product {
             location: location.into(),
             barcode: barcode.into(),
             system_quantity,
-            counted_quantity: None,
+            pick_count: None,
+            overflow_counts: Vec::new(),
         }
     }
 
@@ -76,9 +98,51 @@ impl Product {
         &self.name
     }
 
-    /// The shelf position, empty when the product has none.
+    /// The pick location, empty when the product has none.
     pub fn location(&self) -> &str {
         &self.location
+    }
+
+    /// Whether `location` is the pick location. An empty location is too,
+    /// so a product without one can still be counted at it.
+    pub fn is_pick_location(&self, location: &str) -> bool {
+        let location = normalize_location(location);
+        location.is_empty() || location == normalize_location(&self.location)
+    }
+
+    /// What has been counted at `location`, `None` while nothing has. An
+    /// uncounted pick location of a product counted elsewhere is `None` too.
+    pub fn count_at(&self, location: &str) -> Option<i64> {
+        if self.is_pick_location(location) {
+            return self.pick_count;
+        }
+        let location = normalize_location(location);
+        self.overflow_counts
+            .iter()
+            .find(|count| count.location == location)
+            .map(|count| count.quantity)
+    }
+
+    /// Every location something has been counted at, with what was counted
+    /// there: the pick location first, then the overflow locations. A
+    /// counted product's pick location is always listed, as zero if it
+    /// wasn't counted itself.
+    pub fn counts(&self) -> impl Iterator<Item = (&str, i64)> {
+        let pick = self
+            .is_counted()
+            .then(|| (self.location.as_str(), self.pick_count.unwrap_or(0)));
+        pick.into_iter().chain(self.overflow_counts())
+    }
+
+    /// The overflow locations counted at, with what was counted there.
+    pub fn overflow_counts(&self) -> impl Iterator<Item = (&str, i64)> {
+        self.overflow_counts
+            .iter()
+            .map(|count| (count.location.as_str(), count.quantity))
+    }
+
+    pub fn overflow_len(&self) -> usize {
+        self.overflow_counts.len()
     }
 
     /// The letters the location starts with, such as `C` for `C4-7`. Empty
@@ -100,19 +164,52 @@ impl Product {
         self.system_quantity
     }
 
-    /// `None` while the product is uncounted.
+    /// What was counted at all its locations together, `None` while the
+    /// product is uncounted.
     pub fn counted_quantity(&self) -> Option<i64> {
-        self.counted_quantity
+        self.is_counted().then(|| {
+            self.pick_count.unwrap_or(0)
+                + self
+                    .overflow_counts
+                    .iter()
+                    .map(|count| count.quantity)
+                    .sum::<i64>()
+        })
     }
 
+    /// Whether anything has been counted, at any location.
     pub fn is_counted(&self) -> bool {
-        self.counted_quantity.is_some()
+        self.pick_count.is_some() || !self.overflow_counts.is_empty()
     }
 
     /// Counted minus system quantity, `None` while uncounted.
     pub fn difference(&self) -> Option<i64> {
-        self.counted_quantity
+        self.counted_quantity()
             .map(|counted| counted - self.system_quantity)
+    }
+
+    /// Records what was counted at `location`, replacing any earlier count
+    /// there. Zero at an overflow location removes it, which is how a
+    /// mistyped one is corrected.
+    fn set_count(&mut self, location: &str, quantity: i64) {
+        if self.is_pick_location(location) {
+            self.pick_count = Some(quantity);
+            return;
+        }
+        let location = normalize_location(location);
+        let found = self
+            .overflow_counts
+            .binary_search_by(|count| compare_locations(&count.location, &location));
+        match (found, quantity) {
+            (Ok(ix), 0) => {
+                self.overflow_counts.remove(ix);
+            }
+            (Ok(ix), _) => self.overflow_counts[ix].quantity = quantity,
+            (Err(_), 0) => {}
+            (Err(ix), _) => self
+                .overflow_counts
+                .insert(ix, OverflowCount { location, quantity }),
+        }
     }
 
     fn matches_exactly(&self, query: &str) -> bool {
@@ -122,7 +219,8 @@ impl Product {
 
     fn contains(&self, needle: &str) -> bool {
         [&self.item_number, &self.name, &self.location, &self.barcode]
-            .iter()
+            .into_iter()
+            .chain(self.overflow_counts.iter().map(|count| &count.location))
             .any(|field| field.to_lowercase().contains(needle))
     }
 }
@@ -224,8 +322,10 @@ impl Stocktake {
         self.len() - self.counted_len()
     }
 
-    pub fn set_counted_quantity(&mut self, id: ProductId, quantity: i64) {
-        self.products[id.0].counted_quantity = Some(quantity);
+    /// Records what was counted of a product at `location`, replacing any
+    /// earlier count there. Zero at an overflow location removes it.
+    pub fn set_count(&mut self, id: ProductId, location: &str, quantity: i64) {
+        self.products[id.0].set_count(location, quantity);
     }
 
     /// Every aisle in the stock list and how many products it holds, in the
@@ -403,7 +503,7 @@ mod tests {
     #[test]
     fn filter_hides_counted_or_uncounted_products() {
         let mut stocktake = stocktake();
-        stocktake.set_counted_quantity(ProductId(0), 33);
+        stocktake.set_count(ProductId(0), "", 33);
         let mut filter = Filter::default();
         filter.set_counted_shown(true, false);
         assert_eq!(stocktake.search_filtered("", &filter).len(), 3);
@@ -450,11 +550,94 @@ mod tests {
     fn counting_zero_counts() {
         let mut stocktake = stocktake();
         assert_eq!(stocktake.counted_len(), 0);
-        stocktake.set_counted_quantity(ProductId(3), 0);
+        stocktake.set_count(ProductId(3), "", 0);
         assert_eq!(stocktake.counted_len(), 1);
         assert_eq!(stocktake.product(ProductId(3)).difference(), Some(0));
-        stocktake.set_counted_quantity(ProductId(0), 30);
+        stocktake.set_count(ProductId(0), "", 30);
         assert_eq!(stocktake.product(ProductId(0)).difference(), Some(-3));
         assert_eq!(stocktake.uncounted_len(), 2);
+    }
+
+    #[test]
+    fn counts_add_up_across_locations() {
+        let mut stocktake = stocktake();
+        let id = ProductId(1);
+        stocktake.set_count(id, "C4-7", 40);
+        stocktake.set_count(id, " d2-1 ", 6);
+        stocktake.set_count(id, "A1", 2);
+        let product = stocktake.product(id);
+        assert_eq!(product.counted_quantity(), Some(48));
+        assert_eq!(product.difference(), Some(-1));
+        // The pick location first, then the overflow locations in order.
+        assert_eq!(
+            product.counts().collect::<Vec<_>>(),
+            [("C4-7", 40), ("A1", 2), ("D2-1", 6)]
+        );
+        assert_eq!(product.count_at("c4-7"), Some(40));
+        assert_eq!(product.count_at("D2-1"), Some(6));
+        assert_eq!(product.count_at("D2-2"), None);
+    }
+
+    #[test]
+    fn a_count_replaces_the_one_at_its_location() {
+        let mut stocktake = stocktake();
+        let id = ProductId(1);
+        stocktake.set_count(id, "D2-1", 6);
+        stocktake.set_count(id, "D2-1", 4);
+        stocktake.set_count(id, "", 40);
+        stocktake.set_count(id, "C4-7", 41);
+        assert_eq!(stocktake.product(id).counted_quantity(), Some(45));
+    }
+
+    #[test]
+    fn zero_at_an_overflow_location_removes_it() {
+        let mut stocktake = stocktake();
+        let id = ProductId(1);
+        stocktake.set_count(id, "D21", 4);
+        stocktake.set_count(id, "D21", 0);
+        assert!(!stocktake.product(id).is_counted());
+        assert_eq!(stocktake.product(id).overflow_len(), 0);
+        // Zero at the pick location is a count like any other.
+        stocktake.set_count(id, "C4-7", 0);
+        assert_eq!(stocktake.product(id).counted_quantity(), Some(0));
+    }
+
+    #[test]
+    fn counted_only_at_an_overflow_location_is_counted() {
+        let mut stocktake = stocktake();
+        let id = ProductId(1);
+        stocktake.set_count(id, "D2-1", 5);
+        let product = stocktake.product(id);
+        assert!(product.is_counted());
+        assert_eq!(product.counted_quantity(), Some(5));
+        assert_eq!(product.count_at("C4-7"), None);
+        assert_eq!(
+            product.counts().collect::<Vec<_>>(),
+            [("C4-7", 0), ("D2-1", 5)]
+        );
+        assert_eq!(stocktake.counted_len(), 1);
+    }
+
+    #[test]
+    fn a_product_without_a_pick_location_counts_there_when_left_empty() {
+        let mut stocktake = stocktake();
+        let id = ProductId(2);
+        stocktake.set_count(id, "", 16);
+        stocktake.set_count(id, "B1", 1);
+        assert_eq!(
+            stocktake.product(id).counts().collect::<Vec<_>>(),
+            [("", 16), ("B1", 1)]
+        );
+    }
+
+    #[test]
+    fn search_finds_overflow_locations_but_aisles_go_by_pick_location() {
+        let mut stocktake = stocktake();
+        stocktake.set_count(ProductId(1), "E9", 3);
+        assert_eq!(stocktake.search("e9"), [ProductId(1)]);
+        let mut filter = Filter::default();
+        filter.set_aisle_shown("C", false);
+        assert_eq!(stocktake.search_filtered("e9", &filter), []);
+        assert_eq!(stocktake.aisles(), [("C", 3), ("", 1)]);
     }
 }

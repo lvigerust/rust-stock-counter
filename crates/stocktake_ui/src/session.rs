@@ -55,10 +55,16 @@ impl Session {
         self.save_state
     }
 
-    /// Records a product's counted quantity, replacing any earlier count,
-    /// and saves at once.
-    pub fn record_count(&mut self, id: ProductId, quantity: i64, cx: &mut Context<Self>) {
-        self.stocktake.set_counted_quantity(id, quantity);
+    /// Records what was counted of a product at `location`, replacing any
+    /// earlier count there, and saves at once.
+    pub fn record_count(
+        &mut self,
+        id: ProductId,
+        location: &str,
+        quantity: i64,
+        cx: &mut Context<Self>,
+    ) {
+        self.stocktake.set_count(id, location, quantity);
         self.save(cx);
     }
 
@@ -102,7 +108,7 @@ mod tests {
         let session = cx.new(|_| Session::new(stocktake(), path.clone()));
 
         let id = session.read_with(cx, |session, _| session.stocktake().search("")[0]);
-        session.update(cx, |session, cx| session.record_count(id, 4, cx));
+        session.update(cx, |session, cx| session.record_count(id, "A1", 4, cx));
 
         let saved = store::load(&path).unwrap().unwrap();
         assert_eq!(saved.product(id).counted_quantity(), Some(4));
@@ -135,7 +141,7 @@ mod tests {
         });
 
         let id = session.read_with(cx, |session, _| session.stocktake().search("")[0]);
-        session.update(cx, |session, cx| session.record_count(id, 4, cx));
+        session.update(cx, |session, cx| session.record_count(id, "A1", 4, cx));
         cx.run_until_parked();
 
         session.read_with(cx, |session, _| {

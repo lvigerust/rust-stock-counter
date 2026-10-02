@@ -375,7 +375,19 @@ impl TableDelegate for ProductTable {
         let column = ProductColumn::ALL[col_ix];
         let product = self.session.read(cx).stocktake().product(id);
         let content = match column {
-            ProductColumn::Location => product.location().to_string().into_any_element(),
+            // The pick location, and how many overflow locations units were
+            // also counted at.
+            ProductColumn::Location => h_flex()
+                .gap_1()
+                .child(product.location().to_string())
+                .when(product.overflow_len() > 0, |this| {
+                    this.child(
+                        div()
+                            .text_color(cx.theme().muted_foreground)
+                            .child(format!("+{}", product.overflow_len())),
+                    )
+                })
+                .into_any_element(),
             ProductColumn::ItemNumber => div()
                 .text_color(cx.theme().muted_foreground)
                 .child(product.item_number().to_string())
@@ -426,7 +438,12 @@ impl TableDelegate for ProductTable {
         };
         let product = self.session.read(cx).stocktake().product(id);
         match ProductColumn::ALL[col_ix] {
-            ProductColumn::Location => product.location().to_string(),
+            ProductColumn::Location => match product.overflow_len() {
+                0 => product.location().to_string(),
+                overflow => format!("{} +{overflow}", product.location())
+                    .trim_start()
+                    .to_string(),
+            },
             ProductColumn::ItemNumber => product.item_number().to_string(),
             ProductColumn::Name => product.name().to_string(),
             ProductColumn::SystemQuantity => product.system_quantity().to_string(),

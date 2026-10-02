@@ -154,6 +154,65 @@ fn a_scan_counts_the_product_and_saves_it(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn counts_at_overflow_locations_add_up(cx: &mut TestAppContext) {
+    let mut counter = Counter::resume(cx, "overflow");
+    /// Counts Burano at `location` (the pick location if `None`), saved
+    /// with Enter or the button `save`.
+    fn count(counter: &mut Counter, location: Option<&str>, quantity: &str, save: &'static str) {
+        counter.input(BURANO.0);
+        counter.press("enter");
+        assert!(counter.is_focused("count"));
+        if let Some(location) = location {
+            counter.press("shift-tab");
+            assert!(counter.is_focused("location"));
+            counter.press("secondary-a");
+            counter.input(location);
+            counter.press("tab");
+        }
+        counter.input(quantity);
+        // The dialog slides in, so its buttons are reached from the keyboard
+        // rather than clicked where they were a frame ago.
+        if save == "enter" {
+            counter.press("enter");
+        } else {
+            // Past Avbryt to Erstatt.
+            counter.press("tab");
+            counter.press("tab");
+            assert!(counter.is_focused("replace-count"));
+            if save == "add-count" {
+                counter.press("tab");
+            }
+            assert!(counter.is_focused(save));
+            counter.press("space");
+        }
+        assert!(counter.find("count").is_none());
+    }
+
+    // The location starts as the pick location, so a plain count lands there.
+    counter.input(BURANO.0);
+    counter.press("enter");
+    assert_eq!(counter.value("location").as_deref(), Some("C4-7"));
+    counter.press("escape");
+    count(&mut counter, None, "40", "enter");
+    assert_eq!(counter.counted(BURANO.0), Some(40));
+
+    // Units found at an overflow location add to the total.
+    count(&mut counter, Some("d2-1"), "6", "enter");
+    assert_eq!(counter.counted(BURANO.0), Some(46));
+
+    // At a location already counted, Enter adds to that location's count…
+    count(&mut counter, Some("D2-1"), "2", "enter");
+    assert_eq!(counter.counted(BURANO.0), Some(48));
+    // …and Erstatt replaces it: zero removes the overflow location.
+    count(&mut counter, Some("D2-1"), "0", "replace-count");
+    assert_eq!(counter.counted(BURANO.0), Some(40));
+    count(&mut counter, None, "39", "replace-count");
+    assert_eq!(counter.counted(BURANO.0), Some(39));
+    count(&mut counter, None, "1", "add-count");
+    assert_eq!(counter.counted(BURANO.0), Some(40));
+}
+
+#[gpui_kit::test]
 fn a_scan_into_the_count_dialog_counts_the_scanned_product_next(cx: &mut TestAppContext) {
     let mut counter = Counter::resume(cx, "rescan");
     counter.input(BURANO.0);
@@ -321,14 +380,14 @@ fn tab_skips_lagre_while_it_is_disabled(cx: &mut TestAppContext) {
     counter.press("enter");
 
     // With no quantity, Lagre is disabled, and a full round of Tab never
-    // lands on it: the field and Avbryt are the only stops.
-    for _ in 0..2 {
+    // lands on it: the two fields and Avbryt are the only stops.
+    for _ in 0..3 {
         counter.press("tab");
         assert!(!counter.is_focused("save-count"));
     }
     assert!(counter.is_focused("count"));
     // Nor does a round of Shift-Tab.
-    for _ in 0..2 {
+    for _ in 0..3 {
         counter.press("shift-tab");
         assert!(!counter.is_focused("save-count"));
     }

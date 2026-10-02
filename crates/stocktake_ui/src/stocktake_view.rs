@@ -119,9 +119,11 @@ struct OpenStocktake {
 /// A count dialog that is open.
 struct Count {
     product: ProductId,
+    /// The dialog's location field.
+    location: Entity<InputState>,
     /// The dialog's quantity field.
     input: Entity<InputState>,
-    _input_events: Subscription,
+    _input_events: [Subscription; 2],
 }
 
 impl OpenStocktake {
