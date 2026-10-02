@@ -155,10 +155,10 @@ impl StocktakeView {
 
     /// A band over the sidebar's trailing rule that resizes it: dragging it
     /// moves the edge, and a double-click puts it back at its default width.
-    /// Hovering it draws the rule in the focus color, to show it can be
-    /// grabbed.
+    /// Hovering it draws the rule in the sidebar items' hover color, to show
+    /// it can be grabbed.
     fn render_resize_handle(cx: &mut Context<Self>) -> impl IntoElement + use<> {
-        let line = cx.theme().ring;
+        let line = cx.theme().sidebar_accent;
         div()
             .id("sidebar-resize-handle")
             .group("sidebar-resize-handle")
