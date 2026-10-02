@@ -60,6 +60,10 @@ const SEARCH_HEIGHT: Rems = Rems(2.5);
 /// Space above and below the search field in the main pane's bar.
 const SEARCH_PADDING: Rems = Rems(1.5);
 
+/// Space between the search field and the columns menu beside it, tighter
+/// than the bar's own gap, so the two read as one group.
+const SEARCH_GAP: Rems = Rems(0.75);
+
 pub struct StocktakeView {
     /// The window's own focus, so its commands and shortcuts work while no
     /// control inside it has focus.
@@ -311,12 +315,14 @@ impl StocktakeView {
             .child(
                 // With the sidebar hidden, the traffic lights move into this
                 // bar, followed by the way back, disabled without a
-                // stocktake. With it shown, the search is inset by the
-                // pane's padding, in line with the table's content below.
+                // stocktake; its glyph sits inside the button, so the gap
+                // after it is shorter by that inset. With the sidebar shown,
+                // the search is inset by the pane's padding, in line with
+                // the table's content below.
                 WindowBar::new()
                     .traffic_lights(!sidebar_shown)
                     .h(self.bar_height())
-                    .gap_4()
+                    .gap(WindowBar::GAP - WindowBar::ICON_INSET)
                     .when(sidebar_shown, |this| this.px(MAIN_PADDING))
                     .when(!sidebar_shown, |this| {
                         this.child(Self::render_sidebar_toggle(false, open.is_none(), cx))
@@ -328,7 +334,7 @@ impl StocktakeView {
                             h_flex()
                                 .flex_1()
                                 .min_w_0()
-                                .gap_3()
+                                .gap(SEARCH_GAP)
                                 .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                                 .child(
                                     div()

@@ -13,9 +13,9 @@ const PADDING: Pixels = px(16.);
 /// controls.
 const TRAFFIC_LIGHTS: (Pixels, Pixels) = (px(22.), px(21.));
 
-/// How far the bar's content starts from the leading edge, so it clears the
-/// traffic lights with the same gap it keeps between its own groups.
-const TRAFFIC_LIGHTS_CLEARANCE: Pixels = px(94.);
+/// Where the traffic lights end: three 14px buttons 9px apart, from
+/// [`TRAFFIC_LIGHTS`], as AppKit lays them out on macOS 26 and later.
+const TRAFFIC_LIGHTS_END: Pixels = px(82.);
 
 /// The band at the top of the window that the traffic lights sit in, so the
 /// app's own controls share a row with them instead of sitting under a
@@ -41,6 +41,16 @@ impl WindowBar {
     /// The bar's height: a row of small controls (1.5rem) with 1rem of
     /// padding above and below, the same padding the sidebar's sections use.
     pub const HEIGHT: Pixels = px(56.);
+
+    /// How far apart the bar's controls are drawn, the traffic lights
+    /// included. Measured between what each control draws: a border, or an
+    /// icon button's glyph, which sits [`Self::ICON_INSET`] inside the button.
+    pub const GAP: Pixels = px(20.);
+
+    /// How far an icon button's glyph sits inside its bounds: a 14px icon
+    /// centered in 24px, and the glyph's own margin. A gap beside one is
+    /// that much shorter, so the glyph sits [`Self::GAP`] from its neighbor.
+    pub const ICON_INSET: Pixels = px(6.);
 
     pub fn new() -> Self {
         Self {
@@ -97,9 +107,11 @@ impl RenderOnce for WindowBar {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let state = window.use_state(cx, |_, _| DragState { pressed: false });
         // Full screen hides the traffic lights, so nothing needs clearing.
+        // Otherwise the content starts so an icon button's glyph sits a gap
+        // after them.
         let leading = if self.traffic_lights && cfg!(target_os = "macos") && !window.is_fullscreen()
         {
-            TRAFFIC_LIGHTS_CLEARANCE
+            TRAFFIC_LIGHTS_END + Self::GAP - Self::ICON_INSET
         } else {
             PADDING
         };
