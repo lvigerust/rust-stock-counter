@@ -4,6 +4,7 @@ use std::{cmp::Ordering, time::Instant};
 
 use gpui_kit::component::{
     table::{Column, ColumnSort, TableDelegate, TableState},
+    tag::Tag,
     tooltip::Tooltip,
 };
 use gpui_kit::{Div, Edges, Pixels, Stateful, px};
@@ -420,7 +421,7 @@ impl TableDelegate for ProductTable {
             // The pick location, and how many overflow locations units were
             // also counted at, named in a tooltip.
             ProductColumn::Location => {
-                let location = h_flex().gap_1().child(product.location().to_string());
+                let location = h_flex().gap_2().child(product.location().to_string());
                 match product.overflow_len() {
                     0 => location.into_any_element(),
                     overflow => {
@@ -431,16 +432,26 @@ impl TableDelegate for ProductTable {
                         location
                             .id(("location", id.line()))
                             .child(
-                                div()
-                                    .text_color(cx.theme().muted_foreground)
-                                    .child(format!("+{overflow}")),
+                                // gpui has no letter spacing, so the sign
+                                // is set apart from the number by hand.
+                                Tag::secondary().small().rounded(px(6.)).child(
+                                    h_flex().gap_px().child("+").child(overflow.to_string()),
+                                ),
                             )
                             .tooltip(move |window, cx| {
                                 let buffers = buffers.clone();
-                                Tooltip::element(move |_, _| {
+                                Tooltip::element(move |_, cx| {
                                     v_flex()
-                                        .child(div().font_medium().child("Buffer"))
+                                        .child(
+                                            div()
+                                                .font_medium()
+                                                .child("Bufferlokasjoner")
+                                                .text_color(cx.theme().muted_foreground)
+                                                .text_sm()
+                                                .mb_1(),
+                                        )
                                         .children(buffers.clone())
+                                        .p_2()
                                 })
                                 .build(window, cx)
                             })
