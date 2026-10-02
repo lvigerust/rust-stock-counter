@@ -463,8 +463,9 @@ impl StocktakeView {
     }
 
     /// Beside the search, the same height: which of the table's columns to
-    /// show. Picking a column shows or hides it; the product name always
-    /// shows, so its item is checked but can't be picked.
+    /// show. Clicking a column shows or hides it, and the menu stays open for
+    /// the next; the product name always shows, so its item is checked but
+    /// can't be picked.
     fn render_columns_menu(open: &OpenStocktake, cx: &mut Context<Self>) -> impl IntoElement {
         let muted = cx.theme().muted_foreground;
         let button = DropdownButton::new()
@@ -485,6 +486,7 @@ impl StocktakeView {
                 DropdownItem::new(column.name())
                     .checked(open.table.read(cx).delegate().is_shown(column))
                     .disabled(!column.is_hideable())
+                    .stays_open(true)
                     .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
                         this.toggle_column(column, cx)
                     }))

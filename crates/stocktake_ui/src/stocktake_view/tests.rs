@@ -513,10 +513,9 @@ fn the_columns_menu_hides_and_shows_columns(cx: &mut TestAppContext) {
     }
     assert_eq!(columns_count(&mut counter), 7);
 
-    // Picking one hides it, and the menu shows it unchecked next time.
+    // Clicking one hides it, and the menu stays open with it unchecked.
     counter.click("menu-item:Varenummer");
     assert_eq!(columns_count(&mut counter), 6);
-    counter.click("columns");
     assert_eq!(checked(&mut counter, "menu-item:Varenummer"), Some(false));
 
     // The product name always shows: picking it does nothing, and the menu
@@ -524,7 +523,18 @@ fn the_columns_menu_hides_and_shows_columns(cx: &mut TestAppContext) {
     counter.click("menu-item:Produkt");
     assert_eq!(columns_count(&mut counter), 6);
 
-    // Picking the hidden column again shows it.
+    // Clicking the hidden column again shows it.
     counter.click("menu-item:Varenummer");
     assert_eq!(columns_count(&mut counter), 7);
+    assert_eq!(checked(&mut counter, "menu-item:Varenummer"), Some(true));
+
+    // Picked from the keyboard, a column still toggles, and the menu closes.
+    // The menu is closed and opened again first, for a fresh selection.
+    counter.click("columns");
+    counter.click("columns");
+    counter.press("down");
+    counter.press("down");
+    counter.press("enter");
+    assert_eq!(columns_count(&mut counter), 6);
+    assert!(counter.find("menu-item:Varenummer").is_none());
 }

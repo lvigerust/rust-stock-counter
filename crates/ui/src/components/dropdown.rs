@@ -31,6 +31,10 @@
 //! Each item is a row of our own inside gpui-kit's, padded like Catalyst's.
 //! gpui-kit's own rows have a fixed height that can't take that padding.
 //!
+//! gpui-kit closes its menu on any pick. An item that [stays
+//! open](DropdownItem::stays_open), such as one of a set of checks, handles
+//! a click itself before gpui-kit's row sees it.
+//!
 //! gpui-kit keeps an open menu as it was built. When the items change while
 //! it's open, say a shortcut moves the check, [`Dropdown`] builds it again.
 
@@ -428,6 +432,7 @@ pub struct DropdownItem {
     icon: Option<Icon>,
     checked: bool,
     disabled: bool,
+    stays_open: bool,
     action: Option<Box<dyn Action>>,
     on_click: Option<ClickHandler>,
 }
@@ -440,6 +445,7 @@ impl DropdownItem {
             icon: None,
             checked: false,
             disabled: false,
+            stays_open: false,
             action: None,
             on_click: None,
         }
@@ -461,6 +467,14 @@ impl DropdownItem {
     /// Marks the item with a check, such as the option currently chosen.
     pub fn checked(mut self, checked: bool) -> Self {
         self.checked = checked;
+        self
+    }
+
+    /// Keeps the menu open when the item is clicked, so the counter can pick
+    /// several in a row, such as checks to turn on and off. Its click
+    /// handler runs; picked with Enter, the menu still closes.
+    pub fn stays_open(mut self, stays_open: bool) -> Self {
+        self.stays_open = stays_open;
         self
     }
 
@@ -500,6 +514,12 @@ impl DropdownItem {
             .clone()
             .or_else(|| checked.then(|| Icon::new(IconName::Check)));
         let trailing_check = checked && self.icon.is_some();
+        // Handled here and stopped, gpui-kit's row never sees the click, so
+        // it doesn't close the menu.
+        let own_click = self
+            .on_click
+            .clone()
+            .filter(|_| self.stays_open && !self.disabled);
         PopupMenuItem::element(move |window, cx| {
             let muted = cx.theme().muted_foreground;
             let shortcut = action
@@ -518,6 +538,12 @@ impl DropdownItem {
                     Toggled::False
                 })
                 .test_support()
+                .when_some(own_click.clone(), |this, on_click| {
+                    this.on_click(move |event, window, cx| {
+                        cx.stop_propagation();
+                        on_click(event, window, cx);
+                    })
+                })
                 .flex_1()
                 .min_w_0()
                 .items_start()
