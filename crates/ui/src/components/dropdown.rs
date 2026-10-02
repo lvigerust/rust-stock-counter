@@ -504,7 +504,8 @@ impl DropdownItem {
             let muted = cx.theme().muted_foreground;
             let shortcut = action
                 .as_ref()
-                .and_then(|action| Kbd::binding_for_action_in(action.as_ref(), &context, window));
+                .and_then(|action| Kbd::binding_for_action_in(action.as_ref(), &context, window))
+                .map(|kbd| kbd.appearance(false));
             // gpui-kit names its own rows to assistive tech, but not one
             // like this: it carries its label and check itself. Only one
             // menu is open at a time, so the label keeps the id unique.
@@ -563,7 +564,13 @@ impl DropdownItem {
                 .when(trailing_check, |this| {
                     this.child(label_line().child(Icon::new(IconName::Check).small()))
                 })
-                .children(shortcut.map(|kbd| label_line().flex_none().child(kbd)))
+                .children(shortcut.map(|kbd| {
+                    label_line()
+                        .flex_none()
+                        .text_xs()
+                        .text_color(muted)
+                        .child(kbd)
+                }))
         })
         .disabled(self.disabled)
         .when_some(self.action.as_ref(), |item, action| {
