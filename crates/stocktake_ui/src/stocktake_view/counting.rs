@@ -6,7 +6,7 @@ use gpui_kit::component::{WindowExt as _, input::InputEvent};
 use stocktake::{Lookup, ProductId};
 use ui::prelude::*;
 
-use super::{Count, StocktakeView};
+use super::{Count, Mode, StocktakeView};
 use crate::{
     count_dialog::{self, parse_quantity, quantity_input},
     product_table::LastCounted,
@@ -222,8 +222,14 @@ impl StocktakeView {
         });
     }
 
-    /// Back to the search, with its text selected so typing replaces it.
+    /// Back to the search, with its text selected so typing replaces it. A
+    /// scan is for counting, so this brings the stock list back from any
+    /// other mode first.
     pub(super) fn focus_search(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.open.is_none() {
+            return;
+        }
+        self.set_mode(Mode::Counting, window, cx);
         let Some(open) = &self.open else {
             return;
         };

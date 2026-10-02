@@ -12,13 +12,13 @@ use gpui_kit::{
     ClickEvent, CursorStyle, DragMoveEvent, Empty, Focusable as _, MouseButton, Pixels, px,
 };
 use ui::{
-    Sidebar, SidebarBody, SidebarFooter, SidebarHeading, SidebarItem, SidebarSection, WindowBar,
-    prelude::*,
+    Dropdown, DropdownButton, DropdownItem, DropdownMenu, Sidebar, SidebarBody, SidebarFooter,
+    SidebarHeader, SidebarHeading, SidebarItem, SidebarSection, WindowBar, prelude::*,
 };
 
-use super::StocktakeView;
+use super::{Mode, StocktakeView};
 use crate::count_status::CountStatus;
-use crate::{APP_NAME, CONTEXT, ToggleSidebar};
+use crate::{CONTEXT, ToggleSidebar};
 
 /// The sidebar's width when the window opens, and after a double-click on
 /// its edge: wide enough for an aisle's label beside its count, and a bar
@@ -141,11 +141,11 @@ impl StocktakeView {
             .w(self.sidebar_width)
             .child(WindowBar::new().justify_end().child(toggle))
             .child(Separator::horizontal().color(cx.theme().sidebar_border))
-            .child(
-                SidebarBody::new()
-                    .children(status_filter)
-                    .children(aisle_filter),
-            )
+            .child(SidebarHeader::new().child(render_mode_menu(self.mode)))
+            .child(SidebarBody::new().map(|body| match self.mode {
+                Mode::Counting => body.children(status_filter).children(aisle_filter),
+                Mode::Differences => body,
+            }))
             .child(
                 SidebarFooter::new()
                     .child(SidebarSection::new().child(Self::render_discard_button(cx))),
@@ -363,18 +363,31 @@ fn render_filter_item(
     SidebarItem::new().p_0().child(checkbox)
 }
 
-/// The app's name, atop the sidebar.
-#[expect(
-    dead_code,
-    reason = "taken out of the sidebar for now; restore it in a SidebarHeader"
-)]
-fn render_app_name() -> impl IntoElement {
-    SidebarItem::new().child(
-        div()
-            .min_w_0()
-            .truncate()
-            .text_sm()
-            .font_semibold()
-            .child(APP_NAME),
-    )
+/// Atop the sidebar, the mode the window is in, as a button that opens a
+/// menu of every mode below it, the current one checked. The name takes the
+/// width the chevron leaves, and truncates past it.
+fn render_mode_menu(current: Mode) -> impl IntoElement {
+    let button = DropdownButton::new()
+        .w_full()
+        .p_2()
+        .child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .truncate()
+                .text_sm()
+                .font_semibold()
+                .child(current.label()),
+        )
+        .child(Icon::new(IconName::ChevronDown).small());
+    // Catalyst's desktop width for the menu atop its sidebar (`lg:min-w-64`).
+    let menu = DropdownMenu::new()
+        .min_w(px(256.))
+        .items(Mode::ALL.map(|mode| {
+            DropdownItem::new(mode.label())
+                .description(mode.description())
+                .checked(mode == current)
+                .action(mode.action())
+        }));
+    Dropdown::new("mode-menu", button, menu)
 }

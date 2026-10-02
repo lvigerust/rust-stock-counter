@@ -14,10 +14,12 @@
 //! | this file     | State, lifecycle, focus, actions, the main pane's layout |
 //! | `counting.rs` | Scan or search → count dialog → saved count               |
 //! | `files.rs`    | Importing stock lists, recent ones, exporting to Excel    |
+//! | `mode.rs`     | What the window shows: counting, or the differences       |
 //! | `sidebar.rs`  | The sidebar: filters, starting over, hiding it            |
 
 mod counting;
 mod files;
+mod mode;
 mod sidebar;
 
 use std::path::{Path, PathBuf};
@@ -42,13 +44,14 @@ use stocktake::{
 use ui::{Dropdown, DropdownButton, DropdownItem, DropdownMenu, WindowBar, prelude::*};
 
 use crate::{
-    CONTEXT, ExportStocktake, FocusNext, FocusPrevious, FocusSearch, ImportStockList,
-    ToggleSidebar,
+    CONTEXT, ExportStocktake, FocusNext, FocusPrevious, FocusSearch, ImportStockList, ShowCounting,
+    ShowDifferences, ToggleSidebar,
     product_table::{ProductTable, ROW_HEIGHT},
     session::{SaveState, Session, SessionEvent},
     welcome::Welcome,
 };
 use files::ImportSource;
+use mode::Mode;
 use sidebar::DraggedSidebar;
 
 /// Padding around the content of the main pane.
@@ -79,6 +82,8 @@ pub struct StocktakeView {
     open: Option<OpenStocktake>,
     /// Why the saved stocktake couldn't be resumed, shown on the welcome.
     resume_error: Option<SharedString>,
+    /// What the window shows of the stocktake, picked atop the sidebar.
+    mode: Mode,
     /// Whether the counter hid the sidebar. Without a stocktake it's hidden
     /// anyway, having nothing to act on; see [`Self::sidebar_shown`].
     sidebar_collapsed: bool,
@@ -164,6 +169,7 @@ impl StocktakeView {
             recent,
             open: None,
             resume_error: None,
+            mode: Mode::default(),
             sidebar_collapsed: false,
             sidebar_width: sidebar::DEFAULT_SIDEBAR_WIDTH,
             aisle_filter_collapsed: false,
@@ -327,30 +333,38 @@ impl StocktakeView {
                     .when(!sidebar_shown, |this| {
                         this.child(Self::render_sidebar_toggle(false, open.is_none(), cx))
                     })
-                    .when_some(open, |this, open| {
-                        // A press here is the field's or the menu's, not
-                        // the start of a window drag.
-                        this.child(
-                            h_flex()
-                                .flex_1()
-                                .min_w_0()
-                                .gap(SEARCH_GAP)
-                                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                                .child(
-                                    div()
-                                        .flex_1()
-                                        .min_w_0()
-                                        .child(Self::render_search(&open.search, cx)),
-                                )
-                                .child(Self::render_columns_menu()),
-                        )
-                    }),
+                    .when_some(
+                        open.filter(|_| self.mode == Mode::Counting),
+                        |this, open| {
+                            // A press here is the field's or the menu's, not
+                            // the start of a window drag.
+                            this.child(
+                                h_flex()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .gap(SEARCH_GAP)
+                                    .on_mouse_down(MouseButton::Left, |_, _, cx| {
+                                        cx.stop_propagation()
+                                    })
+                                    .child(
+                                        div()
+                                            .flex_1()
+                                            .min_w_0()
+                                            .child(Self::render_search(&open.search, cx)),
+                                    )
+                                    .child(Self::render_columns_menu()),
+                            )
+                        },
+                    ),
             )
             .child(
                 // The table runs to the pane's edges, so it shows as many
                 // rows as fit and its scrollbar sits against the window. Its
                 // outer columns inset their content by the pane's padding.
                 v_flex().flex_1().min_h_0().map(|this| match open {
+                    Some(_) if self.mode == Mode::Differences => {
+                        this.child(mode::render_differences(cx))
+                    }
                     // The rows set their own height; the text stays small.
                     Some(open) => this.child(
                         div().flex_1().min_h_0().text_sm().child(
@@ -539,6 +553,14 @@ impl Render for StocktakeView {
                 .on_action(cx.listener(|this, _: &ToggleSidebar, window, cx| {
                     this.toggle_sidebar(window, cx)
                 }))
+                .on_action(cx.listener(|this, _: &ShowCounting, window, cx| {
+                    this.set_mode(Mode::Counting, window, cx)
+                }))
+                .on_action(cx.listener(
+                    |this, _: &ShowDifferences, window, cx| {
+                        this.set_mode(Mode::Differences, window, cx)
+                    },
+                ))
             })
             .on_drop(cx.listener(|this, paths: &ExternalPaths, window, cx| {
                 this.on_drop_files(paths, window, cx)

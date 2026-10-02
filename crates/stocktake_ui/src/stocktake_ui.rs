@@ -43,7 +43,12 @@ actions!(
         /// Moves focus to the previous control, skipping the table.
         FocusPrevious,
         /// Hides the sidebar, or shows it again.
-        ToggleSidebar
+        ToggleSidebar,
+        /// Shows the stock list for counting.
+        ShowCounting,
+        /// Shows the products whose counted quantity differs from the
+        /// system quantity.
+        ShowDifferences
     ]
 );
 
@@ -64,6 +69,8 @@ pub fn init(cx: &mut App) {
         KeyBinding::new("secondary-f", FocusSearch, Some(CONTEXT)),
         // The shortcut editors use for showing and hiding a sidebar.
         KeyBinding::new("secondary-b", ToggleSidebar, Some(CONTEXT)),
+        KeyBinding::new("secondary-1", ShowCounting, Some(CONTEXT)),
+        KeyBinding::new("secondary-2", ShowDifferences, Some(CONTEXT)),
         // The table binds Tab to moving between columns, which traps focus in
         // it. These replace that, and also take precedence over the window's
         // own Tab handling so focus can skip the table.

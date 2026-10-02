@@ -342,6 +342,37 @@ fn tab_skips_lagre_while_it_is_disabled(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn the_mode_menu_switches_what_the_window_shows(cx: &mut TestAppContext) {
+    let mut counter = Counter::resume(cx, "mode-menu");
+    let mode = |counter: &mut Counter| counter.cx.read(|cx| counter.view.read(cx).mode);
+    assert_eq!(mode(&mut counter), Mode::Counting);
+
+    // Opened with a click and picked from the keyboard, the second item
+    // shows the differences: its action reaches the view from the menu.
+    counter.click("mode-menu");
+    counter.press("down");
+    counter.press("down");
+    counter.press("enter");
+    assert_eq!(mode(&mut counter), Mode::Differences);
+    assert!(counter.find("search").is_none());
+
+    // The shortcut goes back.
+    counter.press("secondary-1");
+    assert_eq!(mode(&mut counter), Mode::Counting);
+    assert!(counter.find("search").is_some());
+
+    // With the menu open, a shortcut moves its check, and it stays open.
+    let checked = |counter: &mut Counter, id| counter.find(id).and_then(|item| item.checked());
+    counter.click("mode-menu");
+    assert_eq!(checked(&mut counter, "menu-item:Varetelling"), Some(true));
+    assert_eq!(checked(&mut counter, "menu-item:Differanse"), Some(false));
+    counter.press("secondary-2");
+    assert_eq!(mode(&mut counter), Mode::Differences);
+    assert_eq!(checked(&mut counter, "menu-item:Varetelling"), Some(false));
+    assert_eq!(checked(&mut counter, "menu-item:Differanse"), Some(true));
+}
+
+#[gpui_kit::test]
 fn the_columns_menu_opens_beside_the_search(cx: &mut TestAppContext) {
     let mut counter = Counter::resume(cx, "columns");
     assert!(counter.find("menu-item:Lokasjon").is_none());

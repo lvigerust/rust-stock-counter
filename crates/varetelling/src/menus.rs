@@ -2,7 +2,10 @@
 //! shortcut shown beside it.
 
 use gpui_kit::{App, Menu, MenuItem};
-use stocktake_ui::{APP_NAME, ExportStocktake, FocusSearch, ImportStockList, ToggleSidebar};
+use stocktake_ui::{
+    APP_NAME, ExportStocktake, FocusSearch, ImportStockList, ShowCounting, ShowDifferences,
+    ToggleSidebar,
+};
 
 use crate::Quit;
 
@@ -17,6 +20,11 @@ pub fn init(cx: &mut App) {
             MenuItem::separator(),
             MenuItem::action("Søk", FocusSearch),
         ]),
-        Menu::new("Vis").items([MenuItem::action("Vis/skjul sidepanel", ToggleSidebar)]),
+        Menu::new("Vis").items([
+            MenuItem::action("Varetelling", ShowCounting),
+            MenuItem::action("Differanse", ShowDifferences),
+            MenuItem::separator(),
+            MenuItem::action("Vis/skjul sidepanel", ToggleSidebar),
+        ]),
     ]);
 }
