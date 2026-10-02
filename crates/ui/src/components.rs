@@ -3,6 +3,7 @@
 //! never breaks an import.
 
 mod delta;
+mod dropdown;
 mod logo;
 mod row_button;
 mod sidebar;
@@ -11,6 +12,7 @@ mod sidebar_item;
 mod window_bar;
 
 pub use delta::*;
+pub use dropdown::*;
 pub use logo::*;
 pub use row_button::*;
 pub use sidebar::*;

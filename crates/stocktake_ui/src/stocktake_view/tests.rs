@@ -340,3 +340,13 @@ fn tab_skips_lagre_while_it_is_disabled(cx: &mut TestAppContext) {
     counter.press("tab");
     assert!(counter.is_focused("save-count"));
 }
+
+#[gpui_kit::test]
+fn the_columns_menu_opens_beside_the_search(cx: &mut TestAppContext) {
+    let mut counter = Counter::resume(cx, "columns");
+    assert!(counter.find("menu-item:Kommer snart").is_none());
+
+    // It's a placeholder for now: its one item is there, but can't be picked.
+    counter.click("columns");
+    assert!(counter.find("menu-item:Kommer snart").is_some());
+}

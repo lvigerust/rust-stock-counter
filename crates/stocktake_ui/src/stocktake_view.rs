@@ -24,9 +24,7 @@ use std::path::{Path, PathBuf};
 
 use gpui_kit::component::{
     Size, WindowExt as _,
-    button::Button,
     input::{InputEvent, InputGroup, InputGroupAddon, InputGroupInput, InputState},
-    menu::{DropdownMenu as _, PopupMenuItem},
     notification::Notification,
     progress::Progress,
     status_bar::StatusBar,
@@ -41,7 +39,7 @@ use stocktake::{
     recent::{self, RecentStockLists},
     store,
 };
-use ui::{WindowBar, prelude::*};
+use ui::{Dropdown, DropdownButton, DropdownItem, DropdownMenu, WindowBar, prelude::*};
 
 use crate::{
     CONTEXT, ExportStocktake, FocusNext, FocusPrevious, FocusSearch, ImportStockList,
@@ -427,19 +425,21 @@ impl StocktakeView {
     /// Beside the search, the same height: which of the table's columns to
     /// show. A placeholder for now; the menu has nothing to choose yet.
     fn render_columns_menu() -> impl IntoElement {
-        Button::new("columns")
-            .small()
+        let button = DropdownButton::new()
             .outline()
-            .icon(IconName::Columns3Cog)
-            .label("Kolonner")
-            .dropdown_caret(true)
+            .small()
+            .accessibility_label("Kolonner")
             .h(SEARCH_HEIGHT)
-            // Under the button, lined up with its trailing edge, since it
-            // sits against the end of the bar.
-            .dropdown_menu_with_anchor(Anchor::TopRight, |menu, _, _| {
-                menu.label("Vis kolonner")
-                    .item(PopupMenuItem::new("Kommer snart").disabled(true))
-            })
+            .child(Icon::new(IconName::Columns3Cog).small())
+            .child("Kolonner")
+            .child(Icon::new(IconName::ChevronDown).small());
+        // Under the button, lined up with its trailing edge, since it sits
+        // against the end of the bar.
+        let menu = DropdownMenu::new()
+            .anchor(Anchor::TopRight)
+            .heading("Vis kolonner")
+            .item(DropdownItem::new("Kommer snart").disabled(true));
+        Dropdown::new("columns", button, menu)
     }
 
     /// Along the bottom of the main pane, while there's a stock list: how
