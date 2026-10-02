@@ -1,6 +1,7 @@
 # Builds the Windows executable on demand. GPUI compiles its DirectX shaders
 # with Windows SDK tools, so it can't be cross-compiled from macOS. Run it
-# from the Actions tab and download the artifact from the finished run.
+# from the Actions tab; it replaces the "latest" release with the new build,
+# which anyone can download without signing in to GitHub.
 name: Windows build
 
 on: workflow_dispatch
@@ -8,6 +9,8 @@ on: workflow_dispatch
 jobs:
   build:
     runs-on: windows-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -28,7 +31,14 @@ jobs:
           mkdir dist
           cp target/release/varetelling.exe "dist/Scala Bad.exe"
 
-      - uses: actions/upload-artifact@v4
-        with:
-          name: scala-bad-windows
-          path: dist/Scala Bad.exe
+      - name: Replace the latest release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete latest --cleanup-tag --yes || true
+          gh release create latest "dist/Scala Bad.exe" \
+            --target "$GITHUB_SHA" \
+            --title "Latest Windows build" \
+            --notes "Built from $GITHUB_SHA." \
+            --latest
