@@ -84,9 +84,7 @@ pub(crate) fn open(
     let item_number = or_dash(product.item_number());
     let system_quantity: SharedString = product.system_quantity().to_string().into();
     // Only once the pick location itself has been counted.
-    let pick_count: Option<SharedString> = product
-        .count_at(product.location())
-        .map(|quantity| quantity.to_string().into());
+    let pick_count = product.count_at(product.location());
     let on_save: SaveCallback = Rc::new(on_save);
     let on_cancel: Callback = Rc::new(on_cancel);
     // The checkbox's state, kept while it's hidden so it comes back as the
@@ -154,26 +152,16 @@ pub(crate) fn open(
                             .bordered(false)
                             .columns(1)
                             .item("Varenummer", item_number.clone(), 1)
-                            .item("I lagersystemet", system_quantity.clone(), 1)
-                            .when_some(pick_count.clone(), |this, pick_count| {
-                                this.item("Plukklokasjon", pick_count, 1)
-                            }),
+                            .item("I lagersystemet", system_quantity.clone(), 1),
                     )
+                    .when_some(pick_count, |this, pick_count| {
+                        this.child(location_counts(
+                            "Lager",
+                            [(product.location(), pick_count)].into_iter(),
+                        ))
+                    })
                     .when(product.overflow_len() > 0, |this| {
-                        this.child(
-                            v_flex()
-                                .gap_3()
-                                .child(div().text_sm().font_medium().child("Buffer"))
-                                .child(DescriptionList::new().bordered(false).columns(1).children(
-                                    product.overflow_counts().map(|(location, quantity)| {
-                                        DescriptionItem::Item {
-                                            label: SharedString::from(location.to_string()).into(),
-                                            value: SharedString::from(quantity.to_string()).into(),
-                                            span: 1,
-                                        }
-                                    }),
-                                )),
-                        )
+                        this.child(location_counts("Buffer", product.overflow_counts()))
                     })
                     .child(
                         v_flex()
@@ -250,6 +238,26 @@ pub(crate) fn open(
             // that itself.
             .w(Spacing(128.).to_pixels(window.rem_size()))
     });
+}
+
+/// A titled list of locations, each beside what was counted there.
+fn location_counts<'a>(
+    title: &'static str,
+    counts: impl Iterator<Item = (&'a str, i64)>,
+) -> impl IntoElement {
+    v_flex()
+        .gap_3()
+        .child(div().text_sm().font_medium().child(title))
+        .child(
+            DescriptionList::new()
+                .bordered(false)
+                .columns(1)
+                .children(counts.map(|(location, quantity)| DescriptionItem::Item {
+                    label: or_dash(location).into(),
+                    value: SharedString::from(quantity.to_string()).into(),
+                    span: 1,
+                })),
+        )
 }
 
 /// A dash rather than an empty value, for a product the list leaves blank.

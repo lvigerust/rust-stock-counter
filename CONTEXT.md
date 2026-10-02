@@ -32,7 +32,7 @@ _Avoid_: Lokasjon, bin, slot
 
 **Pick location**:
 The location a product is picked from. It starts as the one the stock list gives, which may be empty, and a counter can move it during the stocktake while nothing has been counted there.
-_Avoid_: Main location, primary location, home location
+_Avoid_: Lager, plukklokasjon, main location, primary location, home location
 
 **Overflow location**:
 Any location other than its pick location where units of a product are found during a stocktake.
