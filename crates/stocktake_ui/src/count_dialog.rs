@@ -80,6 +80,10 @@ pub(crate) fn open(
     let title: SharedString = product.name().to_string().into();
     let item_number = or_dash(product.item_number());
     let system_quantity: SharedString = product.system_quantity().to_string().into();
+    // Only once the pick location itself has been counted.
+    let pick_count: Option<SharedString> = product
+        .count_at(product.location())
+        .map(|quantity| quantity.to_string().into());
     let on_save: SaveCallback = Rc::new(on_save);
     let on_cancel: Callback = Rc::new(on_cancel);
 
@@ -138,17 +142,20 @@ pub(crate) fn open(
                             .bordered(false)
                             .columns(1)
                             .item("Varenummer", item_number.clone(), 1)
-                            .item("På lager", system_quantity.clone(), 1),
+                            .item("Totalt på lager", system_quantity.clone(), 1)
+                            .when_some(pick_count.clone(), |this, pick_count| {
+                                this.item("Plukklokasjon", pick_count, 1)
+                            }),
                     )
-                    .when(product.is_counted(), |this| {
+                    .when(product.overflow_len() > 0, |this| {
                         this.child(
                             v_flex()
                                 .gap_3()
-                                .child(div().text_sm().font_medium().child("Telt så langt"))
+                                .child(div().text_sm().font_medium().child("Buffer"))
                                 .child(DescriptionList::new().bordered(false).columns(1).children(
-                                    product.counts().map(|(location, quantity)| {
+                                    product.overflow_counts().map(|(location, quantity)| {
                                         DescriptionItem::Item {
-                                            label: or_dash(location).into(),
+                                            label: SharedString::from(location.to_string()).into(),
                                             value: SharedString::from(quantity.to_string()).into(),
                                             span: 1,
                                         }

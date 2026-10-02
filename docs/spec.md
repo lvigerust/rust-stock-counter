@@ -68,7 +68,7 @@ Today the stocktake is done in a spreadsheet on a laptop with a USB barcode scan
 ### Counting a product again
 
 - Counts are kept per location. When the location in the field already has a count, the dialog shows it and lets the counter either **replace** it or **add** to it; Enter adds. A location without a count yet just takes the new count.
-- The dialog lists the count so far at each of the product's locations.
+- The dialog shows the pick location's count beside the system quantity (as "Totalt på lager"), once the pick location has been counted, and lists the overflow locations counted so far under "Buffer" when there are any.
 - Replacing an overflow location's count with zero removes that location, which is how a mistyped location is corrected.
 
 ## Persistence

@@ -36,7 +36,7 @@ _Avoid_: Main location, primary location, home location
 
 **Overflow location**:
 Any location other than its pick location where units of a product are found during a stocktake.
-_Avoid_: Extra location, secondary location, new location
+_Avoid_: Buffer, extra location, secondary location, new location
 
 **Aisle**:
 The letters a location starts with, such as `C` in `C4-7`. The table can be filtered to some aisles by pick location. A product whose pick location is empty, or doesn't start with a letter, has no aisle.
