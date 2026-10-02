@@ -352,7 +352,7 @@ impl StocktakeView {
                                             .min_w_0()
                                             .child(Self::render_search(&open.search, cx)),
                                     )
-                                    .child(Self::render_columns_menu()),
+                                    .child(Self::render_columns_menu(cx)),
                             )
                         },
                     ),
@@ -445,15 +445,16 @@ impl StocktakeView {
     /// Beside the search, the same height: which of the table's columns to
     /// show. A placeholder for now: it lists every column as shown, but
     /// picking one doesn't hide it yet.
-    fn render_columns_menu() -> impl IntoElement {
+    fn render_columns_menu(cx: &App) -> impl IntoElement {
+        let muted = cx.theme().muted_foreground;
         let button = DropdownButton::new()
             .outline()
             .small()
             .accessibility_label("Kolonner")
             .h(SEARCH_HEIGHT)
-            .child(Icon::new(IconName::Columns3Cog).small())
+            .child(Icon::new(IconName::Columns3Cog).small().text_color(muted))
             .child("Kolonner")
-            .child(Icon::new(IconName::ChevronDown).small());
+            .child(Icon::new(IconName::ChevronDown).small().text_color(muted));
         // Under the button, lined up with its trailing edge, since it sits
         // against the end of the bar.
         let menu = DropdownMenu::new()

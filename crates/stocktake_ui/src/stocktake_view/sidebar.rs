@@ -141,7 +141,7 @@ impl StocktakeView {
             .w(self.sidebar_width)
             .child(WindowBar::new().justify_end().child(toggle))
             .child(Separator::horizontal().color(cx.theme().sidebar_border))
-            .child(SidebarHeader::new().child(render_mode_menu(self.mode)))
+            .child(SidebarHeader::new().child(render_mode_menu(self.mode, cx)))
             .child(SidebarBody::new().map(|body| match self.mode {
                 Mode::Counting => body.children(status_filter).children(aisle_filter),
                 Mode::Differences => body,
@@ -366,7 +366,7 @@ fn render_filter_item(
 /// Atop the sidebar, the mode the window is in, as a button that opens a
 /// menu of every mode below it, the current one checked. The name takes the
 /// width the chevron leaves, and truncates past it.
-fn render_mode_menu(current: Mode) -> impl IntoElement {
+fn render_mode_menu(current: Mode, cx: &App) -> impl IntoElement {
     let button = DropdownButton::new()
         .w_full()
         .p_2()
@@ -379,7 +379,11 @@ fn render_mode_menu(current: Mode) -> impl IntoElement {
                 .font_semibold()
                 .child(current.label()),
         )
-        .child(Icon::new(IconName::ChevronDown).small());
+        .child(
+            Icon::new(IconName::ChevronDown)
+                .small()
+                .text_color(cx.theme().muted_foreground),
+        );
     // Catalyst's desktop width for the menu atop its sidebar (`lg:min-w-64`).
     let menu = DropdownMenu::new()
         .min_w(Spacing(64.))
