@@ -27,11 +27,19 @@ The EAN printed on a product's packaging; scanning it identifies the product. No
 _Avoid_: EAN, QR code
 
 **Location**:
-The shelf position code where a product is stored, such as `C4-7`.
+A place in the storage where units of a product are kept, usually a shelf position code such as `C4-7`. A product can be kept at more than one location.
 _Avoid_: Lokasjon, bin, slot
 
+**Pick location**:
+The location the stock list gives for a product, where it is picked from. It may be empty.
+_Avoid_: Main location, primary location, home location
+
+**Overflow location**:
+Any location other than its pick location where units of a product are found during a stocktake.
+_Avoid_: Extra location, secondary location, new location
+
 **Aisle**:
-The letters a location starts with, such as `C` in `C4-7`. The table can be filtered to some aisles. A product whose location is empty, or doesn't start with a letter, has no aisle.
+The letters a location starts with, such as `C` in `C4-7`. The table can be filtered to some aisles by pick location. A product whose pick location is empty, or doesn't start with a letter, has no aisle.
 _Avoid_: Reol, zone, rack
 
 **System quantity**:
@@ -39,7 +47,7 @@ The number of units the business system says is in the storage for a product (Fy
 _Avoid_: Expected quantity, on hand, stock level
 
 **Counted quantity**:
-The number of units a counter has verified are physically in the storage for a product.
+The number of units a counter has verified are physically in the storage for a product: the sum of what was counted at each of its locations.
 _Avoid_: Actual, physical quantity
 
 **Difference**:
