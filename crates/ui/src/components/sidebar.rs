@@ -12,14 +12,11 @@
 //! ```
 //!
 //! Catalyst spaces sections with sibling selectors; GPUI has none, so each
-//! container spaces its children with a gap instead. [`SidebarItem`] and
-//! [`SidebarHeading`] have modules of their own.
-//!
-//! [`SidebarItem`]: crate::SidebarItem
-//! [`SidebarHeading`]: crate::SidebarHeading
+//! container spaces its children with a gap instead.
 
-use gpui_kit::StyleRefinement;
+use gpui_kit::{ClickEvent, StyleRefinement};
 
+use crate::RowButton;
 use crate::prelude::*;
 
 /// Declares a part that holds children and takes style overrides, leaving
@@ -153,7 +150,7 @@ impl RenderOnce for SidebarFooter {
 
 container!(
     /// A group of items in a sidebar's header, body or footer, usually
-    /// under a [`SidebarHeading`](crate::SidebarHeading). Its items sit
+    /// under a [`SidebarHeading`]. Its items sit
     /// almost touching, so their hover fills read as one column.
     ///
     /// As wide as its container, even where nothing stretches it: inside a
@@ -169,5 +166,162 @@ impl RenderOnce for SidebarSection {
             .gap_0p5()
             .children(self.children)
             .refine_style(&self.style)
+    }
+}
+
+/// What a press on a heading that opens and closes its section does.
+type ToggleHandler = Box<dyn Fn(&ClickEvent, &mut Window, &mut App)>;
+
+/// The title of a group in a section of the sidebar, such as `Tellinger`
+/// above the stocktakes. Muted, so the items under it lead, and inset like
+/// an item's content so the two line up.
+///
+/// With [`Self::on_toggle`] it opens and closes the items under it, the way
+/// the trigger of a gpui-kit `Collapsible` does: the whole heading is a
+/// [`RowButton`], with a chevron against its trailing edge.
+#[derive(IntoElement)]
+pub struct SidebarHeading {
+    label: SharedString,
+    toggle: Option<(ElementId, bool, ToggleHandler)>,
+}
+
+impl SidebarHeading {
+    pub fn new(label: impl Into<SharedString>) -> Self {
+        Self {
+            label: label.into(),
+            toggle: None,
+        }
+    }
+
+    /// Makes the heading the button that opens and closes its section.
+    /// `open` turns the chevron; the caller keeps it and flips it in
+    /// `handler`. `id` keeps the button's focus from frame to frame, so it
+    /// must be unique in the window.
+    pub fn on_toggle(
+        mut self,
+        id: impl Into<ElementId>,
+        open: bool,
+        handler: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.toggle = Some((id.into(), open, Box::new(handler)));
+        self
+    }
+}
+
+impl RenderOnce for SidebarHeading {
+    fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
+        let theme = cx.theme();
+        let label = div().min_w_0().truncate().child(self.label);
+        let Some((id, open, handler)) = self.toggle else {
+            return div()
+                .min_w_0()
+                .px_2()
+                .mb_1()
+                .text_xs()
+                .text_color(theme.muted_foreground)
+                .child(label)
+                .into_any_element();
+        };
+        let chevron = if open {
+            IconName::ChevronDown
+        } else {
+            IconName::ChevronRight
+        };
+        RowButton::new(id, handler)
+            .hover_colors(theme.sidebar_accent, theme.sidebar_accent_foreground)
+            .justify_between()
+            .gap_2()
+            .px_2()
+            .py_1()
+            .text_xs()
+            .text_color(theme.muted_foreground)
+            .child(label)
+            .child(Icon::new(chevron).xsmall().flex_none())
+            .into_any_element()
+    }
+}
+
+/// One item in a section of the sidebar, such as the app's name in its
+/// header: a row padded by 0.5rem, its children side by side.
+///
+/// With [`Self::on_click`] the whole row is a [`RowButton`] in the sidebar's
+/// accent. The padding stays the same, so a clickable item lines up with a
+/// plain one.
+#[derive(IntoElement)]
+pub struct SidebarItem {
+    button: Option<RowButton>,
+    disabled: bool,
+    style: StyleRefinement,
+    children: Vec<AnyElement>,
+}
+
+impl SidebarItem {
+    pub fn new() -> Self {
+        Self {
+            button: None,
+            disabled: false,
+            style: StyleRefinement::default(),
+            children: Vec::new(),
+        }
+    }
+
+    /// Makes the row a button. `id` keeps its focus from frame to frame, so
+    /// it must be unique in the window.
+    pub fn on_click(
+        mut self,
+        id: impl Into<ElementId>,
+        handler: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.button = Some(RowButton::new(id, handler));
+        self
+    }
+}
+
+impl Default for SidebarItem {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// A disabled item is dimmed and ignores clicks and Tab.
+impl Disableable for SidebarItem {
+    fn disabled(mut self, disabled: bool) -> Self {
+        self.disabled = disabled;
+        self
+    }
+}
+
+impl Styled for SidebarItem {
+    fn style(&mut self) -> &mut StyleRefinement {
+        &mut self.style
+    }
+}
+
+impl ParentElement for SidebarItem {
+    fn extend(&mut self, elements: impl IntoIterator<Item = AnyElement>) {
+        self.children.extend(elements);
+    }
+}
+
+impl RenderOnce for SidebarItem {
+    fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
+        let Some(button) = self.button else {
+            return h_flex()
+                .min_w_0()
+                .gap_2()
+                .p_2()
+                .children(self.children)
+                .refine_style(&self.style)
+                .into_any_element();
+        };
+        let theme = cx.theme();
+        button
+            .hover_colors(theme.sidebar_accent, theme.sidebar_accent_foreground)
+            .disabled(self.disabled)
+            .gap_2()
+            .p_2()
+            .children(self.children)
+            .refine_style(&self.style)
+            .into_any_element()
     }
 }
