@@ -7,7 +7,6 @@
 
 use std::{cell::Cell, rc::Rc};
 
-use gpui_kit::ClickEvent;
 use gpui_kit::component::{
     FocusableExt as _, WindowExt as _,
     button::{Button, ButtonVariants as _},
@@ -16,8 +15,9 @@ use gpui_kit::component::{
     dialog::{DialogClose, DialogFooter},
     input::{Input, InputState},
 };
+use gpui_kit::{ClickEvent, Hsla};
 use stocktake::Product;
-use ui::{Spacing, prelude::*};
+use ui::{Delta, Spacing, prelude::*};
 
 /// A single-line input that accepts whole, non-negative numbers.
 pub(crate) fn quantity_input(window: &mut Window, cx: &mut Context<InputState>) -> InputState {
@@ -83,10 +83,6 @@ pub(crate) fn open(
     let title: SharedString = product.name().to_string().into();
     let item_number = or_dash(product.item_number());
     let system_quantity: SharedString = product.system_quantity().to_string().into();
-    // Only once the pick location itself has been counted.
-    let pick_count: Option<SharedString> = product
-        .count_at(product.location())
-        .map(|quantity| quantity.to_string().into());
     let on_save: SaveCallback = Rc::new(on_save);
     let on_cancel: Callback = Rc::new(on_cancel);
     // The checkbox's state, kept while it's hidden so it comes back as the
@@ -154,27 +150,10 @@ pub(crate) fn open(
                             .bordered(false)
                             .columns(1)
                             .item("Varenummer", item_number.clone(), 1)
-                            .item("Totalt på lager", system_quantity.clone(), 1)
-                            .when_some(pick_count.clone(), |this, pick_count| {
-                                this.item("Plukklokasjon", pick_count, 1)
-                            }),
+                            // What's expected, then what was found.
+                            .item("I lagersystemet", system_quantity.clone(), 1)
+                            .children(counted_items(&product, muted)),
                     )
-                    .when(product.overflow_len() > 0, |this| {
-                        this.child(
-                            v_flex()
-                                .gap_3()
-                                .child(div().text_sm().font_medium().child("Buffer"))
-                                .child(DescriptionList::new().bordered(false).columns(1).children(
-                                    product.overflow_counts().map(|(location, quantity)| {
-                                        DescriptionItem::Item {
-                                            label: SharedString::from(location.to_string()).into(),
-                                            value: SharedString::from(quantity.to_string()).into(),
-                                            span: 1,
-                                        }
-                                    }),
-                                )),
-                        )
-                    })
                     .child(
                         v_flex()
                             .gap_3()
@@ -250,6 +229,52 @@ pub(crate) fn open(
             // that itself.
             .w(Spacing(128.).to_pixels(window.rem_size()))
     });
+}
+
+/// The counted quantity beside its difference from the system quantity,
+/// then what was counted at each location, the pick location first. Nothing
+/// while the product is uncounted, and the pick location only once it has
+/// been counted itself.
+fn counted_items(product: &Product, muted: Hsla) -> Vec<DescriptionItem> {
+    let (Some(counted), Some(difference)) = (product.counted_quantity(), product.difference())
+    else {
+        return Vec::new();
+    };
+    let total = DescriptionItem::Item {
+        label: "Telt".into(),
+        value: h_flex()
+            .gap_3()
+            .child(counted.to_string())
+            .child(Delta::new(difference))
+            .into_any_element()
+            .into(),
+        span: 1,
+    };
+    let pick = product
+        .count_at(product.location())
+        .map(|quantity| (product.location(), quantity, "Plukklokasjon"));
+    let overflow = product
+        .overflow_counts()
+        .map(|(location, quantity)| (location, quantity, "Buffer"));
+    let locations = pick
+        .into_iter()
+        .chain(overflow)
+        .map(|(location, quantity, kind)| DescriptionItem::Item {
+            // Indented under the total they add up to.
+            label: div()
+                .pl_4()
+                .child(or_dash(location))
+                .into_any_element()
+                .into(),
+            value: h_flex()
+                .gap_3()
+                .child(quantity.to_string())
+                .child(div().text_color(muted).child(kind))
+                .into_any_element()
+                .into(),
+            span: 1,
+        });
+    std::iter::once(total).chain(locations).collect()
 }
 
 /// A dash rather than an empty value, for a product the list leaves blank.
