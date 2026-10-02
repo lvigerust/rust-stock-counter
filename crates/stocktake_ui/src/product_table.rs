@@ -2,7 +2,10 @@
 
 use std::{cmp::Ordering, time::Instant};
 
-use gpui_kit::component::table::{Column, ColumnSort, TableDelegate, TableState};
+use gpui_kit::component::{
+    table::{Column, ColumnSort, TableDelegate, TableState},
+    tooltip::Tooltip,
+};
 use gpui_kit::{Div, Edges, Pixels, Stateful, px};
 use stocktake::{ProductId, compare_locations, natural_cmp};
 use ui::{Delta, flash, prelude::*};
@@ -415,18 +418,36 @@ impl TableDelegate for ProductTable {
         let product = self.session.read(cx).stocktake().product(id);
         let content = match column {
             // The pick location, and how many overflow locations units were
-            // also counted at.
-            ProductColumn::Location => h_flex()
-                .gap_1()
-                .child(product.location().to_string())
-                .when(product.overflow_len() > 0, |this| {
-                    this.child(
-                        div()
-                            .text_color(cx.theme().muted_foreground)
-                            .child(format!("+{}", product.overflow_len())),
-                    )
-                })
-                .into_any_element(),
+            // also counted at, named in a tooltip.
+            ProductColumn::Location => {
+                let location = h_flex().gap_1().child(product.location().to_string());
+                match product.overflow_len() {
+                    0 => location.into_any_element(),
+                    overflow => {
+                        let buffers: Vec<SharedString> = product
+                            .overflow_counts()
+                            .map(|(location, _)| location.to_string().into())
+                            .collect();
+                        location
+                            .id(("location", id.line()))
+                            .child(
+                                div()
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child(format!("+{overflow}")),
+                            )
+                            .tooltip(move |window, cx| {
+                                let buffers = buffers.clone();
+                                Tooltip::element(move |_, _| {
+                                    v_flex()
+                                        .child(div().font_medium().child("Buffer"))
+                                        .children(buffers.clone())
+                                })
+                                .build(window, cx)
+                            })
+                            .into_any_element()
+                    }
+                }
+            }
             ProductColumn::ItemNumber => div()
                 .text_color(cx.theme().muted_foreground)
                 .child(product.item_number().to_string())
