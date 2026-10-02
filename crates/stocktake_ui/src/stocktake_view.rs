@@ -429,7 +429,8 @@ impl StocktakeView {
     }
 
     /// Beside the search, the same height: which of the table's columns to
-    /// show. A placeholder for now; the menu has nothing to choose yet.
+    /// show. A placeholder for now: it lists every column as shown, but
+    /// picking one doesn't hide it yet.
     fn render_columns_menu() -> impl IntoElement {
         let button = DropdownButton::new()
             .outline()
@@ -444,7 +445,7 @@ impl StocktakeView {
         let menu = DropdownMenu::new()
             .anchor(Anchor::TopRight)
             .heading("Vis kolonner")
-            .item(DropdownItem::new("Kommer snart").disabled(true));
+            .items(ProductTable::column_names().map(|name| DropdownItem::new(name).checked(true)));
         Dropdown::new("columns", button, menu)
     }
 

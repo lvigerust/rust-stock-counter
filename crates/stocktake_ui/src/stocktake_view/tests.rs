@@ -344,9 +344,20 @@ fn tab_skips_lagre_while_it_is_disabled(cx: &mut TestAppContext) {
 #[gpui_kit::test]
 fn the_columns_menu_opens_beside_the_search(cx: &mut TestAppContext) {
     let mut counter = Counter::resume(cx, "columns");
-    assert!(counter.find("menu-item:Kommer snart").is_none());
+    assert!(counter.find("menu-item:Lokasjon").is_none());
 
-    // It's a placeholder for now: its one item is there, but can't be picked.
+    // A placeholder for now: every column is listed, and shown.
     counter.click("columns");
-    assert!(counter.find("menu-item:Kommer snart").is_some());
+    for id in [
+        "menu-item:Lokasjon",
+        "menu-item:Varenummer",
+        "menu-item:Produkt",
+        "menu-item:På lager",
+        "menu-item:Telt",
+        "menu-item:Differanse",
+        "menu-item:Status",
+    ] {
+        let item = counter.find(id);
+        assert_eq!(item.and_then(|item| item.checked()), Some(true), "{id}");
+    }
 }

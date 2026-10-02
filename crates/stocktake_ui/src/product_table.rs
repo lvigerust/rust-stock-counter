@@ -137,6 +137,13 @@ impl ProductTable {
         }
     }
 
+    /// The columns' headers, in the order the table shows them.
+    pub fn column_names() -> impl Iterator<Item = &'static str> {
+        ProductColumn::ALL
+            .into_iter()
+            .map(|column| column.key_and_name().1)
+    }
+
     /// Shows these products, sorted by the column the counter picked.
     pub fn set_rows(&mut self, matches: Vec<ProductId>, cx: &App) {
         self.matches = matches;
