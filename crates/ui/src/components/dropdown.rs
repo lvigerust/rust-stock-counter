@@ -38,13 +38,13 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use gpui_kit::component::FocusableExt as _;
-use gpui_kit::component::Size;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::kbd::Kbd;
 use gpui_kit::component::menu::{DropdownMenu as _, PopupMenu, PopupMenuItem};
+use gpui_kit::component::{Colorize as _, Size};
 use gpui_kit::{
-    Action, Anchor, ClickEvent, FocusHandle, Pixels, StyleRefinement, TestSupportExt as _, Toggled,
-    WeakEntity, rems,
+    Action, Anchor, ClickEvent, FocusHandle, Hsla, Pixels, StyleRefinement, TestSupportExt as _,
+    Toggled, WeakEntity, rems,
 };
 
 use crate::prelude::*;
@@ -82,6 +82,8 @@ struct DropdownState {
     context: FocusHandle,
     /// The menu while it's open. gpui-kit owns it and drops it on closing.
     open_menu: WeakEntity<PopupMenu>,
+    /// Whether the menu is open, to fill the button as it is on hover.
+    open: bool,
     /// What the open menu was built from, to tell when it's out of date.
     built_from: Vec<EntryLook>,
 }
@@ -92,9 +94,13 @@ impl RenderOnce for Dropdown {
         let state = window.use_keyed_state(state_id, cx, |_, cx| DropdownState {
             context: cx.focus_handle(),
             open_menu: WeakEntity::new_invalid(),
+            open: false,
             built_from: Vec::new(),
         });
-        let context = state.read(cx).context.clone();
+        let (context, open) = {
+            let state = state.read(cx);
+            (state.context.clone(), state.open)
+        };
         let DropdownMenu {
             entries,
             min_width,
@@ -126,20 +132,30 @@ impl RenderOnce for Dropdown {
         }
 
         let state = state.downgrade();
+        let button = self.button.into_button(self.id, open, cx);
         div().track_focus(&context).child(
-            self.button.into_button(self.id).dropdown_menu_with_anchor(
-                anchor,
-                move |menu, _, cx| {
-                    let open_menu = cx.weak_entity();
+            button
+                .dropdown_menu_with_anchor(anchor, {
+                    let state = state.clone();
+                    move |menu, _, cx| {
+                        let open_menu = cx.weak_entity();
+                        state
+                            .update(cx, |state, _| {
+                                state.open_menu = open_menu;
+                                state.built_from = looks.clone();
+                            })
+                            .ok();
+                        build_menu(menu, &entries, min_width, &context)
+                    }
+                })
+                .on_open_change(move |open, _, cx| {
                     state
-                        .update(cx, |state, _| {
-                            state.open_menu = open_menu;
-                            state.built_from = looks.clone();
+                        .update(cx, |state, cx| {
+                            state.open = *open;
+                            cx.notify();
                         })
                         .ok();
-                    build_menu(menu, &entries, min_width, &context)
-                },
-            ),
+                }),
         )
     }
 }
@@ -222,7 +238,22 @@ impl DropdownButton {
         self
     }
 
-    fn into_button(self, id: ElementId) -> Button {
+    /// gpui-kit fills a button whose menu is open with another color than
+    /// a hovered one, so moving onto the menu would change it. This is the
+    /// hover fill, which gpui-kit keeps to itself, for the open button too.
+    fn hover_fill(&self, cx: &App) -> Hsla {
+        let theme = cx.theme();
+        if self.outline {
+            theme.input.mix_oklab(theme.transparent, 0.5)
+        } else if theme.is_dark() {
+            theme.accent.opacity(0.5)
+        } else {
+            theme.accent
+        }
+    }
+
+    fn into_button(self, id: ElementId, open: bool, cx: &App) -> Button {
+        let hover_fill = self.hover_fill(cx);
         Button::new(id)
             .with_size(self.size)
             .map(|button| {
@@ -242,6 +273,7 @@ impl DropdownButton {
                 button.accessibility_label(label)
             })
             .refine_style(&self.style)
+            .when(open, |button| button.bg(hover_fill))
             // gpui-kit centers a button's content; this row runs its full
             // width, so the caller can push a child to the trailing edge.
             .child(h_flex().w_full().min_w_0().gap_2().children(self.children))
