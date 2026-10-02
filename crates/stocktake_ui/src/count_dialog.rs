@@ -157,7 +157,7 @@ pub(crate) fn open(
                     .when_some(pick_count, |this, pick_count| {
                         this.child(location_counts(
                             "Lager",
-                            [(product.location(), pick_count)].into_iter(),
+                            [("Plukklokasjon", pick_count)].into_iter(),
                         ))
                     })
                     .when(product.overflow_len() > 0, |this| {
