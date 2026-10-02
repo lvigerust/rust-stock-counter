@@ -5,12 +5,13 @@
 //! caller's, passed in as callbacks, so this module knows nothing about the
 //! view that opens it.
 
-use std::rc::Rc;
+use std::{cell::Cell, rc::Rc};
 
 use gpui_kit::ClickEvent;
 use gpui_kit::component::{
     FocusableExt as _, WindowExt as _,
     button::{Button, ButtonVariants as _},
+    checkbox::Checkbox,
     description_list::{DescriptionItem, DescriptionList},
     dialog::{DialogClose, DialogFooter},
     input::{Input, InputState},
@@ -54,7 +55,7 @@ pub(crate) enum Save {
 
 /// What the dialog's buttons and keys do.
 type Callback = Rc<dyn Fn(&mut Window, &mut App)>;
-type SaveCallback = Rc<dyn Fn(Save, &mut Window, &mut App)>;
+type SaveCallback = Rc<dyn Fn(Save, bool, &mut Window, &mut App)>;
 
 /// Opens the dialog for `product`, with `location` (a [`location_input`])
 /// and `input` (a [`quantity_input`], filled in by the caller) as its
@@ -65,13 +66,15 @@ type SaveCallback = Rc<dyn Fn(Save, &mut Window, &mut App)>;
 /// the wrong field) and closes the dialog itself once it's done with it; the
 /// buttons are only enabled while the field holds a quantity. While the
 /// location already has a count, Enter adds to it, and a second button
-/// replaces it instead. `on_cancel` runs when Escape or Avbryt close the
-/// dialog.
+/// replaces it instead. It's also told whether the location should become
+/// the pick location: while the field holds another location and the pick
+/// location can still be moved, a checkbox asks. `on_cancel` runs when
+/// Escape or Avbryt close the dialog.
 pub(crate) fn open(
     product: &Product,
     location: Entity<InputState>,
     input: Entity<InputState>,
-    on_save: impl Fn(Save, &mut Window, &mut App) + 'static,
+    on_save: impl Fn(Save, bool, &mut Window, &mut App) + 'static,
     on_cancel: impl Fn(&mut Window, &mut App) + 'static,
     window: &mut Window,
     cx: &mut App,
@@ -86,25 +89,34 @@ pub(crate) fn open(
         .map(|quantity| quantity.to_string().into());
     let on_save: SaveCallback = Rc::new(on_save);
     let on_cancel: Callback = Rc::new(on_cancel);
+    // The checkbox's state, kept while it's hidden so it comes back as the
+    // counter left it.
+    let moves_pick_location = Rc::new(Cell::new(false));
 
     window.open_dialog(cx, move |dialog, window, cx| {
         // Built again every frame, so the buttons follow the typing.
         let valid = parse_quantity(&input.read(cx).value()).is_some();
-        let earlier = product.count_at(&location.read(cx).value());
+        let typed_location = location.read(cx).value();
+        let earlier = product.count_at(&typed_location);
+        let offers_move =
+            !product.is_pick_location(&typed_location) && product.can_move_pick_location();
+        let moves = offers_move && moves_pick_location.get();
         let ring = cx.theme().ring;
         let surface = cx.theme().background;
         let muted = cx.theme().muted_foreground;
         let on_ok = {
             let on_save = on_save.clone();
             move |_: &ClickEvent, window: &mut Window, cx: &mut App| {
-                on_save(Save::Add, window, cx);
+                on_save(Save::Add, moves, window, cx);
                 // `on_save` closes the dialog when it's done with it.
                 false
             }
         };
         let on_click = |save: Save| {
             let on_save = on_save.clone();
-            move |_: &ClickEvent, window: &mut Window, cx: &mut App| on_save(save, window, cx)
+            move |_: &ClickEvent, window: &mut Window, cx: &mut App| {
+                on_save(save, moves, window, cx)
+            }
         };
         let save_button = |id: &'static str, label: &'static str| {
             Button::new(id)
@@ -167,7 +179,19 @@ pub(crate) fn open(
                         v_flex()
                             .gap_3()
                             .child(div().text_sm().font_medium().child("Lokasjon"))
-                            .child(Input::new(&location).id("location")),
+                            .child(Input::new(&location).id("location"))
+                            .when(offers_move, |this| {
+                                let moves_pick_location = moves_pick_location.clone();
+                                this.child(
+                                    Checkbox::new("move-pick-location")
+                                        .label("Erstatt plukklokasjon")
+                                        .checked(moves)
+                                        .on_click(move |checked, window, _| {
+                                            moves_pick_location.set(*checked);
+                                            window.refresh();
+                                        }),
+                                )
+                            }),
                     )
                     .child(
                         v_flex()

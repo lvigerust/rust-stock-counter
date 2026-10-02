@@ -22,8 +22,8 @@ const ROW_PADDING: Pixels = px(16.);
 const EDGE_PADDING: Pixels = px(48.);
 
 /// A cell's padding: [`ROW_PADDING`] around its content, [`EDGE_PADDING`] on
-/// the table's outer edges.
-fn cell_paddings(col_ix: usize) -> Edges<Pixels> {
+/// the table's outer edges, of `columns_count` shown columns.
+fn cell_paddings(col_ix: usize, columns_count: usize) -> Edges<Pixels> {
     Edges {
         top: ROW_PADDING,
         bottom: ROW_PADDING,
@@ -32,7 +32,7 @@ fn cell_paddings(col_ix: usize) -> Edges<Pixels> {
         } else {
             ROW_PADDING
         },
-        right: if col_ix + 1 == ProductColumn::ALL.len() {
+        right: if col_ix + 1 == columns_count {
             EDGE_PADDING
         } else {
             ROW_PADDING
@@ -40,8 +40,9 @@ fn cell_paddings(col_ix: usize) -> Edges<Pixels> {
     }
 }
 
+/// One of the table's columns, which the counter can show or hide.
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum ProductColumn {
+pub enum ProductColumn {
     Location,
     ItemNumber,
     Name,
@@ -52,7 +53,8 @@ enum ProductColumn {
 }
 
 impl ProductColumn {
-    const ALL: [Self; 7] = [
+    /// Every column, in the order the table shows them.
+    pub const ALL: [Self; 7] = [
         Self::Location,
         Self::ItemNumber,
         Self::Name,
@@ -71,6 +73,18 @@ impl ProductColumn {
             self,
             Self::SystemQuantity | Self::CountedQuantity | Self::Difference
         )
+    }
+
+    /// The column's header, in the table and in the columns menu.
+    pub fn name(self) -> &'static str {
+        self.key_and_name().1
+    }
+
+    /// Whether the counter can hide the column. The product name stays: it's
+    /// what the counter reads off the shelf, and it takes the width the other
+    /// columns leave.
+    pub fn is_hideable(self) -> bool {
+        self != Self::Name
     }
 
     fn key_and_name(self) -> (&'static str, &'static str) {
@@ -115,6 +129,8 @@ pub struct ProductTable {
     session: Entity<Session>,
     /// The products matching the search, in the storage's walking order.
     matches: Vec<ProductId>,
+    /// The columns shown, in the order of [`ProductColumn::ALL`].
+    columns: Vec<ProductColumn>,
     /// `matches` in display order: sorted when the counter picked a column.
     rows: Vec<ProductId>,
     /// The column the counter sorted by, if any.
@@ -131,17 +147,39 @@ impl ProductTable {
             session,
             rows: matches.clone(),
             matches,
+            columns: ProductColumn::ALL.to_vec(),
             sort: None,
             width: px(0.),
             last_counted: None,
         }
     }
 
-    /// The columns' headers, in the order the table shows them.
-    pub fn column_names() -> impl Iterator<Item = &'static str> {
-        ProductColumn::ALL
+    pub fn is_shown(&self, column: ProductColumn) -> bool {
+        self.columns.contains(&column)
+    }
+
+    /// Shows or hides `column`, unless it's one that always shows. Hiding
+    /// the sorted column puts the rows back in walking order, as there'd be
+    /// no arrow left to say how they're sorted. Call `TableState::refresh`
+    /// afterwards, so the table reads the new columns.
+    pub fn set_shown(&mut self, column: ProductColumn, shown: bool, cx: &App) {
+        if !column.is_hideable() {
+            return;
+        }
+        self.columns = ProductColumn::ALL
             .into_iter()
-            .map(|column| column.key_and_name().1)
+            .filter(|&other| {
+                if other == column {
+                    shown
+                } else {
+                    self.is_shown(other)
+                }
+            })
+            .collect();
+        if !shown && self.sort.is_some_and(|(sorted, _)| sorted == column) {
+            self.sort = None;
+            self.apply_sort(cx);
+        }
     }
 
     /// Shows these products, sorted by the column the counter picked.
@@ -242,7 +280,7 @@ fn uncounted_last(a: Option<i64>, b: Option<i64>, direction: ColumnSort) -> Orde
 
 impl TableDelegate for ProductTable {
     fn columns_count(&self, _: &App) -> usize {
-        ProductColumn::ALL.len()
+        self.columns.len()
     }
 
     fn rows_count(&self, _: &App) -> usize {
@@ -250,9 +288,10 @@ impl TableDelegate for ProductTable {
     }
 
     fn column(&self, col_ix: usize, _: &App) -> Column {
-        let column = ProductColumn::ALL[col_ix];
+        let column = self.columns[col_ix];
         let (key, name) = column.key_and_name();
-        let fixed: f32 = ProductColumn::ALL
+        let fixed: f32 = self
+            .columns
             .iter()
             .filter_map(|column| column.fixed_width())
             .sum();
@@ -263,7 +302,7 @@ impl TableDelegate for ProductTable {
         // instead and sorts on a click anywhere in the cell.
         Column::new(key, name)
             .width(px(column.fixed_width().unwrap_or(name_width)))
-            .paddings(cell_paddings(col_ix))
+            .paddings(cell_paddings(col_ix, self.columns.len()))
             .min_width(px(64.))
             .movable(false)
             .when(column.is_numeric(), |column| column.text_right())
@@ -278,7 +317,7 @@ impl TableDelegate for ProductTable {
     ) {
         self.sort = match sort {
             ColumnSort::Default => None,
-            direction => Some((ProductColumn::ALL[col_ix], direction)),
+            direction => Some((self.columns[col_ix], direction)),
         };
         self.apply_sort(cx);
         // A selected row index now points at a different product.
@@ -296,8 +335,8 @@ impl TableDelegate for ProductTable {
         _: &mut Window,
         cx: &mut Context<TableState<Self>>,
     ) -> impl IntoElement {
-        let column = ProductColumn::ALL[col_ix];
-        let paddings = cell_paddings(col_ix);
+        let column = self.columns[col_ix];
+        let paddings = cell_paddings(col_ix, self.columns.len());
         let sort = self.sort_of(column);
         let (icon, sorted) = match sort {
             ColumnSort::Ascending => (IconName::SortAscending, true),
@@ -308,7 +347,7 @@ impl TableDelegate for ProductTable {
             .size_3()
             .flex_none()
             .when(!sorted, |icon| icon.opacity(0.5));
-        let label = div().min_w_0().truncate().child(column.key_and_name().1);
+        let label = div().min_w_0().truncate().child(column.name());
         let hover_color = cx.theme().foreground;
         h_flex()
             .id(("sort", col_ix))
@@ -372,7 +411,7 @@ impl TableDelegate for ProductTable {
         let Some(id) = self.product_at(row_ix) else {
             return div().into_any_element();
         };
-        let column = ProductColumn::ALL[col_ix];
+        let column = self.columns[col_ix];
         let product = self.session.read(cx).stocktake().product(id);
         let content = match column {
             // The pick location, and how many overflow locations units were
@@ -437,7 +476,7 @@ impl TableDelegate for ProductTable {
             return String::new();
         };
         let product = self.session.read(cx).stocktake().product(id);
-        match ProductColumn::ALL[col_ix] {
+        match self.columns[col_ix] {
             ProductColumn::Location => match product.overflow_len() {
                 0 => product.location().to_string(),
                 overflow => format!("{} +{overflow}", product.location())

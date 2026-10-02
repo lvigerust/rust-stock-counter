@@ -67,7 +67,8 @@ fn write_counts(
 
     for (row, id) in (1u32..).zip(stocktake.search("")) {
         let product = stocktake.product(id);
-        sheet.write_string(row, 0, product.location())?;
+        // The stock list's own, until the export reports moves.
+        sheet.write_string(row, 0, product.listed_location())?;
         sheet.write_string(row, 1, product.item_number())?;
         sheet.write_string(row, 2, product.name())?;
         sheet.write_string(row, 3, product.barcode())?;

@@ -61,6 +61,9 @@ Today the stocktake is done in a spreadsheet on a laptop with a USB barcode scan
 - The count dialog has an editable location field, pre-filled with the pick location. Leaving it as is counts at the pick location, so the normal scan-and-Enter flow is unchanged.
 - To register units at an overflow location, the counter types that location into the field before saving. Any text is accepted; it's trimmed and upper-cased (`c4-7` becomes `C4-7`) so one shelf isn't recorded twice.
 - If the product has no pick location, the field starts empty, and an empty location counts as the pick location.
+- When the field holds a location other than the pick location (compared after trimming and upper-casing), a checkbox **Erstatt plukklokasjon** appears below it, unchecked. Unchecked, the count is saved at an overflow location. Checked, the typed location becomes the product's pick location and the count is saved there; if units were already counted at that location as an overflow location, they become the pick location's count. Changing the field back to the pick location hides the checkbox.
+- The checkbox isn't shown once the pick location has been counted, so a counted pick location is never lost.
+- A moved pick location is used everywhere in the app: the table's location column, sorting, search and the aisle filter. Typing the stock list's location with the box checked moves it back.
 - Focus then returns to the search field for the next scan.
 - A product is **uncounted** until it has been confirmed or overwritten at any location. A product counted as zero is counted.
 - A product counted only at overflow locations is counted, and its pick location counts as zero.
@@ -105,5 +108,7 @@ Today the stocktake is done in a spreadsheet on a laptop with a USB barcode scan
 - **Location field in the count dialog.** The editable, pre-filled field is a first take on registering overflow locations; the interaction may change once it's tried on the floor.
 - **Suggesting locations.** The location field could suggest the locations already in the stock list as the counter types. gpui-kit's combobox only picks from a list, and the field has to take any text, so this waits for a suitable component.
 - **Enter adds at a counted location.** When the location already has a count, Enter adds to it rather than replacing it. Whether recounting a shelf (replace) is the more common case on the floor is open.
+- **Resetting a pick location.** A counted pick location can't be moved. A reset that clears its count, so it can be counted again or moved, is planned.
+- **Exporting moved pick locations.** The export doesn't yet say which products' pick location was moved. The plan: keep the stock list's `Lokasjon` and mark the move from old to new, on the Lokasjoner sheet and as a new-location column on the main sheet.
 - **Showing overflow locations in the table.** The `C4-7 +2` hint is a stopgap. Check whether gpui-kit has a component that suits showing a product's locations better.
 - **Importing results.** Whether the business system can import stocktake results directly, which would make a matching export format worthwhile.

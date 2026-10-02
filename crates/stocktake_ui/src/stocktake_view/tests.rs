@@ -4,6 +4,7 @@
 use std::path::PathBuf;
 
 use gpui_kit::component::Root;
+use gpui_kit::component::table::TableDelegate as _;
 use gpui_kit::test::{ElementSnapshot, TestWindowExt as _};
 use gpui_kit::{AnyWindowHandle, TestAppContext, px, size};
 use stocktake::{Product, Stocktake};
@@ -210,6 +211,60 @@ fn counts_at_overflow_locations_add_up(cx: &mut TestAppContext) {
     assert_eq!(counter.counted(BURANO.0), Some(39));
     count(&mut counter, None, "1", "add-count");
     assert_eq!(counter.counted(BURANO.0), Some(40));
+}
+
+#[gpui_kit::test]
+fn a_count_can_move_the_pick_location(cx: &mut TestAppContext) {
+    let mut counter = Counter::resume(cx, "move-pick");
+    let location = |counter: &mut Counter| {
+        counter.cx.read(|cx| {
+            let session = counter
+                .view
+                .read(cx)
+                .open
+                .as_ref()
+                .unwrap()
+                .session
+                .read(cx);
+            let stocktake = session.stocktake();
+            let id = stocktake.product_with_barcode(VENETO.0).unwrap();
+            stocktake.product(id).location().to_string()
+        })
+    };
+    counter.input(VENETO.0);
+    counter.press("enter");
+    counter.press("shift-tab");
+    assert!(counter.find("move-pick-location").is_none());
+
+    // Another location offers to replace the pick location; the pick
+    // location again, typed loosely, doesn't.
+    counter.press("secondary-a");
+    counter.input("e5");
+    assert!(counter.find("move-pick-location").is_some());
+    counter.press("secondary-a");
+    counter.input(" d3-1");
+    assert!(counter.find("move-pick-location").is_none());
+
+    counter.press("secondary-a");
+    counter.input("E5");
+    counter.press("tab");
+    assert!(counter.is_focused("move-pick-location"));
+    counter.press("space");
+    counter.press("tab");
+    counter.input("3");
+    counter.press("enter");
+    assert!(counter.find("count").is_none());
+    assert_eq!(location(&mut counter), "E5");
+    assert_eq!(counter.counted(VENETO.0), Some(3));
+
+    // Now the pick location is counted, so it can't be replaced.
+    counter.input(VENETO.0);
+    counter.press("enter");
+    assert_eq!(counter.value("location").as_deref(), Some("E5"));
+    counter.press("shift-tab");
+    counter.press("secondary-a");
+    counter.input("F1");
+    assert!(counter.find("move-pick-location").is_none());
 }
 
 #[gpui_kit::test]
@@ -432,11 +487,18 @@ fn the_mode_menu_switches_what_the_window_shows(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn the_columns_menu_opens_beside_the_search(cx: &mut TestAppContext) {
+fn the_columns_menu_hides_and_shows_columns(cx: &mut TestAppContext) {
     let mut counter = Counter::resume(cx, "columns");
+    let checked = |counter: &mut Counter, id| counter.find(id).and_then(|item| item.checked());
+    let columns_count = |counter: &mut Counter| {
+        counter.cx.read(|cx| {
+            let table = &counter.view.read(cx).open.as_ref().unwrap().table;
+            table.read(cx).delegate().columns_count(cx)
+        })
+    };
     assert!(counter.find("menu-item:Lokasjon").is_none());
 
-    // A placeholder for now: every column is listed, and shown.
+    // Every column is listed, and shown.
     counter.click("columns");
     for id in [
         "menu-item:Lokasjon",
@@ -447,7 +509,22 @@ fn the_columns_menu_opens_beside_the_search(cx: &mut TestAppContext) {
         "menu-item:Differanse",
         "menu-item:Status",
     ] {
-        let item = counter.find(id);
-        assert_eq!(item.and_then(|item| item.checked()), Some(true), "{id}");
+        assert_eq!(checked(&mut counter, id), Some(true), "{id}");
     }
+    assert_eq!(columns_count(&mut counter), 7);
+
+    // Picking one hides it, and the menu shows it unchecked next time.
+    counter.click("menu-item:Varenummer");
+    assert_eq!(columns_count(&mut counter), 6);
+    counter.click("columns");
+    assert_eq!(checked(&mut counter, "menu-item:Varenummer"), Some(false));
+
+    // The product name always shows.
+    counter.click("menu-item:Produkt");
+    assert_eq!(columns_count(&mut counter), 6);
+
+    // Picking it again shows it.
+    counter.click("columns");
+    counter.click("menu-item:Varenummer");
+    assert_eq!(columns_count(&mut counter), 7);
 }

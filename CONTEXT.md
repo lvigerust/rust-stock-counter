@@ -31,7 +31,7 @@ A place in the storage where units of a product are kept, usually a shelf positi
 _Avoid_: Lokasjon, bin, slot
 
 **Pick location**:
-The location the stock list gives for a product, where it is picked from. It may be empty.
+The location a product is picked from. It starts as the one the stock list gives, which may be empty, and a counter can move it during the stocktake while nothing has been counted there.
 _Avoid_: Main location, primary location, home location
 
 **Overflow location**:

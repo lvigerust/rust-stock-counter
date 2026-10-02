@@ -56,14 +56,19 @@ impl Session {
     }
 
     /// Records what was counted of a product at `location`, replacing any
-    /// earlier count there, and saves at once.
+    /// earlier count there, and saves at once. With `moves_pick_location`,
+    /// `location` becomes the product's pick location first.
     pub fn record_count(
         &mut self,
         id: ProductId,
         location: &str,
         quantity: i64,
+        moves_pick_location: bool,
         cx: &mut Context<Self>,
     ) {
+        if moves_pick_location {
+            self.stocktake.move_pick_location(id, location);
+        }
         self.stocktake.set_count(id, location, quantity);
         self.save(cx);
     }
@@ -108,7 +113,9 @@ mod tests {
         let session = cx.new(|_| Session::new(stocktake(), path.clone()));
 
         let id = session.read_with(cx, |session, _| session.stocktake().search("")[0]);
-        session.update(cx, |session, cx| session.record_count(id, "A1", 4, cx));
+        session.update(cx, |session, cx| {
+            session.record_count(id, "A1", 4, false, cx)
+        });
 
         let saved = store::load(&path).unwrap().unwrap();
         assert_eq!(saved.product(id).counted_quantity(), Some(4));
@@ -141,7 +148,9 @@ mod tests {
         });
 
         let id = session.read_with(cx, |session, _| session.stocktake().search("")[0]);
-        session.update(cx, |session, cx| session.record_count(id, "A1", 4, cx));
+        session.update(cx, |session, cx| {
+            session.record_count(id, "A1", 4, false, cx)
+        });
         cx.run_until_parked();
 
         session.read_with(cx, |session, _| {

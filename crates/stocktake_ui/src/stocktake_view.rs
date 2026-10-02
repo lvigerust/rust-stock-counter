@@ -33,7 +33,7 @@ use gpui_kit::component::{
     table::{DataTable, TableEvent, TableState},
 };
 use gpui_kit::{
-    Anchor, DefiniteLength, DragMoveEvent, ExternalPaths, FocusHandle, Focusable, MouseButton,
+    Anchor, ClickEvent, DefiniteLength, DragMoveEvent, ExternalPaths, FocusHandle, Focusable, MouseButton,
     Pixels, Subscription, Task,
 };
 use stocktake::{
@@ -46,7 +46,7 @@ use ui::{Dropdown, DropdownButton, DropdownItem, DropdownMenu, Spacing, WindowBa
 use crate::{
     CONTEXT, ExportStocktake, FocusNext, FocusPrevious, FocusSearch, ImportStockList, ShowCounting,
     ShowDifferences, ToggleSidebar,
-    product_table::{ProductTable, ROW_HEIGHT},
+    product_table::{ProductColumn, ProductTable, ROW_HEIGHT},
     session::{SaveState, Session, SessionEvent},
     welcome::Welcome,
 };
@@ -287,6 +287,24 @@ impl StocktakeView {
         });
     }
 
+    /// Shows `column` if it's hidden, or hides it, as picked from the columns
+    /// menu.
+    fn toggle_column(&mut self, column: ProductColumn, cx: &mut Context<Self>) {
+        let Some(open) = &self.open else {
+            return;
+        };
+        open.table.update(cx, |table, cx| {
+            let shown = table.delegate().is_shown(column);
+            table.delegate_mut().set_shown(column, !shown, cx);
+            // Column indices now point at different columns, and hiding the
+            // sorted one reorders the rows.
+            table.clear_selection(cx);
+            table.refresh(cx);
+            cx.notify();
+        });
+        cx.notify();
+    }
+
     /// Tab and Shift-Tab, skipping the table. Rows are reached by scanning,
     /// searching or clicking, and the table shows no focus ring, so a Tab
     /// stop on it would look like lost focus.
@@ -354,7 +372,7 @@ impl StocktakeView {
                                             .min_w_0()
                                             .child(Self::render_search(&open.search, cx)),
                                     )
-                                    .child(Self::render_columns_menu(cx)),
+                                    .child(Self::render_columns_menu(open, cx)),
                             )
                         },
                     ),
@@ -445,9 +463,9 @@ impl StocktakeView {
     }
 
     /// Beside the search, the same height: which of the table's columns to
-    /// show. A placeholder for now: it lists every column as shown, but
-    /// picking one doesn't hide it yet.
-    fn render_columns_menu(cx: &App) -> impl IntoElement {
+    /// show. Picking a column shows or hides it; the product name always
+    /// shows, so its item is checked but can't be picked.
+    fn render_columns_menu(open: &OpenStocktake, cx: &mut Context<Self>) -> impl IntoElement {
         let muted = cx.theme().muted_foreground;
         let button = DropdownButton::new()
             .outline()
@@ -463,7 +481,14 @@ impl StocktakeView {
             .anchor(Anchor::TopRight)
             .heading("Vis kolonner")
             .min_w(Spacing(64.))
-            .items(ProductTable::column_names().map(|name| DropdownItem::new(name).checked(true)));
+            .items(ProductColumn::ALL.map(|column| {
+                DropdownItem::new(column.name())
+                    .checked(open.table.read(cx).delegate().is_shown(column))
+                    .disabled(!column.is_hideable())
+                    .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                        this.toggle_column(column, cx)
+                    }))
+            }));
         Dropdown::new("columns", button, menu)
     }
 

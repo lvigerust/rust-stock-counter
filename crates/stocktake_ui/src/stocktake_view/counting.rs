@@ -121,9 +121,11 @@ impl StocktakeView {
             input.clone(),
             {
                 let view = view.clone();
-                move |save, window, cx| {
-                    view.update(cx, |this, cx| this.save_count(save, window, cx))
-                        .ok();
+                move |save, moves_pick_location, window, cx| {
+                    view.update(cx, |this, cx| {
+                        this.save_count(save, moves_pick_location, window, cx)
+                    })
+                    .ok();
                 }
             },
             move |window, cx| {
@@ -140,8 +142,15 @@ impl StocktakeView {
     }
 
     /// Enter or a save button in the count dialog: saves the quantity at
-    /// the location, replacing or adding to any earlier count there.
-    fn save_count(&mut self, save: Save, window: &mut Window, cx: &mut Context<Self>) {
+    /// the location, replacing or adding to any earlier count there, and
+    /// makes it the pick location if the counter asked for that.
+    fn save_count(
+        &mut self,
+        save: Save,
+        moves_pick_location: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let Some(open) = &self.open else {
             return;
         };
@@ -177,7 +186,7 @@ impl StocktakeView {
         open.count = None;
         window.close_dialog(cx);
         open.session.update(cx, |session, cx| {
-            session.record_count(id, &location, quantity, cx)
+            session.record_count(id, &location, quantity, moves_pick_location, cx)
         });
         self.finish_count(window, cx);
         self.reveal_counted(id, cx);

@@ -47,6 +47,10 @@ pub struct Product {
     location: String,
     barcode: String,
     system_quantity: i64,
+    /// Where the counter moved the pick location to, `None` while it's the
+    /// one the stock list gives.
+    #[serde(default)]
+    moved_location: Option<String>,
     /// What was counted at the pick location. Saved under its name from
     /// before counts were kept per location, so an older save resumes with
     /// its counts at the pick location.
@@ -85,6 +89,7 @@ impl Product {
             location: location.into(),
             barcode: barcode.into(),
             system_quantity,
+            moved_location: None,
             pick_count: None,
             overflow_counts: Vec::new(),
         }
@@ -98,8 +103,14 @@ impl Product {
         &self.name
     }
 
-    /// The pick location, empty when the product has none.
+    /// The pick location, empty when the product has none: where the
+    /// counter moved it, or else the one the stock list gives.
     pub fn location(&self) -> &str {
+        self.moved_location.as_deref().unwrap_or(&self.location)
+    }
+
+    /// The pick location the stock list gives, whether or not it was moved.
+    pub fn listed_location(&self) -> &str {
         &self.location
     }
 
@@ -107,7 +118,13 @@ impl Product {
     /// so a product without one can still be counted at it.
     pub fn is_pick_location(&self, location: &str) -> bool {
         let location = normalize_location(location);
-        location.is_empty() || location == normalize_location(&self.location)
+        location.is_empty() || location == normalize_location(self.location())
+    }
+
+    /// Whether the pick location can be moved: only while nothing has been
+    /// counted there, so a counted pick location is never lost.
+    pub fn can_move_pick_location(&self) -> bool {
+        self.pick_count.is_none()
     }
 
     /// What has been counted at `location`, `None` while nothing has. An
@@ -130,7 +147,7 @@ impl Product {
     pub fn counts(&self) -> impl Iterator<Item = (&str, i64)> {
         let pick = self
             .is_counted()
-            .then(|| (self.location.as_str(), self.pick_count.unwrap_or(0)));
+            .then(|| (self.location(), self.pick_count.unwrap_or(0)));
         pick.into_iter().chain(self.overflow_counts())
     }
 
@@ -148,11 +165,11 @@ impl Product {
     /// The letters the location starts with, such as `C` for `C4-7`. Empty
     /// when the location is, or when it starts with something else.
     pub fn aisle(&self) -> &str {
-        let end = self
-            .location
+        let location = self.location();
+        let end = location
             .find(|c: char| !c.is_alphabetic())
-            .unwrap_or(self.location.len());
-        &self.location[..end]
+            .unwrap_or(location.len());
+        &location[..end]
     }
 
     /// The EAN on the packaging, empty when the product has none.
@@ -188,6 +205,24 @@ impl Product {
             .map(|counted| counted - self.system_quantity)
     }
 
+    /// Makes `location` the pick location, if it can be moved. Anything
+    /// counted there as an overflow location becomes the pick location's
+    /// count. Returns whether it was moved.
+    fn move_pick_location(&mut self, location: &str) -> bool {
+        let location = normalize_location(location);
+        if !self.can_move_pick_location() || location.is_empty() {
+            return false;
+        }
+        if let Ok(ix) = self
+            .overflow_counts
+            .binary_search_by(|count| compare_locations(&count.location, &location))
+        {
+            self.pick_count = Some(self.overflow_counts.remove(ix).quantity);
+        }
+        self.moved_location = (location != normalize_location(&self.location)).then_some(location);
+        true
+    }
+
     /// Records what was counted at `location`, replacing any earlier count
     /// there. Zero at an overflow location removes it, which is how a
     /// mistyped one is corrected.
@@ -220,6 +255,7 @@ impl Product {
     fn contains(&self, needle: &str) -> bool {
         [&self.item_number, &self.name, &self.location, &self.barcode]
             .into_iter()
+            .chain(&self.moved_location)
             .chain(self.overflow_counts.iter().map(|count| &count.location))
             .any(|field| field.to_lowercase().contains(needle))
     }
@@ -326,6 +362,14 @@ impl Stocktake {
     /// earlier count there. Zero at an overflow location removes it.
     pub fn set_count(&mut self, id: ProductId, location: &str, quantity: i64) {
         self.products[id.0].set_count(location, quantity);
+    }
+
+    /// Makes `location` the product's pick location, as long as nothing has
+    /// been counted at the current one. Anything counted at `location` as an
+    /// overflow location becomes the pick location's count. Returns whether
+    /// it was moved.
+    pub fn move_pick_location(&mut self, id: ProductId, location: &str) -> bool {
+        self.products[id.0].move_pick_location(location)
     }
 
     /// Every aisle in the stock list and how many products it holds, in the
@@ -639,5 +683,39 @@ mod tests {
         filter.set_aisle_shown("C", false);
         assert_eq!(stocktake.search_filtered("e9", &filter), []);
         assert_eq!(stocktake.aisles(), [("C", 3), ("", 1)]);
+    }
+
+    #[test]
+    fn moving_the_pick_location() {
+        let mut stocktake = stocktake();
+        let id = ProductId(1);
+        stocktake.set_count(id, "D2-1", 6);
+        assert!(stocktake.move_pick_location(id, " d2-1 "));
+        let product = stocktake.product(id);
+        assert_eq!(product.location(), "D2-1");
+        assert_eq!(product.listed_location(), "C4-7");
+        assert_eq!(product.aisle(), "D");
+        // What was counted there as an overflow location is the pick count now.
+        assert_eq!(product.count_at("D2-1"), Some(6));
+        assert_eq!(product.overflow_len(), 0);
+        assert_eq!(product.count_at("C4-7"), None);
+        assert_eq!(stocktake.search("D2-1"), [id]);
+
+        // Once counted, it stays.
+        assert!(!stocktake.move_pick_location(id, "E1"));
+        assert_eq!(stocktake.product(id).location(), "D2-1");
+    }
+
+    #[test]
+    fn moving_the_pick_location_back() {
+        let mut stocktake = stocktake();
+        let id = ProductId(1);
+        assert!(stocktake.move_pick_location(id, "D2-1"));
+        stocktake.set_count(id, "C4-7", 3);
+        assert!(stocktake.move_pick_location(id, "c4-7"));
+        let product = stocktake.product(id);
+        assert_eq!(product.location(), "C4-7");
+        assert_eq!(product.count_at("C4-7"), Some(3));
+        assert_eq!(product.count_at("D2-1"), None);
     }
 }
