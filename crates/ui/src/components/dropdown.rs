@@ -43,10 +43,11 @@ use gpui_kit::component::kbd::Kbd;
 use gpui_kit::component::menu::{DropdownMenu as _, PopupMenu, PopupMenuItem};
 use gpui_kit::component::{Colorize as _, Size};
 use gpui_kit::{
-    Action, Anchor, ClickEvent, FocusHandle, Hsla, Pixels, StyleRefinement, TestSupportExt as _,
-    Toggled, WeakEntity, rems,
+    AbsoluteLength, Action, Anchor, ClickEvent, FocusHandle, Hsla, Pixels, StyleRefinement,
+    TestSupportExt as _, Toggled, WeakEntity,
 };
 
+use crate::Spacing;
 use crate::prelude::*;
 
 /// What a press on a [`DropdownItem`] does, besides its action.
@@ -106,6 +107,7 @@ impl RenderOnce for Dropdown {
             min_width,
             anchor,
         } = self.menu;
+        let min_width = min_width.map(|width| width.to_pixels(window.rem_size()));
         let entries: Rc<[MenuEntry]> = entries.into();
         let looks: Vec<EntryLook> = entries.iter().map(MenuEntry::look).collect();
 
@@ -319,7 +321,7 @@ impl ParentElement for DropdownButton {
 /// dividers between groups of them.
 pub struct DropdownMenu {
     entries: Vec<MenuEntry>,
-    min_width: Option<Pixels>,
+    min_width: Option<AbsoluteLength>,
     anchor: Anchor,
 }
 
@@ -405,7 +407,7 @@ impl DropdownMenu {
 
     /// The narrowest the menu gets, however short its items. Without it,
     /// the menu is as wide as its widest item.
-    pub fn min_w(mut self, width: impl Into<Pixels>) -> Self {
+    pub fn min_w(mut self, width: impl Into<AbsoluteLength>) -> Self {
         self.min_width = Some(width.into());
         self
     }
@@ -552,7 +554,7 @@ impl DropdownItem {
                                     this.child(
                                         div()
                                             .text_xs()
-                                            .line_height(rems(1.25))
+                                            .line_height(Spacing(5.))
                                             .text_color(muted)
                                             .child(description),
                                     )
@@ -577,7 +579,7 @@ impl DropdownItem {
 /// As tall as an item's label, its content centered on it: what sits beside
 /// the label lines up with it, however many lines come under it.
 fn label_line() -> gpui_kit::Div {
-    h_flex().h(rems(1.5)).line_height(rems(1.5))
+    h_flex().h(Spacing(6.)).line_height(Spacing(6.))
 }
 
 /// A disabled item is dimmed and can't be picked.

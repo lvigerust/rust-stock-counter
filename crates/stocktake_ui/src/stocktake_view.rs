@@ -34,14 +34,14 @@ use gpui_kit::component::{
 };
 use gpui_kit::{
     Anchor, DefiniteLength, DragMoveEvent, ExternalPaths, FocusHandle, Focusable, MouseButton,
-    Pixels, Rems, Subscription, Task,
+    Pixels, Subscription, Task,
 };
 use stocktake::{
     Filter, ProductId,
     recent::{self, RecentStockLists},
     store,
 };
-use ui::{Dropdown, DropdownButton, DropdownItem, DropdownMenu, WindowBar, prelude::*};
+use ui::{Dropdown, DropdownButton, DropdownItem, DropdownMenu, Spacing, WindowBar, prelude::*};
 
 use crate::{
     CONTEXT, ExportStocktake, FocusNext, FocusPrevious, FocusSearch, ImportStockList, ShowCounting,
@@ -55,17 +55,17 @@ use mode::Mode;
 use sidebar::DraggedSidebar;
 
 /// Padding around the content of the main pane.
-const MAIN_PADDING: Rems = Rems(3.);
+const MAIN_PADDING: Spacing = Spacing(12.);
 
 /// The search field's height, a size up from a medium input.
-const SEARCH_HEIGHT: Rems = Rems(2.5);
+const SEARCH_HEIGHT: Spacing = Spacing(10.);
 
 /// Space above and below the search field in the main pane's bar.
-const SEARCH_PADDING: Rems = Rems(1.5);
+const SEARCH_PADDING: Spacing = Spacing(6.);
 
 /// Space between the search field and the columns menu beside it, tighter
 /// than the bar's own gap, so the two read as one group.
-const SEARCH_GAP: Rems = Rems(0.75);
+const SEARCH_GAP: Spacing = Spacing(3.);
 
 pub struct StocktakeView {
     /// The window's own focus, so its commands and shortcuts work while no
@@ -459,6 +459,7 @@ impl StocktakeView {
         let menu = DropdownMenu::new()
             .anchor(Anchor::TopRight)
             .heading("Vis kolonner")
+            .min_w(Spacing(64.))
             .items(ProductTable::column_names().map(|name| DropdownItem::new(name).checked(true)));
         Dropdown::new("columns", button, menu)
     }
@@ -481,7 +482,7 @@ impl StocktakeView {
             .bg(theme.background)
             .h_8()
             .pl(MAIN_PADDING)
-            .pr(Rems(1.5))
+            .pr(Spacing(6.))
             .left(
                 h_flex()
                     .gap_4()

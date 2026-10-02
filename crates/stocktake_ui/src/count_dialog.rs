@@ -16,7 +16,7 @@ use gpui_kit::component::{
     input::{Input, InputState},
 };
 use stocktake::Product;
-use ui::prelude::*;
+use ui::{Spacing, prelude::*};
 
 /// A single-line input that accepts whole, non-negative numbers.
 pub(crate) fn quantity_input(window: &mut Window, cx: &mut Context<InputState>) -> InputState {
@@ -154,7 +154,7 @@ pub(crate) fn open(
             .rounded_2xl()
             // Never wider than the window, less a margin; the dialog sees to
             // that itself.
-            .w(window.rem_size() * 32.)
+            .w(Spacing(128.).to_pixels(window.rem_size()))
     });
 }
 

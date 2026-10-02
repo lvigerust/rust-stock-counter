@@ -2,9 +2,9 @@
 
 use std::{path::PathBuf, rc::Rc, time::Duration};
 
+use gpui_kit::Div;
 use gpui_kit::component::{alert::Alert, kbd::Kbd};
-use gpui_kit::{Div, rems};
-use ui::{RowButton, prelude::*};
+use ui::{RowButton, Spacing, prelude::*};
 
 use crate::{
     CONTEXT, ImportStockList,
@@ -74,13 +74,13 @@ impl RenderOnce for Welcome {
             .child(
                 v_flex().flex_1().items_center().justify_center().child(
                     v_flex()
-                        .w(rems(28.))
+                        .w(Spacing(112.))
                         .gap_8()
                         .child(
                             Appear::new("welcome-title")
                                 .flex()
                                 .justify_center()
-                                .child(ui::Logo::new(rems(3.5))),
+                                .child(ui::Logo::new(Spacing(14.))),
                         )
                         .child(
                             Appear::new("welcome-start")

@@ -13,7 +13,7 @@ use gpui_kit::{
 };
 use ui::{
     Dropdown, DropdownButton, DropdownItem, DropdownMenu, Sidebar, SidebarBody, SidebarFooter,
-    SidebarHeader, SidebarHeading, SidebarItem, SidebarSection, WindowBar, prelude::*,
+    SidebarHeader, SidebarHeading, SidebarItem, SidebarSection, Spacing, WindowBar, prelude::*,
 };
 
 use super::{Mode, StocktakeView};
@@ -382,7 +382,7 @@ fn render_mode_menu(current: Mode) -> impl IntoElement {
         .child(Icon::new(IconName::ChevronDown).small());
     // Catalyst's desktop width for the menu atop its sidebar (`lg:min-w-64`).
     let menu = DropdownMenu::new()
-        .min_w(px(256.))
+        .min_w(Spacing(64.))
         .items(Mode::ALL.map(|mode| {
             DropdownItem::new(mode.label())
                 .description(mode.description())
