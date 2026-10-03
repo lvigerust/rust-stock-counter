@@ -36,9 +36,11 @@ fn main() {
         let options = WindowOptions {
             window_bounds: Some(WindowBounds::Maximized(windowed)),
             window_min_size: Some(size(px(960.), px(560.))),
-            // The toolbar is the title bar: the traffic lights sit in it and
-            // it moves the window itself, so AppKit doesn't claim its top
-            // strip for dragging.
+            // The toolbar is the title bar. On macOS the traffic lights sit
+            // in it and it moves the window itself, so AppKit doesn't claim
+            // its top strip for dragging; `app_owns_titlebar_drag` does
+            // nothing elsewhere. On Windows the bar draws the caption
+            // buttons and marks where the system may drag.
             titlebar: Some(ui::WindowBar::titlebar_options(APP_NAME)),
             app_owns_titlebar_drag: true,
             ..Default::default()

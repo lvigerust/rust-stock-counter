@@ -5,14 +5,12 @@ use gpui_kit::component::{
     FocusableExt as _, button::ButtonVariants as _, checkbox::Checkbox, collapsible::Collapsible,
     separator::Separator,
 };
-use gpui_kit::{
-    ClickEvent, CursorStyle, DragMoveEvent, Empty, Focusable as _, MouseButton, Pixels, px,
-};
+use gpui_kit::{ClickEvent, CursorStyle, DragMoveEvent, Empty, Focusable as _, Pixels, px};
 use stocktake::CountState;
 use ui::{
     Button, Dropdown, DropdownButton, DropdownItem, DropdownMenu, Sidebar, SidebarBody,
     SidebarFooter, SidebarHeader, SidebarHeading, SidebarItem, SidebarSection, SidebarSpacer,
-    Spacing, WindowBar, prelude::*,
+    Spacing, WindowBar, WindowBarItem, prelude::*,
 };
 
 use super::{Mode, StocktakeView};
@@ -138,7 +136,12 @@ impl StocktakeView {
         Sidebar::new()
             .relative()
             .w(self.sidebar_width)
-            .child(WindowBar::new().justify_end().child(toggle))
+            .child(
+                WindowBar::new()
+                    .trailing_edge(false)
+                    .justify_end()
+                    .child(toggle),
+            )
             .child(Separator::horizontal().color(cx.theme().sidebar_border))
             .child(SidebarHeader::new().child(render_mode_menu(self.mode, cx)))
             .child(SidebarBody::new().map(|body| {
@@ -303,28 +306,25 @@ impl StocktakeView {
         } else {
             ("show-sidebar", "Vis sidepanel")
         };
-        // A press here is the button's, not the start of a window drag.
-        div()
-            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-            .child(
-                Button::new(id)
-                    .ghost()
-                    .small()
-                    .icon(IconName::PanelLeft)
-                    .disabled(disabled)
-                    // gpui-kit would recolor a border for focus; this draws
-                    // a faint ring around the button instead.
-                    .focus_ring(false)
-                    .subtle_focus_ring()
-                    .map(|button| {
-                        if disabled {
-                            button.tooltip("Åpne en fil for å vise sidepanelet")
-                        } else {
-                            button.tooltip_with_action(tooltip, &ToggleSidebar, Some(CONTEXT))
-                        }
-                    })
-                    .on_click(cx.listener(|this, _, window, cx| this.toggle_sidebar(window, cx))),
-            )
+        WindowBarItem::new().child(
+            Button::new(id)
+                .ghost()
+                .small()
+                .icon(IconName::PanelLeft)
+                .disabled(disabled)
+                // gpui-kit would recolor a border for focus; this draws
+                // a faint ring around the button instead.
+                .focus_ring(false)
+                .subtle_focus_ring()
+                .map(|button| {
+                    if disabled {
+                        button.tooltip("Åpne en fil for å vise sidepanelet")
+                    } else {
+                        button.tooltip_with_action(tooltip, &ToggleSidebar, Some(CONTEXT))
+                    }
+                })
+                .on_click(cx.listener(|this, _, window, cx| this.toggle_sidebar(window, cx))),
+        )
     }
 }
 

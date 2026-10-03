@@ -34,14 +34,17 @@ use gpui_kit::component::{
 };
 use gpui_kit::{
     Anchor, ClickEvent, DefiniteLength, DragMoveEvent, ExternalPaths, FocusHandle, Focusable,
-    MouseButton, Pixels, Subscription, Task,
+    Pixels, Subscription, Task,
 };
 use stocktake::{
     Filter, ProductId,
     recent::{self, RecentStockLists},
     store,
 };
-use ui::{Dropdown, DropdownButton, DropdownItem, DropdownMenu, Spacing, WindowBar, prelude::*};
+use ui::{
+    Dropdown, DropdownButton, DropdownItem, DropdownMenu, Spacing, WindowBar, WindowBarItem,
+    prelude::*,
+};
 
 use crate::{
     CONTEXT, ExportStocktake, FocusNext, FocusPrevious, FocusSearch, ImportStockList, ShowCounting,
@@ -344,9 +347,11 @@ impl StocktakeView {
                 // stocktake; its glyph sits inside the button, so the gap
                 // after it is shorter by that inset. With the sidebar shown,
                 // the search is inset by the pane's padding, in line with
-                // the table's content below.
+                // the table's content below. The bar always runs to the
+                // window's trailing edge, so it holds the Windows caption
+                // buttons.
                 WindowBar::new()
-                    .traffic_lights(!sidebar_shown)
+                    .leading_edge(!sidebar_shown)
                     .h(self.bar_height())
                     .gap(WindowBar::GAP - WindowBar::ICON_INSET)
                     .when(sidebar_shown, |this| this.px(MAIN_PADDING))
@@ -356,16 +361,12 @@ impl StocktakeView {
                     .when_some(
                         open.filter(|_| self.mode == Mode::Counting),
                         |this, open| {
-                            // A press here is the field's or the menu's, not
-                            // the start of a window drag.
                             this.child(
-                                h_flex()
+                                WindowBarItem::new()
+                                    .h_flex()
                                     .flex_1()
                                     .min_w_0()
                                     .gap(SEARCH_GAP)
-                                    .on_mouse_down(MouseButton::Left, |_, _, cx| {
-                                        cx.stop_propagation()
-                                    })
                                     .child(
                                         div()
                                             .flex_1()
