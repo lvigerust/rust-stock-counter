@@ -112,11 +112,11 @@ impl StocktakeView {
         cx.notify();
     }
 
-    fn set_counted_shown(&mut self, counted: bool, shown: bool, cx: &mut Context<Self>) {
+    fn set_state_shown(&mut self, state: CountState, shown: bool, cx: &mut Context<Self>) {
         let Some(open) = &mut self.open else {
             return;
         };
-        open.filter.set_counted_shown(counted, shown);
+        open.filter.set_state_shown(state, shown);
         open.refresh_rows(cx);
         cx.notify();
     }
@@ -197,30 +197,24 @@ impl StocktakeView {
         cx.notify();
     }
 
-    /// A checkbox each for uncounted and counted products, beside how many
-    /// there are, so the table can be narrowed to what's left to count.
-    /// Partly counted products are left to count, so they're under
-    /// uncounted.
-    /// Only while there's a stock list.
+    /// A checkbox for each count state, beside how many products are in
+    /// it, so the table can be narrowed to what's left to count. Only while
+    /// there's a stock list.
     fn render_status_filter(&self, cx: &mut Context<Self>) -> Option<impl IntoElement + use<>> {
         let open = self.open.as_ref()?;
         let stocktake = open.session.read(cx).stocktake();
-        let statuses = [
-            (CountState::Counted, stocktake.counted_len()),
-            (CountState::Uncounted, stocktake.uncounted_len()),
+        let states = [
+            (CountState::Counted, "status-counted"),
+            (CountState::PartlyCounted, "status-partly-counted"),
+            (CountState::Uncounted, "status-uncounted"),
         ];
-        let items = statuses.map(|(state, len)| {
-            let counted = state == CountState::Counted;
-            let id = if counted {
-                "status-counted"
-            } else {
-                "status-uncounted"
-            };
+        let items = states.map(|(state, id)| {
             let checkbox = Checkbox::new(id)
-                .checked(open.filter.shows_counted(counted))
+                .checked(open.filter.shows_state(state))
                 .on_click(cx.listener(move |this, shown: &bool, _, cx| {
-                    this.set_counted_shown(counted, *shown, cx)
+                    this.set_state_shown(state, *shown, cx)
                 }));
+            let len = stocktake.state_len(state);
             render_filter_item(checkbox, CountStatus::label(state).into(), len, cx)
         });
         Some(

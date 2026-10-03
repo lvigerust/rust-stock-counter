@@ -287,8 +287,8 @@ pub struct Filter {
     /// Stored as the aisles left out, so an aisle shows until the counter
     /// hides it.
     hidden_aisles: BTreeSet<String>,
-    hides_counted: bool,
-    hides_uncounted: bool,
+    /// Likewise the count states left out.
+    hidden_states: BTreeSet<CountState>,
 }
 
 impl Filter {
@@ -304,27 +304,20 @@ impl Filter {
         }
     }
 
-    /// Whether counted products show, or uncounted ones if `counted` is
-    /// false. Partly counted products go with the uncounted ones, since
-    /// their pick location is still to count.
-    pub fn shows_counted(&self, counted: bool) -> bool {
-        if counted {
-            !self.hides_counted
-        } else {
-            !self.hides_uncounted
-        }
+    pub fn shows_state(&self, state: CountState) -> bool {
+        !self.hidden_states.contains(&state)
     }
 
-    pub fn set_counted_shown(&mut self, counted: bool, shown: bool) {
-        if counted {
-            self.hides_counted = !shown;
+    pub fn set_state_shown(&mut self, state: CountState, shown: bool) {
+        if shown {
+            self.hidden_states.remove(&state);
         } else {
-            self.hides_uncounted = !shown;
+            self.hidden_states.insert(state);
         }
     }
 
     fn shows(&self, product: &Product) -> bool {
-        self.shows_aisle(product.aisle()) && self.shows_counted(product.is_counted())
+        self.shows_aisle(product.aisle()) && self.shows_state(product.count_state())
     }
 }
 
@@ -374,8 +367,17 @@ impl Stocktake {
         self.products.iter().filter(|p| p.is_counted()).count()
     }
 
+    /// Products not counted yet, partly counted ones included.
     pub fn uncounted_len(&self) -> usize {
         self.len() - self.counted_len()
+    }
+
+    /// How many products are in `state`.
+    pub fn state_len(&self, state: CountState) -> usize {
+        self.products
+            .iter()
+            .filter(|p| p.count_state() == state)
+            .count()
     }
 
     /// Records what was counted of a product at `location`, replacing any
@@ -565,14 +567,22 @@ mod tests {
     }
 
     #[test]
-    fn filter_hides_counted_or_uncounted_products() {
+    fn filter_hides_products_by_count_state() {
         let mut stocktake = stocktake();
         stocktake.set_count(ProductId(0), "", 33);
+        stocktake.set_count(ProductId(1), "D2-1", 2);
+        assert_eq!(stocktake.state_len(CountState::Counted), 1);
+        assert_eq!(stocktake.state_len(CountState::PartlyCounted), 1);
+        assert_eq!(stocktake.state_len(CountState::Uncounted), 2);
+        assert_eq!(stocktake.uncounted_len(), 3);
+
         let mut filter = Filter::default();
-        filter.set_counted_shown(true, false);
+        filter.set_state_shown(CountState::Counted, false);
         assert_eq!(stocktake.search_filtered("", &filter).len(), 3);
-        filter.set_counted_shown(true, true);
-        filter.set_counted_shown(false, false);
+        filter.set_state_shown(CountState::Uncounted, false);
+        assert_eq!(stocktake.search_filtered("", &filter), [ProductId(1)]);
+        filter.set_state_shown(CountState::Counted, true);
+        filter.set_state_shown(CountState::PartlyCounted, false);
         assert_eq!(stocktake.search_filtered("", &filter), [ProductId(0)]);
         filter.set_aisle_shown("C", false);
         assert_eq!(stocktake.search_filtered("", &filter), []);

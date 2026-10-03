@@ -48,6 +48,8 @@ fn cell_paddings(col_ix: usize, columns_count: usize) -> Edges<Pixels> {
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum ProductColumn {
     Location,
+    /// The overflow locations and what was counted at each.
+    Overflow,
     ItemNumber,
     Name,
     SystemQuantity,
@@ -58,8 +60,9 @@ pub enum ProductColumn {
 
 impl ProductColumn {
     /// Every column, in the order the table shows them.
-    pub const ALL: [Self; 7] = [
+    pub const ALL: [Self; 8] = [
         Self::Location,
+        Self::Overflow,
         Self::ItemNumber,
         Self::Name,
         Self::SystemQuantity,
@@ -91,9 +94,17 @@ impl ProductColumn {
         self != Self::Name
     }
 
+    /// Whether the column shows until the counter hides it. The overflow
+    /// locations are a closer look most counts don't need; the location
+    /// column already says how many there are.
+    fn is_shown_by_default(self) -> bool {
+        self != Self::Overflow
+    }
+
     fn key_and_name(self) -> (&'static str, &'static str) {
         match self {
             Self::Location => ("location", "Lokasjon"),
+            Self::Overflow => ("overflow", "Buffer"),
             Self::ItemNumber => ("item-number", "Varenummer"),
             Self::Name => ("name", "Produkt"),
             Self::SystemQuantity => ("system-quantity", "På lager"),
@@ -108,6 +119,7 @@ impl ProductColumn {
     fn fixed_width(self) -> Option<f32> {
         match self {
             Self::Location => Some(160.),
+            Self::Overflow => Some(220.),
             Self::ItemNumber => Some(156.),
             Self::Name => None,
             Self::SystemQuantity => Some(136.),
@@ -151,7 +163,10 @@ impl ProductTable {
             session,
             rows: matches.clone(),
             matches,
-            columns: ProductColumn::ALL.to_vec(),
+            columns: ProductColumn::ALL
+                .into_iter()
+                .filter(|column| column.is_shown_by_default())
+                .collect(),
             sort: None,
             width: px(0.),
             last_counted: None,
@@ -231,14 +246,28 @@ impl ProductTable {
             let (a, b) = (stocktake.product(*a), stocktake.product(*b));
             let ordering = match column {
                 ProductColumn::Location => compare_locations(a.location(), b.location()),
+                // By the first overflow location, those without one last.
+                ProductColumn::Overflow => {
+                    return missing_last(
+                        a.overflow_counts().next(),
+                        b.overflow_counts().next(),
+                        direction,
+                        |(a, _), (b, _)| compare_locations(a, b),
+                    );
+                }
                 ProductColumn::ItemNumber => natural_cmp(a.item_number(), b.item_number()),
                 ProductColumn::Name => a.name().to_lowercase().cmp(&b.name().to_lowercase()),
                 ProductColumn::SystemQuantity => a.system_quantity().cmp(&b.system_quantity()),
                 ProductColumn::CountedQuantity => {
-                    return uncounted_last(a.counted_quantity(), b.counted_quantity(), direction);
+                    return missing_last(
+                        a.counted_quantity(),
+                        b.counted_quantity(),
+                        direction,
+                        i64::cmp,
+                    );
                 }
                 ProductColumn::Difference => {
-                    return uncounted_last(a.difference(), b.difference(), direction);
+                    return missing_last(a.difference(), b.difference(), direction, i64::cmp);
                 }
                 // Uncounted first when ascending: that's the work left.
                 ProductColumn::Status => a.count_state().cmp(&b.count_state()),
@@ -271,11 +300,17 @@ fn directed(ordering: Ordering, direction: ColumnSort) -> Ordering {
     }
 }
 
-/// Uncounted products have no value to compare, so they stay at the bottom
-/// whichever way the column is sorted.
-fn uncounted_last(a: Option<i64>, b: Option<i64>, direction: ColumnSort) -> Ordering {
+/// Products without a value to compare, such as uncounted ones in the
+/// counted-quantity column, stay at the bottom whichever way the column is
+/// sorted.
+fn missing_last<T>(
+    a: Option<T>,
+    b: Option<T>,
+    direction: ColumnSort,
+    compare: impl FnOnce(&T, &T) -> Ordering,
+) -> Ordering {
     match (a, b) {
-        (Some(a), Some(b)) => directed(a.cmp(&b), direction),
+        (Some(a), Some(b)) => directed(compare(&a, &b), direction),
         (Some(_), None) => Ordering::Less,
         (None, Some(_)) => Ordering::Greater,
         (None, None) => Ordering::Equal,
@@ -459,6 +494,25 @@ impl TableDelegate for ProductTable {
                     }
                 }
             }
+            // Each overflow location beside what was counted there, the
+            // count muted so the locations read first.
+            ProductColumn::Overflow => h_flex()
+                .min_w_0()
+                .gap_3()
+                .overflow_hidden()
+                .children(product.overflow_counts().map(|(location, quantity)| {
+                    h_flex()
+                        .flex_none()
+                        .gap_1()
+                        .child(location.to_string())
+                        .child(
+                            div()
+                                .text_color(cx.theme().muted_foreground)
+                                .tabular_nums()
+                                .child(quantity.to_string()),
+                        )
+                }))
+                .into_any_element(),
             ProductColumn::ItemNumber => div()
                 .text_color(cx.theme().muted_foreground)
                 .child(product.item_number().to_string())
@@ -515,6 +569,11 @@ impl TableDelegate for ProductTable {
                     .trim_start()
                     .to_string(),
             },
+            ProductColumn::Overflow => product
+                .overflow_counts()
+                .map(|(location, quantity)| format!("{location} {quantity}"))
+                .collect::<Vec<_>>()
+                .join(", "),
             ProductColumn::ItemNumber => product.item_number().to_string(),
             ProductColumn::Name => product.name().to_string(),
             ProductColumn::SystemQuantity => product.system_quantity().to_string(),
@@ -536,11 +595,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn uncounted_products_sort_last_both_ways() {
+    fn missing_values_sort_last_both_ways() {
         let mut values = vec![None, Some(3), Some(-1), None, Some(0)];
-        values.sort_by(|a, b| uncounted_last(*a, *b, ColumnSort::Ascending));
+        values.sort_by(|a, b| missing_last(*a, *b, ColumnSort::Ascending, i64::cmp));
         assert_eq!(values, [Some(-1), Some(0), Some(3), None, None]);
-        values.sort_by(|a, b| uncounted_last(*a, *b, ColumnSort::Descending));
+        values.sort_by(|a, b| missing_last(*a, *b, ColumnSort::Descending, i64::cmp));
         assert_eq!(values, [Some(3), Some(0), Some(-1), None, None]);
     }
 }

@@ -38,6 +38,7 @@ Today the stocktake is done in a spreadsheet on a laptop with a USB barcode scan
 
 - The whole stock list as a table: location, item number, name, system quantity (columns H, C, D, N), then counted quantity, difference, and whether the product is counted or uncounted.
 - The location column shows the pick location. A product counted at overflow locations shows how many after it, e.g. `C4-7 +2`, and its counted quantity is the total across all its locations.
+- A **Buffer** column, hidden until it's switched on in the columns menu, lists each overflow location with what was counted there. Sorted, it goes by the first overflow location, with products without one last.
 - The aisle filter goes by pick location only.
 - After a count is saved, the table scrolls to the product and its row briefly highlights, so the counter sees where the count landed.
 - When every product is counted, a summary says how many products have a difference, next to an export button.
@@ -66,7 +67,7 @@ Today the stocktake is done in a spreadsheet on a laptop with a USB barcode scan
 - A moved pick location is used everywhere in the app: the table's location column, sorting, search and the aisle filter. Typing the stock list's location with the box checked moves it back.
 - Focus then returns to the search field for the next scan.
 - A product is **uncounted** until its pick location has been confirmed or overwritten. A product counted as zero is counted, so an empty pick shelf is recorded by counting zero there.
-- A product counted only at overflow locations is **partly counted** ("Delvis talt"): it has its own status in the table, but it has no counted quantity or difference yet, and it's grouped with the uncounted products in the status filter, the progress indicator and the export warning. Counting its pick location makes it counted.
+- A product counted only at overflow locations is **partly counted** ("Delvis talt"): it has its own status in the table and its own checkbox in the sidebar's status filter, but it has no counted quantity or difference yet, and it's grouped with the uncounted products in the progress indicator and the export warning. Counting its pick location makes it counted.
 
 ### Counting a product again
 
