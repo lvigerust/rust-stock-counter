@@ -26,9 +26,15 @@ use gpui_kit::{Action, ClickEvent, Interactivity, StyleRefinement};
 
 use crate::prelude::*;
 
+/// What a muted icon watches to come up on hover: the button around it.
+const HOVER_GROUP: &str = "ui-button";
+
 #[derive(IntoElement)]
 pub struct Button {
     base: ComponentButton,
+    variant: ButtonVariant,
+    outline: bool,
+    disabled: bool,
     size: Size,
     icon: Option<Icon>,
     label: Option<SharedString>,
@@ -53,7 +59,8 @@ impl Button {
     }
 
     /// An icon before the label. Without a label or children, the button is
-    /// a square around it.
+    /// a square around it. On a ghost or outline button it's muted, and
+    /// comes up to the text's color on hover.
     pub fn icon(mut self, icon: impl Into<Icon>) -> Self {
         self.icon = Some(icon.into());
         self
@@ -68,6 +75,7 @@ impl Button {
 
     /// Outlined, in the variant's color.
     pub fn outline(mut self) -> Self {
+        self.outline = true;
         self.base = self.base.outline();
         self
     }
@@ -103,6 +111,9 @@ impl From<ComponentButton> for Button {
     fn from(base: ComponentButton) -> Self {
         Self {
             base,
+            variant: ButtonVariant::default(),
+            outline: false,
+            disabled: false,
             size: Size::default(),
             icon: None,
             label: None,
@@ -115,6 +126,7 @@ impl From<ComponentButton> for Button {
 
 impl ButtonVariants for Button {
     fn with_variant(mut self, variant: ButtonVariant) -> Self {
+        self.variant = variant;
         self.base = self.base.with_variant(variant);
         self
     }
@@ -130,6 +142,7 @@ impl Sizable for Button {
 
 impl Disableable for Button {
     fn disabled(mut self, disabled: bool) -> Self {
+        self.disabled = disabled;
         self.base = self.base.disabled(disabled);
         self
     }
@@ -187,9 +200,12 @@ impl ParentElement for Button {
 }
 
 impl RenderOnce for Button {
-    fn render(self, _: &mut Window, _: &mut App) -> impl IntoElement {
+    fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let Self {
             base,
+            variant,
+            outline,
+            disabled,
             size,
             icon,
             label,
@@ -201,9 +217,14 @@ impl RenderOnce for Button {
             base.accessibility_label(label)
         });
 
-        // Nothing but an icon: gpui-kit's square icon button.
+        let theme = cx.theme();
+        let muted_icon = outline || variant == ButtonVariant::Ghost;
+
+        // Nothing but an icon: gpui-kit's square icon button. Muted, it takes
+        // gpui-kit's text color back on hover.
         if label.is_none() && children.is_empty() {
             return base
+                .when(muted_icon, |base| base.text_color(theme.muted_foreground))
                 .when_some(icon, |base, icon| base.icon(icon))
                 .refine_style(&style);
         }
@@ -221,7 +242,7 @@ impl RenderOnce for Button {
             .flex_1()
             .min_w_0()
             .justify_center()
-            .font_medium()
+            .font_semibold()
             .map(|row| match size {
                 Size::XSmall => row.gap_1().text_xs(),
                 Size::Small => row.gap_1().text_sm(),
@@ -229,9 +250,19 @@ impl RenderOnce for Button {
                 Size::Large => row.gap_2().text_base(),
             })
             .refine_style(&row_style)
-            .children(icon.map(|icon| icon.with_size(size)))
+            .children(icon.map(|icon| {
+                let icon = div().flex_none().child(icon.with_size(size));
+                if !muted_icon {
+                    return icon;
+                }
+                let foreground = theme.foreground;
+                icon.text_color(theme.muted_foreground)
+                    .when(!disabled, |icon| {
+                        icon.group_hover(HOVER_GROUP, move |icon| icon.text_color(foreground))
+                    })
+            }))
             .children(label.map(|label| div().min_w_0().truncate().child(label)))
             .children(children);
-        base.refine_style(&style).child(row)
+        base.group(HOVER_GROUP).refine_style(&style).child(row)
     }
 }

@@ -312,8 +312,6 @@ impl StocktakeView {
                     .small()
                     .icon(IconName::PanelLeft)
                     .disabled(disabled)
-                    // Quieter than the content at rest; hover brings it up.
-                    .text_color(cx.theme().muted_foreground)
                     // gpui-kit would recolor a border for focus; this draws
                     // a faint ring around the button instead.
                     .focus_ring(false)
