@@ -170,6 +170,8 @@ pub(crate) fn open(
                                 this.child(
                                     Checkbox::new("move-pick-location")
                                         .label("Erstatt plukklokasjon")
+                                        .small()
+                                        .mt_2()
                                         .checked(moves)
                                         .on_click(move |checked, window, _| {
                                             moves_pick_location.set(*checked);
