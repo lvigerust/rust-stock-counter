@@ -80,7 +80,7 @@ impl RenderOnce for Welcome {
                             Appear::new("welcome-title")
                                 .flex()
                                 .justify_center()
-                                .child(ui::Logo::new(Spacing(14.))),
+                                .child(ui::Logo::new(Spacing(16.))),
                         )
                         .child(
                             Appear::new("welcome-start")
