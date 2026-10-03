@@ -171,7 +171,7 @@ pub(crate) fn open(
                                     Checkbox::new("move-pick-location")
                                         .label("Erstatt plukklokasjon")
                                         .small()
-                                        .mt_2()
+                                        .mt_1p5()
                                         .checked(moves)
                                         .on_click(move |checked, window, _| {
                                             moves_pick_location.set(*checked);
@@ -182,6 +182,7 @@ pub(crate) fn open(
                     )
                     .child(
                         v_flex()
+                            .mt_1p5()
                             .gap_3()
                             .child(div().text_sm().font_medium().child("Talt antall"))
                             .child(Input::new(&input).id("count"))
