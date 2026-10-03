@@ -14,7 +14,7 @@
 //! | `product_table`  | How the stock list renders as rows                     |
 //! | `count_dialog`   | Counting one product, and what a quantity is           |
 //! | `welcome`        | The screen before any stock list is imported           |
-//! | `count_status`   | A product's counted/uncounted marker                   |
+//! | `count_status`   | A product's uncounted/partly counted/counted marker    |
 //! | `path_display`   | Showing file paths to the counter                      |
 
 mod count_dialog;

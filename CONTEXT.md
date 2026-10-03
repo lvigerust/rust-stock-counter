@@ -59,5 +59,9 @@ To accept the system quantity as the counted quantity for a product after checki
 _Avoid_: Approve, verify
 
 **Uncounted**:
-A product in the stocktake that nobody has confirmed or overwritten yet. A product counted as zero is counted, not uncounted.
+A product whose pick location nobody has confirmed or overwritten yet. A product counted as zero is counted, not uncounted.
 _Avoid_: Pending, open, missing
+
+**Partly counted**:
+An uncounted product with units counted at one or more overflow locations. It's counted once its pick location is, if only as zero.
+_Avoid_: Delvis talt, in progress

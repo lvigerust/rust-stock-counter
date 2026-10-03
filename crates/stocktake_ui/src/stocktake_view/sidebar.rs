@@ -11,6 +11,7 @@ use gpui_kit::component::{
 use gpui_kit::{
     ClickEvent, CursorStyle, DragMoveEvent, Empty, Focusable as _, MouseButton, Pixels, px,
 };
+use stocktake::CountState;
 use ui::{
     Dropdown, DropdownButton, DropdownItem, DropdownMenu, Sidebar, SidebarBody, SidebarFooter,
     SidebarHeader, SidebarHeading, SidebarItem, SidebarSection, SidebarSpacer, Spacing, WindowBar,
@@ -198,15 +199,18 @@ impl StocktakeView {
 
     /// A checkbox each for uncounted and counted products, beside how many
     /// there are, so the table can be narrowed to what's left to count.
+    /// Partly counted products are left to count, so they're under
+    /// uncounted.
     /// Only while there's a stock list.
     fn render_status_filter(&self, cx: &mut Context<Self>) -> Option<impl IntoElement + use<>> {
         let open = self.open.as_ref()?;
         let stocktake = open.session.read(cx).stocktake();
         let statuses = [
-            (true, stocktake.counted_len()),
-            (false, stocktake.uncounted_len()),
+            (CountState::Counted, stocktake.counted_len()),
+            (CountState::Uncounted, stocktake.uncounted_len()),
         ];
-        let items = statuses.map(|(counted, len)| {
+        let items = statuses.map(|(state, len)| {
+            let counted = state == CountState::Counted;
             let id = if counted {
                 "status-counted"
             } else {
@@ -217,7 +221,7 @@ impl StocktakeView {
                 .on_click(cx.listener(move |this, shown: &bool, _, cx| {
                     this.set_counted_shown(counted, *shown, cx)
                 }));
-            render_filter_item(checkbox, CountStatus::label(counted).into(), len, cx)
+            render_filter_item(checkbox, CountStatus::label(state).into(), len, cx)
         });
         Some(
             SidebarSection::new()

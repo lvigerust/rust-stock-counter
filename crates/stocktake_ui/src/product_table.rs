@@ -241,7 +241,7 @@ impl ProductTable {
                     return uncounted_last(a.difference(), b.difference(), direction);
                 }
                 // Uncounted first when ascending: that's the work left.
-                ProductColumn::Status => a.is_counted().cmp(&b.is_counted()),
+                ProductColumn::Status => a.count_state().cmp(&b.count_state()),
             };
             directed(ordering, direction)
         });
@@ -477,7 +477,7 @@ impl TableDelegate for ProductTable {
                 Some(difference) => Delta::new(difference).into_any_element(),
                 None => div().into_any_element(),
             },
-            ProductColumn::Status => CountStatus::new(product.is_counted()).into_any_element(),
+            ProductColumn::Status => CountStatus::new(product.count_state()).into_any_element(),
         };
         h_flex()
             .size_full()
@@ -526,7 +526,7 @@ impl TableDelegate for ProductTable {
                 .difference()
                 .map(|difference| difference.to_string())
                 .unwrap_or_default(),
-            ProductColumn::Status => CountStatus::label(product.is_counted()).to_string(),
+            ProductColumn::Status => CountStatus::label(product.count_state()).to_string(),
         }
     }
 }

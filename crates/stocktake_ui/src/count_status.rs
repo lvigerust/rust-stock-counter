@@ -1,41 +1,47 @@
+use stocktake::CountState;
 use ui::prelude::*;
 
-/// Whether a product has been counted, as an icon and a word.
+/// How far a product has been counted, as an icon and a word.
 ///
 /// Lives here rather than in `ui` because "counted" is a stocktake word. The
 /// icon shape differs as well as its color, so the state reads without color.
 ///
-/// Uncounted is the state that needs work, so it keeps full-strength text;
-/// counted steps back to muted text once its check mark has said so.
+/// Uncounted and partly counted are the states that need work, so they keep
+/// full-strength text; counted steps back to muted text once its check mark
+/// has said so.
 #[derive(IntoElement)]
 pub(crate) struct CountStatus {
-    counted: bool,
+    state: CountState,
 }
 
 impl CountStatus {
-    pub fn new(counted: bool) -> Self {
-        Self { counted }
+    pub fn new(state: CountState) -> Self {
+        Self { state }
     }
 
     /// The status in words, as shown and as copied from the table.
-    pub fn label(counted: bool) -> &'static str {
-        if counted { "Talt" } else { "Ikke talt" }
+    pub fn label(state: CountState) -> &'static str {
+        match state {
+            CountState::Uncounted => "Ikke talt",
+            CountState::PartlyCounted => "Delvis talt",
+            CountState::Counted => "Talt",
+        }
     }
 }
 
 impl RenderOnce for CountStatus {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
-        let (icon, color) = if self.counted {
-            (IconName::CircleCheck, cx.theme().success)
-        } else {
-            (IconName::CircleDashed, cx.theme().muted_foreground)
+        let (icon, color) = match self.state {
+            CountState::Uncounted => (IconName::CircleDashed, cx.theme().muted_foreground),
+            CountState::PartlyCounted => (IconName::CircleDotDashed, cx.theme().warning),
+            CountState::Counted => (IconName::CircleCheck, cx.theme().success),
         };
         h_flex()
             .gap_2p5()
-            .when(self.counted, |this| {
+            .when(self.state == CountState::Counted, |this| {
                 this.text_color(cx.theme().muted_foreground)
             })
             .child(Icon::new(icon).small().text_color(color))
-            .child(Self::label(self.counted))
+            .child(Self::label(self.state))
     }
 }

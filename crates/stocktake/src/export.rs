@@ -88,7 +88,8 @@ fn write_counts(
 }
 
 /// One row for each location a product split across locations was counted
-/// at, the pick location first.
+/// at, the pick location first. A pick location not yet counted is marked
+/// as uncounted rather than left out, so it isn't read as empty.
 fn write_locations(
     workbook: &mut Workbook,
     stocktake: &Stocktake,
@@ -117,17 +118,23 @@ fn write_locations(
         .filter(|product| product.overflow_len() > 0);
     let mut row = 1u32;
     for product in split {
-        for (ix, (location, quantity)) in product.counts().enumerate() {
-            let mark = if ix == 0 {
-                PICK_LOCATION_MARK
-            } else {
-                OVERFLOW_LOCATION_MARK
-            };
+        let pick = (
+            product.location(),
+            PICK_LOCATION_MARK,
+            product.count_at(product.location()),
+        );
+        let overflow = product
+            .overflow_counts()
+            .map(|(location, quantity)| (location, OVERFLOW_LOCATION_MARK, Some(quantity)));
+        for (location, mark, quantity) in std::iter::once(pick).chain(overflow) {
             sheet.write_string(row, 0, product.item_number())?;
             sheet.write_string(row, 1, product.name())?;
             sheet.write_string(row, 2, location)?;
             sheet.write_string(row, 3, mark)?;
-            sheet.write_number(row, 4, quantity as f64)?;
+            match quantity {
+                Some(quantity) => sheet.write_number(row, 4, quantity as f64)?,
+                None => sheet.write_string(row, 4, UNCOUNTED_MARK)?,
+            };
             row += 1;
         }
     }
@@ -204,7 +211,7 @@ mod tests {
             [
                 ["1", "Split", "A1", PICK_LOCATION_MARK, "3"],
                 ["1", "Split", "D2-1", OVERFLOW_LOCATION_MARK, "2"],
-                ["3", "Moved", "A3", PICK_LOCATION_MARK, "0"],
+                ["3", "Moved", "A3", PICK_LOCATION_MARK, UNCOUNTED_MARK],
                 ["3", "Moved", "B1", OVERFLOW_LOCATION_MARK, "4"],
             ]
         );

@@ -62,6 +62,17 @@ pub struct Product {
     overflow_counts: Vec<OverflowCount>,
 }
 
+/// How far a product has been counted.
+///
+/// Ordered by the work left, so sorting by it puts uncounted products first.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum CountState {
+    Uncounted,
+    /// Counted at overflow locations, but not yet at its pick location.
+    PartlyCounted,
+    Counted,
+}
+
 /// Units of a product counted at one of its overflow locations.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 struct OverflowCount {
@@ -127,8 +138,7 @@ impl Product {
         self.pick_count.is_none()
     }
 
-    /// What has been counted at `location`, `None` while nothing has. An
-    /// uncounted pick location of a product counted elsewhere is `None` too.
+    /// What has been counted at `location`, `None` while nothing has.
     pub fn count_at(&self, location: &str) -> Option<i64> {
         if self.is_pick_location(location) {
             return self.pick_count;
@@ -141,13 +151,10 @@ impl Product {
     }
 
     /// Every location something has been counted at, with what was counted
-    /// there: the pick location first, then the overflow locations. A
-    /// counted product's pick location is always listed, as zero if it
-    /// wasn't counted itself.
+    /// there: the pick location first, once it has been counted, then the
+    /// overflow locations.
     pub fn counts(&self) -> impl Iterator<Item = (&str, i64)> {
-        let pick = self
-            .is_counted()
-            .then(|| (self.location(), self.pick_count.unwrap_or(0)));
+        let pick = self.pick_count.map(|quantity| (self.location(), quantity));
         pick.into_iter().chain(self.overflow_counts())
     }
 
@@ -181,11 +188,11 @@ impl Product {
         self.system_quantity
     }
 
-    /// What was counted at all its locations together, `None` while the
-    /// product is uncounted.
+    /// What was counted at all its locations together, `None` until the
+    /// product is counted.
     pub fn counted_quantity(&self) -> Option<i64> {
-        self.is_counted().then(|| {
-            self.pick_count.unwrap_or(0)
+        self.pick_count.map(|pick_count| {
+            pick_count
                 + self
                     .overflow_counts
                     .iter()
@@ -194,12 +201,24 @@ impl Product {
         })
     }
 
-    /// Whether anything has been counted, at any location.
+    /// Whether the product is counted: its pick location has been, if only
+    /// as zero. Units found at overflow locations alone don't make it
+    /// counted, so they can't hide a pick location nobody checked.
     pub fn is_counted(&self) -> bool {
-        self.pick_count.is_some() || !self.overflow_counts.is_empty()
+        self.pick_count.is_some()
     }
 
-    /// Counted minus system quantity, `None` while uncounted.
+    pub fn count_state(&self) -> CountState {
+        if self.is_counted() {
+            CountState::Counted
+        } else if self.overflow_counts.is_empty() {
+            CountState::Uncounted
+        } else {
+            CountState::PartlyCounted
+        }
+    }
+
+    /// Counted minus system quantity, `None` until the product is counted.
     pub fn difference(&self) -> Option<i64> {
         self.counted_quantity()
             .map(|counted| counted - self.system_quantity)
@@ -286,7 +305,8 @@ impl Filter {
     }
 
     /// Whether counted products show, or uncounted ones if `counted` is
-    /// false.
+    /// false. Partly counted products go with the uncounted ones, since
+    /// their pick location is still to count.
     pub fn shows_counted(&self, counted: bool) -> bool {
         if counted {
             !self.hides_counted
@@ -647,19 +667,26 @@ mod tests {
     }
 
     #[test]
-    fn counted_only_at_an_overflow_location_is_counted() {
+    fn counted_only_at_an_overflow_location_is_partly_counted() {
         let mut stocktake = stocktake();
         let id = ProductId(1);
         stocktake.set_count(id, "D2-1", 5);
         let product = stocktake.product(id);
-        assert!(product.is_counted());
+        assert_eq!(product.count_state(), CountState::PartlyCounted);
+        assert!(!product.is_counted());
+        assert_eq!(product.counted_quantity(), None);
+        assert_eq!(product.counts().collect::<Vec<_>>(), [("D2-1", 5)]);
+        assert_eq!(stocktake.counted_len(), 0);
+
+        // Zero at the pick location counts it.
+        stocktake.set_count(id, "C4-7", 0);
+        let product = stocktake.product(id);
+        assert_eq!(product.count_state(), CountState::Counted);
         assert_eq!(product.counted_quantity(), Some(5));
-        assert_eq!(product.count_at("C4-7"), None);
         assert_eq!(
             product.counts().collect::<Vec<_>>(),
             [("C4-7", 0), ("D2-1", 5)]
         );
-        assert_eq!(stocktake.counted_len(), 1);
     }
 
     #[test]

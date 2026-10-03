@@ -65,8 +65,8 @@ Today the stocktake is done in a spreadsheet on a laptop with a USB barcode scan
 - The checkbox isn't shown once the pick location has been counted, so a counted pick location is never lost.
 - A moved pick location is used everywhere in the app: the table's location column, sorting, search and the aisle filter. Typing the stock list's location with the box checked moves it back.
 - Focus then returns to the search field for the next scan.
-- A product is **uncounted** until it has been confirmed or overwritten at any location. A product counted as zero is counted.
-- A product counted only at overflow locations is counted, and its pick location counts as zero.
+- A product is **uncounted** until its pick location has been confirmed or overwritten. A product counted as zero is counted, so an empty pick shelf is recorded by counting zero there.
+- A product counted only at overflow locations is **partly counted** ("Delvis talt"): it has its own status in the table, but it has no counted quantity or difference yet, and it's grouped with the uncounted products in the status filter, the progress indicator and the export warning. Counting its pick location makes it counted.
 
 ### Counting a product again
 
@@ -83,7 +83,7 @@ Today the stocktake is done in a spreadsheet on a laptop with a USB barcode scan
 ## Export
 
 - Exports an `.xlsx` of the stock list with two added columns: **Counted quantity** and **Difference** (counted minus system quantity). The counted quantity is the total across all of a product's locations.
-- A second sheet lists every product counted at one or more overflow locations, one row per location with the pick location first: item number, name, location, whether it's the pick location or an overflow location, and the quantity counted there. Products counted only at their pick location are left out. This is what's used to update `Lokasjon` in the business system, or to move the goods.
+- A second sheet lists every product counted at one or more overflow locations, one row per location with the pick location first: item number, name, location, whether it's the pick location or an overflow location, and the quantity counted there. A partly counted product's pick location is marked uncounted. Products counted only at their pick location are left out. This is what's used to update `Lokasjon` in the business system, or to move the goods.
 - If any products are uncounted, the app warns before exporting, and uncounted products are marked in the file.
 - Adjustments are entered into the business system by hand from the exported file.
 
@@ -104,7 +104,6 @@ Today the stocktake is done in a spreadsheet on a laptop with a USB barcode scan
 - **Barcode column.** The storage owner listed C, D, H and N as the interesting columns, which doesn't include the barcode (F). The spec still reads F so scanning works. Confirm this is fine, or whether they scan something else, such as the item number.
 - **Export columns.** Whether the exported `.xlsx` should keep every original column, or only C, D, H and N plus Counted quantity and Difference.
 - **Scanning into an open count cell.** If a counter scans the next product instead of pressing Enter first, the barcode is typed into the counted-quantity cell (or the "count again" field) and the scanner's Enter submits it. The app now guards the case where the text is exactly the barcode of a listed product: nothing is saved, the scanned product is counted next, and a hint says the previous count wasn't saved. A barcode that isn't on the list is still accepted as a quantity. Not yet checked with the real scanner; a maximum quantity could close that gap.
-- **Counted at overflow locations only.** A product with units found only at overflow locations counts as counted, with zero at its pick location. Whether its pick location should have to be counted too, so an overflow find can't hide an unchecked pick shelf, is open.
 - **Location field in the count dialog.** The editable, pre-filled field is a first take on registering overflow locations; the interaction may change once it's tried on the floor.
 - **Suggesting locations.** The location field could suggest the locations already in the stock list as the counter types. gpui-kit's combobox only picks from a list, and the field has to take any text, so this waits for a suitable component.
 - **Enter adds at a counted location.** When the location already has a count, Enter adds to it rather than replacing it. Whether recounting a shelf (replace) is the more common case on the floor is open.
