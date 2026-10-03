@@ -500,7 +500,7 @@ fn the_columns_menu_hides_and_shows_columns(cx: &mut TestAppContext) {
 
     // Every column is listed, and shown but the overflow ones.
     counter.click("columns");
-    for id in ["menu-item:Buffer lokasjon(er)", "menu-item:Buffer"] {
+    for id in ["menu-item:Buffer lokasjon", "menu-item:Buffer"] {
         assert_eq!(checked(&mut counter, id), Some(false), "{id}");
     }
     for id in [

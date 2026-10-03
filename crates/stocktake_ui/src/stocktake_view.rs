@@ -483,8 +483,9 @@ impl StocktakeView {
             .heading("Vis kolonner")
             .min_w(Spacing(64.))
             .items(ProductColumn::ALL.map(|column| {
-                DropdownItem::new(column.name())
-                    .checked(open.table.read(cx).delegate().is_shown(column))
+                let table = open.table.read(cx).delegate();
+                DropdownItem::new(table.column_name(column, cx))
+                    .checked(table.is_shown(column))
                     .disabled(!column.is_hideable())
                     .stays_open(true)
                     .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {

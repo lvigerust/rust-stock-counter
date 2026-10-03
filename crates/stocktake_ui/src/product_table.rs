@@ -8,7 +8,7 @@ use gpui_kit::component::{
     tooltip::Tooltip,
 };
 use gpui_kit::{Div, Edges, Pixels, Stateful, px};
-use stocktake::{ProductId, compare_locations, natural_cmp};
+use stocktake::{Product, ProductId, compare_locations, natural_cmp};
 use ui::{Delta, flash, prelude::*};
 
 use crate::{count_status::CountStatus, session::Session};
@@ -88,11 +88,6 @@ impl ProductColumn {
         )
     }
 
-    /// The column's header, in the table and in the columns menu.
-    pub fn name(self) -> &'static str {
-        self.key_and_name().1
-    }
-
     /// Whether the counter can hide the column. The product name stays: it's
     /// what the counter reads off the shelf, and it takes the width the other
     /// columns leave.
@@ -107,17 +102,34 @@ impl ProductColumn {
         !matches!(self, Self::OverflowLocations | Self::OverflowQuantity)
     }
 
-    fn key_and_name(self) -> (&'static str, &'static str) {
+    fn key(self) -> &'static str {
         match self {
-            Self::Location => ("location", "Lokasjon"),
-            Self::OverflowLocations => ("overflow-locations", "Buffer lokasjon(er)"),
-            Self::ItemNumber => ("item-number", "Varenummer"),
-            Self::Name => ("name", "Produkt"),
-            Self::SystemQuantity => ("system-quantity", "På lager"),
-            Self::CountedQuantity => ("counted-quantity", "Talt"),
-            Self::OverflowQuantity => ("overflow-quantity", "Buffer"),
-            Self::Difference => ("difference", "Differanse"),
-            Self::Status => ("status", "Status"),
+            Self::Location => "location",
+            Self::OverflowLocations => "overflow-locations",
+            Self::ItemNumber => "item-number",
+            Self::Name => "name",
+            Self::SystemQuantity => "system-quantity",
+            Self::CountedQuantity => "counted-quantity",
+            Self::OverflowQuantity => "overflow-quantity",
+            Self::Difference => "difference",
+            Self::Status => "status",
+        }
+    }
+
+    /// The column's header. The overflow locations' is plural once a
+    /// product has more than one.
+    fn name(self, several_overflow_locations: bool) -> &'static str {
+        match self {
+            Self::Location => "Lokasjon",
+            Self::OverflowLocations if several_overflow_locations => "Buffer lokasjoner",
+            Self::OverflowLocations => "Buffer lokasjon",
+            Self::ItemNumber => "Varenummer",
+            Self::Name => "Produkt",
+            Self::SystemQuantity => "På lager",
+            Self::CountedQuantity => "Talt",
+            Self::OverflowQuantity => "Buffer",
+            Self::Difference => "Differanse",
+            Self::Status => "Status",
         }
     }
 
@@ -179,6 +191,17 @@ impl ProductTable {
             width: px(0.),
             last_counted: None,
         }
+    }
+
+    /// The column's header, in the table and in the columns menu.
+    pub fn column_name(&self, column: ProductColumn, cx: &App) -> &'static str {
+        let several_overflow_locations = self
+            .session
+            .read(cx)
+            .stocktake()
+            .products()
+            .any(|(_, product)| product.overflow_len() > 1);
+        column.name(several_overflow_locations)
     }
 
     pub fn is_shown(&self, column: ProductColumn) -> bool {
@@ -309,6 +332,15 @@ impl ProductTable {
     }
 }
 
+/// The product's overflow locations, in location order.
+fn overflow_locations(product: &Product) -> String {
+    product
+        .overflow_counts()
+        .map(|(location, _)| location)
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
 fn directed(ordering: Ordering, direction: ColumnSort) -> Ordering {
     match direction {
         ColumnSort::Descending => ordering.reverse(),
@@ -342,9 +374,9 @@ impl TableDelegate for ProductTable {
         self.rows.len()
     }
 
-    fn column(&self, col_ix: usize, _: &App) -> Column {
+    fn column(&self, col_ix: usize, cx: &App) -> Column {
         let column = self.columns[col_ix];
-        let (key, name) = column.key_and_name();
+        let (key, name) = (column.key(), self.column_name(column, cx));
         let fixed: f32 = self
             .columns
             .iter()
@@ -402,7 +434,10 @@ impl TableDelegate for ProductTable {
             .size_3()
             .flex_none()
             .when(!sorted, |icon| icon.opacity(0.5));
-        let label = div().min_w_0().truncate().child(column.name());
+        let label = div()
+            .min_w_0()
+            .truncate()
+            .child(self.column_name(column, cx));
         let hover_color = cx.theme().foreground;
         h_flex()
             .id(("sort", col_ix))
@@ -510,24 +545,10 @@ impl TableDelegate for ProductTable {
                     }
                 }
             }
-            // Each overflow location beside what was counted there, the
-            // count muted so the locations read first.
-            ProductColumn::OverflowLocations => h_flex()
+            ProductColumn::OverflowLocations => div()
                 .min_w_0()
-                .gap_3()
-                .overflow_hidden()
-                .children(product.overflow_counts().map(|(location, quantity)| {
-                    h_flex()
-                        .flex_none()
-                        .gap_1()
-                        .child(location.to_string())
-                        .child(
-                            div()
-                                .text_color(cx.theme().muted_foreground)
-                                .tabular_nums()
-                                .child(quantity.to_string()),
-                        )
-                }))
+                .truncate()
+                .child(overflow_locations(product))
                 .into_any_element(),
             ProductColumn::ItemNumber => div()
                 .text_color(cx.theme().muted_foreground)
@@ -590,11 +611,7 @@ impl TableDelegate for ProductTable {
                     .trim_start()
                     .to_string(),
             },
-            ProductColumn::OverflowLocations => product
-                .overflow_counts()
-                .map(|(location, quantity)| format!("{location} {quantity}"))
-                .collect::<Vec<_>>()
-                .join(", "),
+            ProductColumn::OverflowLocations => overflow_locations(product),
             ProductColumn::ItemNumber => product.item_number().to_string(),
             ProductColumn::Name => product.name().to_string(),
             ProductColumn::SystemQuantity => product.system_quantity().to_string(),
