@@ -109,7 +109,11 @@ impl RenderOnce for RowButton {
             .focus_ring(false)
             .subtle_focus_ring()
             .disabled(self.disabled)
-            .when(self.disabled, |row| row.opacity(0.5))
+            // The button fades a disabled row, but can't read a custom
+            // variant's colors to keep them; these are the row's at rest.
+            .when(self.disabled, |row| {
+                row.bg(theme.transparent).text_color(hover_fg)
+            })
             .on_click(move |event, window, cx| on_click(event, window, cx))
             .children(self.children)
             .refine_style(&self.style)

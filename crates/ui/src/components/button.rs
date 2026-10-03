@@ -21,10 +21,15 @@ use std::mem;
 
 use gpui_kit::component::button::{Button as ComponentButton, ButtonVariant, ButtonVariants};
 use gpui_kit::component::menu::DropdownMenu;
-use gpui_kit::component::{FocusableExt, Selectable, Size};
-use gpui_kit::{Action, ClickEvent, Interactivity, StyleRefinement};
+use gpui_kit::component::{Colorize as _, FocusableExt, Selectable, Size};
+use gpui_kit::{
+    Action, Background, ClickEvent, Hsla, Interactivity, StyleRefinement, transparent_white,
+};
 
 use crate::prelude::*;
+
+/// How much of a disabled button shows, as on Catalyst's.
+const DISABLED_OPACITY: f32 = 0.5;
 
 /// What a muted icon watches to come up on hover: the button around it.
 const HOVER_GROUP: &str = "ui-button";
@@ -217,6 +222,15 @@ impl RenderOnce for Button {
             base.accessibility_label(label)
         });
 
+        // Faded in its own colors, as Catalyst's is, not in gpui-kit's
+        // muted ones.
+        let base = base.when(disabled, |base| {
+            base.when_some(rest_colors(variant, outline, cx), |base, colors| {
+                let (fill, foreground, border) = colors;
+                base.bg(fill).text_color(foreground).border_color(border)
+            })
+            .opacity(DISABLED_OPACITY)
+        });
         let theme = cx.theme();
         let muted_icon = outline || variant == ButtonVariant::Ghost;
 
@@ -265,4 +279,78 @@ impl RenderOnce for Button {
             .children(children);
         base.group(HOVER_GROUP).refine_style(&style).child(row)
     }
+}
+
+/// The fill, text and border colors gpui-kit gives a button at rest. It keeps
+/// them to itself, and swaps in muted ones while the button is disabled; this
+/// is gpui-kit 0.7's `ButtonVariant::normal`, so recheck it after an upgrade.
+///
+/// A custom variant's colors are private to gpui-kit, so there's nothing to
+/// return for one: whoever made it sets them for the disabled state too.
+fn rest_colors(
+    variant: ButtonVariant,
+    outline: bool,
+    cx: &App,
+) -> Option<(Background, Hsla, Hsla)> {
+    if let ButtonVariant::Custom(_) = variant {
+        return None;
+    }
+    let theme = cx.theme();
+    let tokens = &theme.tokens;
+    let fill: Background = match (variant, outline) {
+        (ButtonVariant::Ghost | ButtonVariant::Link | ButtonVariant::Text, _) => {
+            theme.transparent.into()
+        }
+        (ButtonVariant::Default, true) => theme.input_background().into(),
+        (ButtonVariant::Primary, true) => tokens.primary.background.opacity(0.1),
+        (ButtonVariant::Secondary, true) => tokens.secondary.background.opacity(0.1),
+        (ButtonVariant::Danger, true) => tokens.danger.background.opacity(0.1),
+        (ButtonVariant::Warning, true) => tokens.warning.background.opacity(0.1),
+        (ButtonVariant::Success, true) => tokens.success.background.opacity(0.1),
+        (ButtonVariant::Info, true) => tokens.info.background.opacity(0.1),
+        (ButtonVariant::Default, false) => tokens.button.into(),
+        (ButtonVariant::Primary, false) => tokens.button_primary.into(),
+        (ButtonVariant::Secondary, false) => tokens.button_secondary.into(),
+        (ButtonVariant::Danger, false) => tokens.button_danger.into(),
+        (ButtonVariant::Warning, false) => tokens.button_warning.into(),
+        (ButtonVariant::Success, false) => tokens.button_success.into(),
+        (ButtonVariant::Info, false) => tokens.button_info.into(),
+        (ButtonVariant::Custom(_), _) => unreachable!("returned above"),
+    };
+    let foreground = match (variant, outline) {
+        (ButtonVariant::Default, _) => theme.button_foreground,
+        (ButtonVariant::Ghost, _) => theme.secondary_foreground,
+        (ButtonVariant::Link, _) => theme.link,
+        (ButtonVariant::Text, _) => theme.foreground.opacity(0.9),
+        (ButtonVariant::Primary, true) => theme.primary,
+        (ButtonVariant::Secondary, true) => theme.secondary_foreground,
+        (ButtonVariant::Danger, true) => theme.danger,
+        (ButtonVariant::Warning, true) => theme.warning,
+        (ButtonVariant::Success, true) => theme.success,
+        (ButtonVariant::Info, true) => theme.info,
+        (ButtonVariant::Primary, false) => theme.button_primary_foreground,
+        (ButtonVariant::Secondary, false) => theme.button_secondary_foreground,
+        (ButtonVariant::Danger, false) => theme.button_danger_foreground,
+        (ButtonVariant::Warning, false) => theme.button_warning_foreground,
+        (ButtonVariant::Success, false) => theme.button_success_foreground,
+        (ButtonVariant::Info, false) => theme.button_info_foreground,
+        (ButtonVariant::Custom(_), _) => unreachable!("returned above"),
+    };
+    let faded = |color: Hsla| color.mix_oklab(transparent_white(), 0.4);
+    let border = match (variant, outline) {
+        (ButtonVariant::Default, _) => theme.input,
+        (ButtonVariant::Secondary, _) => theme.border,
+        (ButtonVariant::Primary, _) => theme.primary,
+        (ButtonVariant::Ghost | ButtonVariant::Link | ButtonVariant::Text, _) => theme.transparent,
+        (ButtonVariant::Danger, true) => faded(theme.danger),
+        (ButtonVariant::Warning, true) => faded(theme.warning),
+        (ButtonVariant::Success, true) => faded(theme.success),
+        (ButtonVariant::Info, true) => faded(theme.info),
+        (ButtonVariant::Danger, false) => theme.button_danger,
+        (ButtonVariant::Warning, false) => theme.button_warning,
+        (ButtonVariant::Success, false) => theme.button_success,
+        (ButtonVariant::Info, false) => theme.button_info,
+        (ButtonVariant::Custom(_), _) => unreachable!("returned above"),
+    };
+    Some((fill, foreground, border))
 }
