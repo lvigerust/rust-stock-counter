@@ -256,7 +256,7 @@ impl RenderOnce for Button {
             .flex_1()
             .min_w_0()
             .justify_center()
-            .font_semibold()
+            .font_medium()
             .map(|row| match size {
                 Size::XSmall => row.gap_1().text_xs(),
                 Size::Small => row.gap_1().text_sm(),
