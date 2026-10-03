@@ -1,7 +1,7 @@
 //! UI integration tests: the real view in a headless window, driven by
 //! keys and clicks the way a counter at the scanner drives it.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use gpui_kit::component::Root;
 use gpui_kit::component::table::TableDelegate as _;
@@ -371,18 +371,54 @@ fn importing_a_stock_list_starts_a_saved_stocktake(cx: &mut TestAppContext) {
     assert_eq!(recent.iter().next(), Some(stock_list.as_path()));
 }
 
+/// Remembers `stock_lists` as the recent ones beside `store`.
+fn remember(store: &Path, stock_lists: &[&Path]) {
+    let mut recent = RecentStockLists::default();
+    for stock_list in stock_lists.iter().rev() {
+        recent.add(stock_list.to_path_buf());
+    }
+    recent::save(&recent::path_beside(store), &recent).unwrap();
+}
+
 #[gpui_kit::test]
 fn tab_reaches_the_welcome_buttons(cx: &mut TestAppContext) {
     let path = store_path("welcome");
-    let mut recent = RecentStockLists::default();
-    recent.add("/Users/lager/Vareliste.xlsx".into());
-    recent::save(&recent::path_beside(&path), &recent).unwrap();
+    let stock_list = path.with_file_name("Vareliste.xlsx");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(&stock_list, "").unwrap();
+    remember(&path, &[&stock_list]);
+    let id: &'static str = format!("open-recent:{}", stock_list.display()).leak();
     let mut counter = Counter::open(cx, path);
 
     counter.press("tab");
     assert!(counter.is_focused("import-first"));
     counter.press("tab");
-    assert!(counter.is_focused("open-recent:/Users/lager/Vareliste.xlsx"));
+    assert!(counter.is_focused(id));
+}
+
+#[gpui_kit::test]
+fn a_missing_recent_stock_list_is_kept_but_cannot_be_opened(cx: &mut TestAppContext) {
+    let path = store_path("welcome-missing");
+    let stock_list = path.with_file_name("Vareliste.xlsx");
+    remember(&path, &[&stock_list]);
+    let id: &'static str = format!("open-recent:{}", stock_list.display()).leak();
+    let mut counter = Counter::open(cx, path.clone());
+
+    // Listed, but Tab passes it by, and it stays remembered.
+    assert!(counter.find(id).is_some());
+    counter.press("tab");
+    counter.press("tab");
+    assert!(!counter.is_focused(id));
+    let recent = recent::load(&recent::path_beside(&path)).unwrap();
+    assert_eq!(recent.iter().next(), Some(stock_list.as_path()));
+
+    // Back where it was, it can be opened once the window is looked at again.
+    std::fs::write(&stock_list, "").unwrap();
+    let view = counter.view.clone();
+    counter.step(|_, cx| view.update(cx, |view, cx| view.check_recent(cx)));
+    assert!(counter.is_focused("import-first"));
+    counter.press("tab");
+    assert!(counter.is_focused(id));
 }
 
 #[gpui_kit::test]

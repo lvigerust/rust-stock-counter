@@ -1,6 +1,6 @@
 //! The screen before any stock list is imported.
 
-use std::{path::PathBuf, rc::Rc, time::Duration};
+use std::{collections::HashSet, path::PathBuf, rc::Rc, time::Duration};
 
 use gpui_kit::Div;
 use gpui_kit::component::{alert::Alert, kbd::Kbd};
@@ -27,6 +27,7 @@ type OpenRecent = Rc<dyn Fn(&PathBuf, &mut Window, &mut App)>;
 pub(crate) struct Welcome {
     resume_error: Option<SharedString>,
     recent: Vec<PathBuf>,
+    unavailable: HashSet<PathBuf>,
     on_open_recent: Option<OpenRecent>,
 }
 
@@ -35,6 +36,7 @@ impl Welcome {
         Self {
             resume_error: None,
             recent: Vec::new(),
+            unavailable: HashSet::new(),
             on_open_recent: None,
         }
     }
@@ -51,6 +53,13 @@ impl Welcome {
         self
     }
 
+    /// The recent stock lists that weren't found: moved, deleted, or on a
+    /// drive that isn't connected. They're listed, but can't be opened.
+    pub fn unavailable(mut self, paths: impl IntoIterator<Item = PathBuf>) -> Self {
+        self.unavailable = paths.into_iter().collect();
+        self
+    }
+
     /// Why the saved stocktake couldn't be resumed, shown above the welcome.
     pub fn resume_error(mut self, error: Option<SharedString>) -> Self {
         self.resume_error = error;
@@ -63,7 +72,7 @@ impl RenderOnce for Welcome {
         let recent = self
             .on_open_recent
             .filter(|_| !self.recent.is_empty())
-            .map(|on_open| render_recent(self.recent, on_open, cx));
+            .map(|on_open| render_recent(self.recent, &self.unavailable, on_open, cx));
         v_flex()
             .size_full()
             .p_6()
@@ -117,18 +126,30 @@ fn render_start(window: &mut Window, cx: &mut App) -> impl IntoElement {
 }
 
 /// "Nylig åpnet": the stock lists imported before, each with the folder
-/// it's in. Opening one imports it again.
-fn render_recent(paths: Vec<PathBuf>, on_open: OpenRecent, cx: &App) -> Div {
+/// it's in. Opening one imports it again. One that wasn't found is dimmed
+/// and says so in place of its folder.
+fn render_recent(
+    paths: Vec<PathBuf>,
+    unavailable: &HashSet<PathBuf>,
+    on_open: OpenRecent,
+    cx: &App,
+) -> Div {
     let muted = cx.theme().muted_foreground;
     section("NYLIG ÅPNET", cx).children(paths.into_iter().map(|path| {
         let label = file_name(&path);
-        let folder = folder(&path);
+        let is_unavailable = unavailable.contains(&path);
+        let detail = if is_unavailable {
+            "Ikke tilgjengelig".into()
+        } else {
+            folder(&path)
+        };
         // Keyed by the file, so focus stays with it as the list reorders.
         let id = SharedString::from(format!("open-recent:{}", path.display()));
         let on_open = on_open.clone();
         RowButton::new(id, move |_, window, cx| on_open(&path, window, cx))
+            .disabled(is_unavailable)
             .map(|row| row_content(row, IconName::FileSpreadsheet, label, cx))
-            .child(div().flex_none().text_color(muted).child(folder))
+            .child(div().flex_none().text_color(muted).child(detail))
     }))
 }
 

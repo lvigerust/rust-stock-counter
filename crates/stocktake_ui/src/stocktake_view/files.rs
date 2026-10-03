@@ -4,7 +4,10 @@
 //! Files are read and written on the background executor, so a large or
 //! slow file never stalls the window; the results come back to the view.
 
-use std::path::PathBuf;
+use std::{
+    collections::HashSet,
+    path::{Path, PathBuf},
+};
 
 use gpui_kit::component::{WindowExt as _, button::ButtonVariant, notification::Notification};
 use gpui_kit::{ExternalPaths, PathPromptOptions};
@@ -140,13 +143,13 @@ impl StocktakeView {
                 self.open_stocktake(session.clone(), window, cx);
                 // After opening, so a failed save is reported like any other.
                 session.update(cx, |session, cx| session.save(cx));
+                self.unavailable.remove(&path);
                 self.recent.add(path);
                 self.save_recent();
             }
             Err(error) => {
                 if matches!(error, ImportError::NotFound) {
-                    self.recent.remove(&path);
-                    self.save_recent();
+                    self.unavailable.insert(path);
                     cx.notify();
                 }
                 let description: SharedString = import_error_message(&error).into();
@@ -179,9 +182,9 @@ impl StocktakeView {
         }
     }
 
-    /// Imports a stock list from the recent ones. One that has been moved or
-    /// deleted since is dropped from the list instead, without first asking
-    /// to discard the stocktake in progress for it.
+    /// Imports a stock list from the recent ones. One that has gone missing
+    /// since it was last looked for is marked unavailable instead, without
+    /// first asking to discard the stocktake in progress for it.
     pub(super) fn open_recent(
         &mut self,
         path: PathBuf,
@@ -192,16 +195,36 @@ impl StocktakeView {
             self.import_stock_list(ImportSource::File(path), window, cx);
             return;
         }
-        self.recent.remove(&path);
-        self.save_recent();
-        cx.notify();
         let title: SharedString = format!("Fant ikke {}", file_name(&path)).into();
+        self.unavailable.insert(path);
+        cx.notify();
         window.open_alert_dialog(cx, move |dialog, _, _| {
             dialog
                 .title(title.clone())
-                .description("Filen er flyttet eller slettet, og er fjernet fra nylig åpnet.")
+                .description("Filen er flyttet, slettet eller på en disk som ikke er koblet til.")
                 .ok_text("OK")
         });
+    }
+
+    /// Looks for the recent stock lists off the UI thread, since a drive
+    /// that isn't connected can take seconds to answer, and marks the ones
+    /// not found as unavailable.
+    pub(super) fn check_recent(&mut self, cx: &mut Context<Self>) {
+        let paths: Vec<PathBuf> = self.recent.iter().map(Path::to_path_buf).collect();
+        let unavailable = cx.background_spawn(async move {
+            paths
+                .into_iter()
+                .filter(|path| !path.is_file())
+                .collect::<HashSet<_>>()
+        });
+        self.recent_check = Some(cx.spawn(async move |this, cx| {
+            let unavailable = unavailable.await;
+            this.update(cx, |this, cx| {
+                this.unavailable = unavailable;
+                cx.notify();
+            })
+            .ok();
+        }));
     }
 
     /// Losing the recent stock lists costs a trip to the file dialog, not

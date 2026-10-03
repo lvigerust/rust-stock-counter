@@ -22,7 +22,10 @@ mod files;
 mod mode;
 mod sidebar;
 
-use std::path::{Path, PathBuf};
+use std::{
+    collections::HashSet,
+    path::{Path, PathBuf},
+};
 
 use gpui_kit::component::{
     Size, WindowExt as _,
@@ -80,6 +83,12 @@ pub struct StocktakeView {
     recent_path: PathBuf,
     /// The stock lists imported before, offered on the welcome.
     recent: RecentStockLists,
+    /// The recent stock lists not found when last looked for. They stay
+    /// remembered, so one on a drive that's connected again comes back.
+    unavailable: HashSet<PathBuf>,
+    /// The look for the recent stock lists under way, if any. A newer one
+    /// replaces it.
+    recent_check: Option<Task<()>>,
     /// The stocktake being counted, and everything on screen that goes with
     /// it. `None` shows the welcome.
     open: Option<OpenStocktake>,
@@ -166,12 +175,21 @@ impl StocktakeView {
         let subscriptions = vec![
             // The product column takes the width the others leave.
             cx.observe_window_bounds(window, |this, window, cx| this.fit_columns(window, cx)),
+            // Coming back to the window may be from plugging in the drive a
+            // recent stock list is on.
+            cx.observe_window_activation(window, |this, window, cx| {
+                if window.is_window_active() && this.open.is_none() {
+                    this.check_recent(cx);
+                }
+            }),
         ];
         let mut this = Self {
             focus_handle,
             store_path,
             recent_path,
             recent,
+            unavailable: HashSet::new(),
+            recent_check: None,
             open: None,
             resume_error: None,
             mode: Mode::default(),
@@ -186,10 +204,11 @@ impl StocktakeView {
                 let session = cx.new(|_| Session::new(stocktake, this.store_path.clone()));
                 this.open_stocktake(session, window, cx);
             }
-            Ok(None) => {}
+            Ok(None) => this.check_recent(cx),
             Err(error) => {
                 this.resume_error =
-                    Some(format!("Den lagrede varetellingen kunne ikke åpnes: {error}").into())
+                    Some(format!("Den lagrede varetellingen kunne ikke åpnes: {error}").into());
+                this.check_recent(cx);
             }
         }
         this
@@ -272,6 +291,7 @@ impl StocktakeView {
         // nothing to take the shortcuts.
         self.focus_handle.focus(window, cx);
         self.open = None;
+        self.check_recent(cx);
         cx.notify();
     }
 
@@ -402,6 +422,7 @@ impl StocktakeView {
                         div().size_full().pb(self.bar_height()).child(
                             Welcome::new()
                                 .resume_error(self.resume_error.clone())
+                                .unavailable(self.unavailable.iter().cloned())
                                 .recent(
                                     self.recent.iter().map(Path::to_path_buf),
                                     cx.listener(|this, path: &PathBuf, window, cx| {
