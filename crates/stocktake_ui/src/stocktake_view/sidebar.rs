@@ -2,10 +2,7 @@
 //! button that hides it or shows it again, and the edge that resizes it.
 
 use gpui_kit::component::{
-    FocusableExt as _,
-    button::{Button, ButtonVariants as _},
-    checkbox::Checkbox,
-    collapsible::Collapsible,
+    FocusableExt as _, button::ButtonVariants as _, checkbox::Checkbox, collapsible::Collapsible,
     separator::Separator,
 };
 use gpui_kit::{
@@ -13,9 +10,9 @@ use gpui_kit::{
 };
 use stocktake::CountState;
 use ui::{
-    Dropdown, DropdownButton, DropdownItem, DropdownMenu, Sidebar, SidebarBody, SidebarFooter,
-    SidebarHeader, SidebarHeading, SidebarItem, SidebarSection, SidebarSpacer, Spacing, WindowBar,
-    prelude::*,
+    Button, Dropdown, DropdownButton, DropdownItem, DropdownMenu, Sidebar, SidebarBody,
+    SidebarFooter, SidebarHeader, SidebarHeading, SidebarItem, SidebarSection, SidebarSpacer,
+    Spacing, WindowBar, prelude::*,
 };
 
 use super::{Mode, StocktakeView};

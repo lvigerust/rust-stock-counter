@@ -10,14 +10,14 @@ use std::{cell::Cell, rc::Rc};
 use gpui_kit::ClickEvent;
 use gpui_kit::component::{
     FocusableExt as _, WindowExt as _,
-    button::{Button, ButtonVariants as _},
+    button::ButtonVariants as _,
     checkbox::Checkbox,
     description_list::{DescriptionItem, DescriptionList},
     dialog::{DialogClose, DialogFooter},
     input::{Input, InputState},
 };
 use stocktake::Product;
-use ui::{Spacing, prelude::*};
+use ui::{Button, Spacing, prelude::*};
 
 /// The system quantity's label, in the dialog and as the table's column
 /// header.
@@ -126,9 +126,7 @@ pub(crate) fn open(
         };
         let save_button = |id: &'static str, label: &'static str| {
             Button::new(id)
-                .rounded_lg()
-                .accessibility_label(label)
-                .child(div().text_sm().font_medium().child(label))
+                .label(label)
                 .focus_ring(false)
                 .solid_focus_ring(ring, surface)
                 .disabled(!valid)
@@ -217,11 +215,9 @@ pub(crate) fn open(
                         div()
                             .flex_none()
                             .child(DialogClose::new().trigger(|button| {
-                                button
+                                Button::from(button)
                                     .ghost()
-                                    .rounded_lg()
-                                    .accessibility_label("Avbryt")
-                                    .child(div().text_sm().font_medium().child("Avbryt"))
+                                    .label("Avbryt")
                                     .focus_ring(false)
                                     .solid_focus_ring(ring, surface)
                             })),

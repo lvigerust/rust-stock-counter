@@ -164,6 +164,7 @@ fn row_content<E: Styled + ParentElement>(
     row.gap_3()
         .px_2()
         .py_1p5()
+        .text_sm()
         .child(
             Icon::new(icon)
                 .small()

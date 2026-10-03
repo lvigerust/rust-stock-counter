@@ -42,7 +42,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use gpui_kit::component::FocusableExt as _;
-use gpui_kit::component::button::{Button, ButtonVariants as _};
+use gpui_kit::component::button::ButtonVariants as _;
 use gpui_kit::component::kbd::Kbd;
 use gpui_kit::component::menu::{DropdownMenu as _, PopupMenu, PopupMenuItem};
 use gpui_kit::component::{Colorize as _, Size};
@@ -51,8 +51,8 @@ use gpui_kit::{
     TestSupportExt as _, Toggled, WeakEntity,
 };
 
-use crate::Spacing;
 use crate::prelude::*;
+use crate::{Button, Spacing};
 
 /// What a press on a [`DropdownItem`] does, besides its action.
 type ClickHandler = Rc<dyn Fn(&ClickEvent, &mut Window, &mut App)>;
@@ -217,7 +217,7 @@ fn heading_popup_item(label: SharedString) -> PopupMenuItem {
     .disabled(true)
 }
 
-/// What opens a [`Dropdown`]: a ghost button, its children side by side.
+/// What opens a [`Dropdown`]: a ghost [`Button`], its children side by side.
 /// The caller sets its width and padding, so it can line up with the rows
 /// around it.
 pub struct DropdownButton {
@@ -285,14 +285,16 @@ impl DropdownButton {
                         .subtle_focus_ring()
                 }
             })
+            // A button centers its content; this starts it at the leading
+            // edge, so the caller can push a child to the trailing one.
+            .justify_start()
+            .gap_2()
             .when_some(self.accessibility_label, |button, label| {
                 button.accessibility_label(label)
             })
             .refine_style(&self.style)
             .when(open, |button| button.bg(hover_fill))
-            // gpui-kit centers a button's content; this row runs its full
-            // width, so the caller can push a child to the trailing edge.
-            .child(h_flex().w_full().min_w_0().gap_2().children(self.children))
+            .children(self.children)
     }
 }
 
