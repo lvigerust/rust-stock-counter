@@ -49,24 +49,27 @@ fn cell_paddings(col_ix: usize, columns_count: usize) -> Edges<Pixels> {
 pub enum ProductColumn {
     Location,
     /// The overflow locations and what was counted at each.
-    Overflow,
+    OverflowLocations,
     ItemNumber,
     Name,
     SystemQuantity,
     CountedQuantity,
+    /// What was counted at the overflow locations together.
+    OverflowQuantity,
     Difference,
     Status,
 }
 
 impl ProductColumn {
     /// Every column, in the order the table shows them.
-    pub const ALL: [Self; 8] = [
+    pub const ALL: [Self; 9] = [
         Self::Location,
-        Self::Overflow,
+        Self::OverflowLocations,
         Self::ItemNumber,
         Self::Name,
         Self::SystemQuantity,
         Self::CountedQuantity,
+        Self::OverflowQuantity,
         Self::Difference,
         Self::Status,
     ];
@@ -78,7 +81,10 @@ impl ProductColumn {
     fn is_numeric(self) -> bool {
         matches!(
             self,
-            Self::SystemQuantity | Self::CountedQuantity | Self::Difference
+            Self::SystemQuantity
+                | Self::CountedQuantity
+                | Self::OverflowQuantity
+                | Self::Difference
         )
     }
 
@@ -95,20 +101,21 @@ impl ProductColumn {
     }
 
     /// Whether the column shows until the counter hides it. The overflow
-    /// locations are a closer look most counts don't need; the location
-    /// column already says how many there are.
+    /// columns are a closer look most counts don't need; the location
+    /// column already says how many overflow locations there are.
     fn is_shown_by_default(self) -> bool {
-        self != Self::Overflow
+        !matches!(self, Self::OverflowLocations | Self::OverflowQuantity)
     }
 
     fn key_and_name(self) -> (&'static str, &'static str) {
         match self {
             Self::Location => ("location", "Lokasjon"),
-            Self::Overflow => ("overflow", "Buffer"),
+            Self::OverflowLocations => ("overflow-locations", "Buffer lokasjon(er)"),
             Self::ItemNumber => ("item-number", "Varenummer"),
             Self::Name => ("name", "Produkt"),
             Self::SystemQuantity => ("system-quantity", "På lager"),
             Self::CountedQuantity => ("counted-quantity", "Talt"),
+            Self::OverflowQuantity => ("overflow-quantity", "Buffer"),
             Self::Difference => ("difference", "Differanse"),
             Self::Status => ("status", "Status"),
         }
@@ -119,11 +126,12 @@ impl ProductColumn {
     fn fixed_width(self) -> Option<f32> {
         match self {
             Self::Location => Some(160.),
-            Self::Overflow => Some(220.),
+            Self::OverflowLocations => Some(220.),
             Self::ItemNumber => Some(156.),
             Self::Name => None,
             Self::SystemQuantity => Some(136.),
             Self::CountedQuantity => Some(136.),
+            Self::OverflowQuantity => Some(136.),
             Self::Difference => Some(146.),
             Self::Status => Some(180.),
         }
@@ -247,7 +255,7 @@ impl ProductTable {
             let ordering = match column {
                 ProductColumn::Location => compare_locations(a.location(), b.location()),
                 // By the first overflow location, those without one last.
-                ProductColumn::Overflow => {
+                ProductColumn::OverflowLocations => {
                     return missing_last(
                         a.overflow_counts().next(),
                         b.overflow_counts().next(),
@@ -262,6 +270,14 @@ impl ProductTable {
                     return missing_last(
                         a.counted_quantity(),
                         b.counted_quantity(),
+                        direction,
+                        i64::cmp,
+                    );
+                }
+                ProductColumn::OverflowQuantity => {
+                    return missing_last(
+                        a.overflow_quantity(),
+                        b.overflow_quantity(),
                         direction,
                         i64::cmp,
                     );
@@ -496,7 +512,7 @@ impl TableDelegate for ProductTable {
             }
             // Each overflow location beside what was counted there, the
             // count muted so the locations read first.
-            ProductColumn::Overflow => h_flex()
+            ProductColumn::OverflowLocations => h_flex()
                 .min_w_0()
                 .gap_3()
                 .overflow_hidden()
@@ -527,6 +543,11 @@ impl TableDelegate for ProductTable {
                 product.system_quantity().to_string().into_any_element()
             }
             ProductColumn::CountedQuantity => self.render_counted_quantity(id, cx),
+            ProductColumn::OverflowQuantity => product
+                .overflow_quantity()
+                .map(|quantity| quantity.to_string())
+                .unwrap_or_default()
+                .into_any_element(),
             ProductColumn::Difference => match product.difference() {
                 Some(difference) => Delta::new(difference).into_any_element(),
                 None => div().into_any_element(),
@@ -569,7 +590,7 @@ impl TableDelegate for ProductTable {
                     .trim_start()
                     .to_string(),
             },
-            ProductColumn::Overflow => product
+            ProductColumn::OverflowLocations => product
                 .overflow_counts()
                 .map(|(location, quantity)| format!("{location} {quantity}"))
                 .collect::<Vec<_>>()
@@ -579,6 +600,10 @@ impl TableDelegate for ProductTable {
             ProductColumn::SystemQuantity => product.system_quantity().to_string(),
             ProductColumn::CountedQuantity => product
                 .counted_quantity()
+                .map(|quantity| quantity.to_string())
+                .unwrap_or_default(),
+            ProductColumn::OverflowQuantity => product
+                .overflow_quantity()
                 .map(|quantity| quantity.to_string())
                 .unwrap_or_default(),
             ProductColumn::Difference => product

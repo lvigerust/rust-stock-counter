@@ -498,9 +498,11 @@ fn the_columns_menu_hides_and_shows_columns(cx: &mut TestAppContext) {
     };
     assert!(counter.find("menu-item:Lokasjon").is_none());
 
-    // Every column is listed, and shown but the overflow locations.
+    // Every column is listed, and shown but the overflow ones.
     counter.click("columns");
-    assert_eq!(checked(&mut counter, "menu-item:Buffer"), Some(false));
+    for id in ["menu-item:Buffer lokasjon(er)", "menu-item:Buffer"] {
+        assert_eq!(checked(&mut counter, id), Some(false), "{id}");
+    }
     for id in [
         "menu-item:Lokasjon",
         "menu-item:Varenummer",

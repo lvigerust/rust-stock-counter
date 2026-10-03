@@ -165,6 +165,13 @@ impl Product {
             .map(|count| (count.location.as_str(), count.quantity))
     }
 
+    /// What was counted at the overflow locations together, `None` when
+    /// nothing was.
+    pub fn overflow_quantity(&self) -> Option<i64> {
+        (!self.overflow_counts.is_empty())
+            .then(|| self.overflow_counts().map(|(_, quantity)| quantity).sum())
+    }
+
     pub fn overflow_len(&self) -> usize {
         self.overflow_counts.len()
     }
@@ -641,6 +648,7 @@ mod tests {
         stocktake.set_count(id, "A1", 2);
         let product = stocktake.product(id);
         assert_eq!(product.counted_quantity(), Some(48));
+        assert_eq!(product.overflow_quantity(), Some(8));
         assert_eq!(product.difference(), Some(-1));
         // The pick location first, then the overflow locations in order.
         assert_eq!(
@@ -671,6 +679,7 @@ mod tests {
         stocktake.set_count(id, "D21", 0);
         assert!(!stocktake.product(id).is_counted());
         assert_eq!(stocktake.product(id).overflow_len(), 0);
+        assert_eq!(stocktake.product(id).overflow_quantity(), None);
         // Zero at the pick location is a count like any other.
         stocktake.set_count(id, "C4-7", 0);
         assert_eq!(stocktake.product(id).counted_quantity(), Some(0));
@@ -685,6 +694,7 @@ mod tests {
         assert_eq!(product.count_state(), CountState::PartlyCounted);
         assert!(!product.is_counted());
         assert_eq!(product.counted_quantity(), None);
+        assert_eq!(product.overflow_quantity(), Some(5));
         assert_eq!(product.counts().collect::<Vec<_>>(), [("D2-1", 5)]);
         assert_eq!(stocktake.counted_len(), 0);
 
