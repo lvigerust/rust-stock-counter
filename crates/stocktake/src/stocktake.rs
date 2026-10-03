@@ -80,6 +80,14 @@ struct OverflowCount {
     quantity: i64,
 }
 
+/// Two counts together, `None` only while neither has been made.
+fn add_counts(a: Option<i64>, b: Option<i64>) -> Option<i64> {
+    match (a, b) {
+        (Some(a), Some(b)) => Some(a + b),
+        (a, b) => a.or(b),
+    }
+}
+
 /// A location as the counter typed it, trimmed and upper-cased so one shelf
 /// isn't recorded twice.
 pub fn normalize_location(location: &str) -> String {
@@ -132,18 +140,26 @@ impl Product {
         location.is_empty() || location == normalize_location(self.location())
     }
 
-    /// Whether the pick location can be moved: only while nothing has been
-    /// counted there, so a counted pick location is never lost.
-    pub fn can_move_pick_location(&self) -> bool {
-        self.pick_count.is_none()
-    }
-
     /// What has been counted at `location`, `None` while nothing has.
     pub fn count_at(&self, location: &str) -> Option<i64> {
         if self.is_pick_location(location) {
             return self.pick_count;
         }
-        let location = normalize_location(location);
+        self.overflow_count_at(&normalize_location(location))
+    }
+
+    /// What would be counted at `location` once the pick location moved
+    /// there: the pick location's count, which moves with it, together with
+    /// anything counted there as an overflow location.
+    pub fn count_at_moved(&self, location: &str) -> Option<i64> {
+        if self.is_pick_location(location) {
+            return self.pick_count;
+        }
+        let overflow = self.overflow_count_at(&normalize_location(location));
+        add_counts(self.pick_count, overflow)
+    }
+
+    fn overflow_count_at(&self, location: &str) -> Option<i64> {
         self.overflow_counts
             .iter()
             .find(|count| count.location == location)
@@ -244,19 +260,21 @@ impl Product {
             .map(|counted| counted - self.system_quantity)
     }
 
-    /// Makes `location` the pick location, if it can be moved. Anything
-    /// counted there as an overflow location becomes the pick location's
-    /// count. Returns whether it was moved.
+    /// Makes `location` the pick location, unless it's empty. The pick
+    /// location's count moves with it, and anything counted there as an
+    /// overflow location is added to it, so the counted quantity stays the
+    /// same. Returns whether it was moved.
     fn move_pick_location(&mut self, location: &str) -> bool {
         let location = normalize_location(location);
-        if !self.can_move_pick_location() || location.is_empty() {
+        if location.is_empty() {
             return false;
         }
         if let Ok(ix) = self
             .overflow_counts
             .binary_search_by(|count| compare_locations(&count.location, &location))
         {
-            self.pick_count = Some(self.overflow_counts.remove(ix).quantity);
+            let overflow = self.overflow_counts.remove(ix).quantity;
+            self.pick_count = add_counts(self.pick_count, Some(overflow));
         }
         self.moved_location = (location != normalize_location(&self.location)).then_some(location);
         true
@@ -406,10 +424,10 @@ impl Stocktake {
         self.products[id.0].set_count(location, quantity);
     }
 
-    /// Makes `location` the product's pick location, as long as nothing has
-    /// been counted at the current one. Anything counted at `location` as an
-    /// overflow location becomes the pick location's count. Returns whether
-    /// it was moved.
+    /// Makes `location` the product's pick location, unless it's empty. The
+    /// pick location's count moves with it, and anything counted at
+    /// `location` as an overflow location is added to it. Returns whether it
+    /// was moved.
     pub fn move_pick_location(&mut self, id: ProductId, location: &str) -> bool {
         self.products[id.0].move_pick_location(location)
     }
@@ -772,9 +790,28 @@ mod tests {
         assert_eq!(product.count_at("C4-7"), None);
         assert_eq!(stocktake.search("D2-1"), [id]);
 
-        // Once counted, it stays.
-        assert!(!stocktake.move_pick_location(id, "E1"));
-        assert_eq!(stocktake.product(id).location(), "D2-1");
+        // Once counted, its count moves with it.
+        assert!(stocktake.move_pick_location(id, "E1"));
+        let product = stocktake.product(id);
+        assert_eq!(product.location(), "E1");
+        assert_eq!(product.count_at("E1"), Some(6));
+        assert_eq!(product.count_at("D2-1"), None);
+        assert!(!stocktake.move_pick_location(id, " "));
+    }
+
+    #[test]
+    fn a_moved_pick_count_is_added_to_one_at_the_new_location() {
+        let mut stocktake = stocktake();
+        let id = ProductId(1);
+        stocktake.set_count(id, "C4-7", 5);
+        stocktake.set_count(id, "D2-1", 2);
+        assert_eq!(stocktake.product(id).count_at_moved("d2-1"), Some(7));
+        assert_eq!(stocktake.product(id).count_at_moved("E1"), Some(5));
+        assert!(stocktake.move_pick_location(id, "D2-1"));
+        let product = stocktake.product(id);
+        assert_eq!(product.count_at("D2-1"), Some(7));
+        assert_eq!(product.overflow_len(), 0);
+        assert_eq!(product.counted_quantity(), Some(7));
     }
 
     #[test]

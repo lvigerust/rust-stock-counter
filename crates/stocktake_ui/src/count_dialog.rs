@@ -71,8 +71,9 @@ type SaveCallback = Rc<dyn Fn(Save, bool, &mut Window, &mut App)>;
 /// buttons are only enabled while the field holds a quantity. While the
 /// location already has a count, Enter adds to it, and a second button
 /// replaces it instead. It's also told whether the location should become
-/// the pick location: while the field holds another location and the pick
-/// location can still be moved, a checkbox asks. `on_cancel` runs when
+/// the pick location: while the field holds another location, a checkbox
+/// asks. Checked, the pick location's count moves there too, so that's the
+/// count Enter adds to. `on_cancel` runs when
 /// Escape or Avbryt close the dialog.
 pub(crate) fn open(
     product: &Product,
@@ -99,14 +100,17 @@ pub(crate) fn open(
         // Built again every frame, so the buttons follow the typing.
         let valid = parse_quantity(&input.read(cx).value()).is_some();
         let typed_location = location.read(cx).value();
-        let earlier = product.count_at(&typed_location);
         // What's left for the pick location once the buffer is counted.
         let expected = product
             .expected_at_pick_location()
             .filter(|_| product.is_pick_location(&typed_location));
-        let offers_move =
-            !product.is_pick_location(&typed_location) && product.can_move_pick_location();
+        let offers_move = !product.is_pick_location(&typed_location);
         let moves = offers_move && moves_pick_location.get();
+        let earlier = if moves {
+            product.count_at_moved(&typed_location)
+        } else {
+            product.count_at(&typed_location)
+        };
         let ring = cx.theme().ring;
         let surface = cx.theme().background;
         let muted = cx.theme().muted_foreground;

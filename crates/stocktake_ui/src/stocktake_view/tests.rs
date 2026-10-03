@@ -169,6 +169,9 @@ fn counts_at_overflow_locations_add_up(cx: &mut TestAppContext) {
             counter.press("secondary-a");
             counter.input(location);
             counter.press("tab");
+            // Past Erstatt plukklokasjon, left unchecked.
+            assert!(counter.is_focused("move-pick-location"));
+            counter.press("tab");
         }
         counter.input(quantity);
         // The dialog slides in, so its buttons are reached from the keyboard
@@ -257,14 +260,24 @@ fn a_count_can_move_the_pick_location(cx: &mut TestAppContext) {
     assert_eq!(location(&mut counter), "E5");
     assert_eq!(counter.counted(VENETO.0), Some(3));
 
-    // Now the pick location is counted, so it can't be replaced.
+    // A counted pick location can still be replaced, and its count moves
+    // with it: Enter adds to it there.
     counter.input(VENETO.0);
     counter.press("enter");
     assert_eq!(counter.value("location").as_deref(), Some("E5"));
     counter.press("shift-tab");
     counter.press("secondary-a");
     counter.input("F1");
-    assert!(counter.find("move-pick-location").is_none());
+    assert!(counter.find("add-count").is_none());
+    counter.press("tab");
+    assert!(counter.is_focused("move-pick-location"));
+    counter.press("space");
+    assert!(counter.find("add-count").is_some());
+    counter.press("tab");
+    counter.input("2");
+    counter.press("enter");
+    assert_eq!(location(&mut counter), "F1");
+    assert_eq!(counter.counted(VENETO.0), Some(5));
 }
 
 #[gpui_kit::test]

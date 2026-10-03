@@ -63,7 +63,7 @@ Today the stocktake is done in a spreadsheet on a laptop with a USB barcode scan
 - To register units at an overflow location, the counter types that location into the field before saving. Any text is accepted; it's trimmed and upper-cased (`c4-7` becomes `C4-7`) so one shelf isn't recorded twice.
 - If the product has no pick location, the field starts empty, and an empty location counts as the pick location.
 - When the field holds a location other than the pick location (compared after trimming and upper-casing), a checkbox **Erstatt plukklokasjon** appears below it, unchecked. Unchecked, the count is saved at an overflow location. Checked, the typed location becomes the product's pick location and the count is saved there; if units were already counted at that location as an overflow location, they become the pick location's count. Changing the field back to the pick location hides the checkbox.
-- The checkbox isn't shown once the pick location has been counted, so a counted pick location is never lost.
+- The pick location can be replaced at any time. What was counted there moves with it, and is added to anything already counted at the new location as an overflow location, so the counted quantity stays the same. With the box checked, the dialog offers **Erstatt** and **Legg til** against that count.
 - A moved pick location is used everywhere in the app: the table's location column, sorting, search and the aisle filter. Typing the stock list's location with the box checked moves it back.
 - Focus then returns to the search field for the next scan.
 - A product is **uncounted** until its pick location has been confirmed or overwritten. A product counted as zero is counted, so an empty pick shelf is recorded by counting zero there.

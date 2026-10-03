@@ -171,12 +171,12 @@ impl StocktakeView {
         let Some(open) = &mut self.open else {
             return;
         };
-        let earlier = open
-            .session
-            .read(cx)
-            .stocktake()
-            .product(id)
-            .count_at(&location);
+        let product = open.session.read(cx).stocktake().product(id);
+        let earlier = if moves_pick_location {
+            product.count_at_moved(&location)
+        } else {
+            product.count_at(&location)
+        };
         let quantity = match (save, earlier) {
             (Save::Add, Some(earlier)) => earlier + quantity,
             _ => quantity,
