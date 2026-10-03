@@ -507,7 +507,7 @@ fn the_columns_menu_hides_and_shows_columns(cx: &mut TestAppContext) {
         "menu-item:Lokasjon",
         "menu-item:Varenummer",
         "menu-item:Produkt",
-        "menu-item:På lager",
+        "menu-item:I lagersystemet",
         "menu-item:Talt",
         "menu-item:Differanse",
         "menu-item:Status",

@@ -172,6 +172,19 @@ impl Product {
             .then(|| self.overflow_counts().map(|(_, quantity)| quantity).sum())
     }
 
+    /// What the system quantity leaves for the pick location once the
+    /// overflow locations are counted, never below zero. `None` unless the
+    /// product is partly counted: with nothing counted elsewhere it's just
+    /// the system quantity, and once the pick location is counted there's
+    /// nothing left to expect.
+    pub fn expected_at_pick_location(&self) -> Option<i64> {
+        if self.is_counted() {
+            return None;
+        }
+        self.overflow_quantity()
+            .map(|overflow| (self.system_quantity - overflow).max(0))
+    }
+
     pub fn overflow_len(&self) -> usize {
         self.overflow_counts.len()
     }
@@ -696,17 +709,28 @@ mod tests {
         assert_eq!(product.counted_quantity(), None);
         assert_eq!(product.overflow_quantity(), Some(5));
         assert_eq!(product.counts().collect::<Vec<_>>(), [("D2-1", 5)]);
+        assert_eq!(product.expected_at_pick_location(), Some(44));
         assert_eq!(stocktake.counted_len(), 0);
 
         // Zero at the pick location counts it.
         stocktake.set_count(id, "C4-7", 0);
         let product = stocktake.product(id);
         assert_eq!(product.count_state(), CountState::Counted);
+        assert_eq!(product.expected_at_pick_location(), None);
         assert_eq!(product.counted_quantity(), Some(5));
         assert_eq!(
             product.counts().collect::<Vec<_>>(),
             [("C4-7", 0), ("D2-1", 5)]
         );
+    }
+
+    #[test]
+    fn nothing_is_expected_at_the_pick_location_beyond_the_system_quantity() {
+        let mut stocktake = stocktake();
+        let id = ProductId(1);
+        assert_eq!(stocktake.product(id).expected_at_pick_location(), None);
+        stocktake.set_count(id, "D2-1", 60);
+        assert_eq!(stocktake.product(id).expected_at_pick_location(), Some(0));
     }
 
     #[test]

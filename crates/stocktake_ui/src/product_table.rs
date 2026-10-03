@@ -11,7 +11,7 @@ use gpui_kit::{Div, Edges, Pixels, Stateful, px};
 use stocktake::{Product, ProductId, compare_locations, natural_cmp};
 use ui::{Delta, flash, prelude::*};
 
-use crate::{count_status::CountStatus, session::Session};
+use crate::{count_dialog::SYSTEM_QUANTITY, count_status::CountStatus, session::Session};
 
 /// How tall each row is: a 1.5rem line and [`ROW_PADDING`] above and below
 /// it. Table geometry is in pixels.
@@ -125,7 +125,7 @@ impl ProductColumn {
             Self::OverflowLocations => "Bufferlokasjon",
             Self::ItemNumber => "Varenummer",
             Self::Name => "Produkt",
-            Self::SystemQuantity => "På lager",
+            Self::SystemQuantity => SYSTEM_QUANTITY,
             Self::CountedQuantity => "Talt",
             Self::OverflowQuantity => "Buffer",
             Self::Difference => "Differanse",
@@ -141,7 +141,7 @@ impl ProductColumn {
             Self::OverflowLocations => Some(220.),
             Self::ItemNumber => Some(156.),
             Self::Name => None,
-            Self::SystemQuantity => Some(136.),
+            Self::SystemQuantity => Some(168.),
             Self::CountedQuantity => Some(136.),
             Self::OverflowQuantity => Some(136.),
             Self::Difference => Some(146.),

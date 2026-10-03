@@ -19,6 +19,10 @@ use gpui_kit::component::{
 use stocktake::Product;
 use ui::{Spacing, prelude::*};
 
+/// The system quantity's label, in the dialog and as the table's column
+/// header.
+pub(crate) const SYSTEM_QUANTITY: &str = "I lagersystemet";
+
 /// A single-line input that accepts whole, non-negative numbers.
 pub(crate) fn quantity_input(window: &mut Window, cx: &mut Context<InputState>) -> InputState {
     InputState::new(window, cx)
@@ -96,6 +100,10 @@ pub(crate) fn open(
         let valid = parse_quantity(&input.read(cx).value()).is_some();
         let typed_location = location.read(cx).value();
         let earlier = product.count_at(&typed_location);
+        // What's left for the pick location once the buffer is counted.
+        let expected = product
+            .expected_at_pick_location()
+            .filter(|_| product.is_pick_location(&typed_location));
         let offers_move =
             !product.is_pick_location(&typed_location) && product.can_move_pick_location();
         let moves = offers_move && moves_pick_location.get();
@@ -149,7 +157,7 @@ pub(crate) fn open(
                             .bordered(false)
                             .columns(1)
                             .item("Varenummer", item_number.clone(), 1)
-                            .item("I lagersystemet", system_quantity.clone(), 1),
+                            .item(SYSTEM_QUANTITY, system_quantity.clone(), 1),
                     )
                     .when_some(pick_count, |this, pick_count| {
                         this.child(location_counts(
@@ -189,6 +197,11 @@ pub(crate) fn open(
                             .when_some(earlier, |this, earlier| {
                                 this.child(div().text_sm().text_color(muted).child(format!(
                                     "Allerede talt {earlier} her. Enter legger til."
+                                )))
+                            })
+                            .when_some(expected, |this, expected| {
+                                this.child(div().text_sm().text_color(muted).child(format!(
+                                    "Forventet {expected} her, med det som er talt i buffer."
                                 )))
                             }),
                     ),
