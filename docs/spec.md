@@ -38,7 +38,7 @@ Today the stocktake is done in a spreadsheet on a laptop with a USB barcode scan
 
 - The whole stock list as a table: location, item number, name, system quantity (columns H, C, D, N), then counted quantity, difference, and whether the product is counted or uncounted.
 - The location column shows the pick location. A product counted at overflow locations shows how many after it, e.g. `C4-7 +2`, and its counted quantity is the total across all its locations.
-- Two columns are hidden until they're switched on in the columns menu. **Buffer lokasjon** lists each overflow location, and is headed **Buffer lokasjoner** once a product has more than one; sorted, it goes by the first overflow location. **Buffer** is what was counted at the overflow locations together. Either way, products without an overflow location sort last.
+- Two columns are hidden until they're switched on in the columns menu. **Bufferlokasjon** lists each overflow location, and is headed **Bufferlokasjoner** once a product has more than one; sorted, it goes by the first overflow location. **Buffer** is what was counted at the overflow locations together. Either way, products without an overflow location sort last.
 - The aisle filter goes by pick location only.
 - After a count is saved, the table scrolls to the product and its row briefly highlights, so the counter sees where the count landed.
 - When every product is counted, a summary says how many products have a difference, next to an export button.

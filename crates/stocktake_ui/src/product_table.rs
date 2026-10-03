@@ -121,8 +121,8 @@ impl ProductColumn {
     fn name(self, several_overflow_locations: bool) -> &'static str {
         match self {
             Self::Location => "Lokasjon",
-            Self::OverflowLocations if several_overflow_locations => "Buffer lokasjoner",
-            Self::OverflowLocations => "Buffer lokasjon",
+            Self::OverflowLocations if several_overflow_locations => "Bufferlokasjoner",
+            Self::OverflowLocations => "Bufferlokasjon",
             Self::ItemNumber => "Varenummer",
             Self::Name => "Produkt",
             Self::SystemQuantity => "På lager",
