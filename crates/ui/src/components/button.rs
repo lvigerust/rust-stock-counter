@@ -336,7 +336,13 @@ impl RenderOnce for Button {
             }))
             .children(label.map(|label| div().min_w_0().truncate().child(label)))
             .children(children);
-        base.group(HOVER_GROUP).refine_style(&style).child(row)
+        // gpui-kit fixes a medium button at 2rem, so padding never gets a say.
+        // Catalyst's is 2.25rem: a 1.5rem line and 0.375rem above and below.
+        // A caller's height still wins, as it's applied after.
+        base.group(HOVER_GROUP)
+            .when(matches!(size, Size::Medium), |base| base.h_9())
+            .refine_style(&style)
+            .child(row)
     }
 }
 
