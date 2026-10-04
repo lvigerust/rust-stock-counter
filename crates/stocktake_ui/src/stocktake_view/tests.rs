@@ -107,6 +107,16 @@ impl<'a> Counter<'a> {
             .and_then(|element| element.value().map(str::to_string))
     }
 
+    /// Whether the window itself has focus, rather than a control in it.
+    fn view_is_focused(&mut self) -> bool {
+        let view = self.view.clone();
+        self.cx
+            .update_window(self.window, |_, window, cx| {
+                view.read(cx).focus_handle.is_focused(window)
+            })
+            .unwrap()
+    }
+
     /// The counted quantity of the product with `barcode`, as the session
     /// holds it.
     fn counted(&mut self, barcode: &str) -> Option<i64> {
@@ -347,8 +357,8 @@ fn importing_a_stock_list_starts_a_saved_stocktake(cx: &mut TestAppContext) {
 
     let mut counter = Counter::open(cx, store.clone());
     let view = counter.view.clone();
-    let import = |counter: &mut Counter, path: &PathBuf| {
-        let path = path.clone();
+    let import = |counter: &mut Counter, path: &Path| {
+        let path = path.to_path_buf();
         counter.step(|window, cx| {
             view.update(cx, |view, cx| {
                 view.import_stock_list(ImportSource::File(path), window, cx)
@@ -584,14 +594,21 @@ fn the_differences_list_counted_products_that_differ(cx: &mut TestAppContext) {
     assert_eq!(counter.counted(BURANO.0), Some(49));
     assert_eq!(differences(&mut counter), 0);
     assert!(counter.find("search").is_none());
-    let view = counter.view.clone();
-    let focused = counter
-        .cx
-        .update_window(counter.window, |_, window, cx| {
-            view.read(cx).focus_handle.is_focused(window)
-        })
-        .unwrap();
-    assert!(focused);
+    assert!(counter.view_is_focused());
+}
+
+#[gpui_kit::test]
+fn switching_mode_moves_focus_off_the_search(cx: &mut TestAppContext) {
+    let mut counter = Counter::resume(cx, "mode-focus");
+    assert!(counter.is_focused("search"));
+
+    // The search goes away with the stock list. Focus returns to the window,
+    // so the shortcut back still has somewhere to land.
+    counter.press("secondary-2");
+    assert!(counter.find("search").is_none());
+    assert!(counter.view_is_focused());
+    counter.press("secondary-1");
+    assert!(counter.find("search").is_some());
 }
 
 #[gpui_kit::test]
