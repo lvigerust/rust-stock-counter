@@ -218,9 +218,10 @@ impl RenderOnce for Button {
             mut style,
             children,
         } = self;
-        let base = base.when_some(accessibility_label.or(label.clone()), |base, label| {
-            base.accessibility_label(label)
-        });
+        let base = base.when_some(
+            accessibility_label.or_else(|| label.clone()),
+            |base, label| base.accessibility_label(label),
+        );
 
         // Faded in its own colors, as Catalyst's is, not in gpui-kit's
         // muted ones.

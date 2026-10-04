@@ -7,8 +7,10 @@ use gpui_kit::SharedString;
 /// The file's name, or the whole path when it has none.
 pub(crate) fn file_name(path: &Path) -> SharedString {
     path.file_name()
-        .map(|name| name.to_string_lossy().into_owned())
-        .unwrap_or_else(|| path.display().to_string())
+        .map_or_else(
+            || path.display().to_string(),
+            |name| name.to_string_lossy().into_owned(),
+        )
         .into()
 }
 

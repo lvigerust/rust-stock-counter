@@ -351,21 +351,16 @@ impl ProductTable {
             directed(ordering, direction)
         });
     }
+}
 
-    fn render_counted_quantity(&self, id: ProductId, cx: &App) -> AnyElement {
-        match self
-            .session
-            .read(cx)
-            .stocktake()
-            .product(id)
-            .counted_quantity()
-        {
-            Some(quantity) => quantity.to_string().into_any_element(),
-            None => div()
-                .text_color(cx.theme().muted_foreground)
-                .child("–")
-                .into_any_element(),
-        }
+/// The counted quantity, or a muted dash while the product is uncounted.
+fn render_counted_quantity(product: &Product, cx: &App) -> AnyElement {
+    match product.counted_quantity() {
+        Some(quantity) => quantity.to_string().into_any_element(),
+        None => div()
+            .text_color(cx.theme().muted_foreground)
+            .child("–")
+            .into_any_element(),
     }
 }
 
@@ -600,7 +595,7 @@ impl TableDelegate for ProductTable {
             ProductColumn::SystemQuantity => {
                 product.system_quantity().to_string().into_any_element()
             }
-            ProductColumn::CountedQuantity => self.render_counted_quantity(id, cx),
+            ProductColumn::CountedQuantity => render_counted_quantity(product, cx),
             ProductColumn::OverflowQuantity => product
                 .overflow_quantity()
                 .map(|quantity| quantity.to_string())

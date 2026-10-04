@@ -52,8 +52,8 @@ actions!(
     ]
 );
 
-/// The application's name, shown atop the sidebar and in the menu bar. It
-/// must match `CFBundleName` in the shell's `Info.plist`.
+/// The application's name, in the menu bar and the window's title. It must
+/// match `CFBundleName` in the shell's `Info.plist`.
 pub const APP_NAME: &str = "Scala Bad";
 
 /// Key context of the whole window.

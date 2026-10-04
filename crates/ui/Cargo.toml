@@ -8,5 +8,8 @@ publish.workspace = true
 [lib]
 path = "src/ui.rs"
 
+[lints]
+workspace = true
+
 [dependencies]
 gpui-kit.workspace = true

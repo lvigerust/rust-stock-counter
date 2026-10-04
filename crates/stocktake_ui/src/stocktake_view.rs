@@ -465,8 +465,8 @@ impl StocktakeView {
                                 .unavailable(self.unavailable.iter().cloned())
                                 .recent(
                                     self.recent.iter().map(Path::to_path_buf),
-                                    cx.listener(|this, path: &PathBuf, window, cx| {
-                                        this.open_recent(path.clone(), window, cx)
+                                    cx.listener(|this, path: &Path, window, cx| {
+                                        this.open_recent(path.to_path_buf(), window, cx)
                                     }),
                                 ),
                         ),

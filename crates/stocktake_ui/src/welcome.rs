@@ -1,6 +1,11 @@
 //! The screen before any stock list is imported.
 
-use std::{collections::HashSet, path::PathBuf, rc::Rc, time::Duration};
+use std::{
+    collections::HashSet,
+    path::{Path, PathBuf},
+    rc::Rc,
+    time::Duration,
+};
 
 use gpui_kit::Div;
 use gpui_kit::component::{alert::Alert, kbd::Kbd};
@@ -15,7 +20,7 @@ use crate::{
 const STAGGER: Duration = Duration::from_millis(70);
 
 /// Opens one of the recent stock lists.
-type OpenRecent = Rc<dyn Fn(&PathBuf, &mut Window, &mut App)>;
+type OpenRecent = Rc<dyn Fn(&Path, &mut Window, &mut App)>;
 
 /// The logo over short lists of ways to start, like Zed's welcome:
 /// open a stock list, drop one on the window, or reopen a recent one.
@@ -46,7 +51,7 @@ impl Welcome {
     pub fn recent(
         mut self,
         paths: impl IntoIterator<Item = PathBuf>,
-        on_open: impl Fn(&PathBuf, &mut Window, &mut App) + 'static,
+        on_open: impl Fn(&Path, &mut Window, &mut App) + 'static,
     ) -> Self {
         self.recent = paths.into_iter().collect();
         self.on_open_recent = Some(Rc::new(on_open));
@@ -72,7 +77,7 @@ impl RenderOnce for Welcome {
         let recent = self
             .on_open_recent
             .filter(|_| !self.recent.is_empty())
-            .map(|on_open| render_recent(self.recent, &self.unavailable, on_open, cx));
+            .map(|on_open| render_recent(self.recent, &self.unavailable, &on_open, cx));
         v_flex()
             .size_full()
             .p_6()
@@ -131,7 +136,7 @@ fn render_start(window: &mut Window, cx: &mut App) -> impl IntoElement {
 fn render_recent(
     paths: Vec<PathBuf>,
     unavailable: &HashSet<PathBuf>,
-    on_open: OpenRecent,
+    on_open: &OpenRecent,
     cx: &App,
 ) -> Div {
     let muted = cx.theme().muted_foreground;

@@ -355,14 +355,14 @@ enum EntryLook {
 impl MenuEntry {
     fn look(&self) -> EntryLook {
         match self {
-            MenuEntry::Item(item) => EntryLook::Item {
+            Self::Item(item) => EntryLook::Item {
                 label: item.label.clone(),
                 description: item.description.clone(),
                 checked: item.checked,
                 disabled: item.disabled,
             },
-            MenuEntry::Heading(label) => EntryLook::Heading(label.clone()),
-            MenuEntry::Divider => EntryLook::Divider,
+            Self::Heading(label) => EntryLook::Heading(label.clone()),
+            Self::Divider => EntryLook::Divider,
         }
     }
 }

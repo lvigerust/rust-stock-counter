@@ -76,7 +76,7 @@ type SaveCallback = Rc<dyn Fn(Save, bool, &mut Window, &mut App)>;
 /// count Enter adds to. `on_cancel` runs when
 /// Escape or Avbryt close the dialog.
 pub(crate) fn open(
-    product: &Product,
+    product: Product,
     location: Entity<InputState>,
     input: Entity<InputState>,
     on_save: impl Fn(Save, bool, &mut Window, &mut App) + 'static,
@@ -84,7 +84,6 @@ pub(crate) fn open(
     window: &mut Window,
     cx: &mut App,
 ) {
-    let product = product.clone();
     let title: SharedString = product.name().to_string().into();
     let item_number = or_dash(product.item_number());
     let system_quantity: SharedString = product.system_quantity().to_string().into();

@@ -30,11 +30,11 @@ impl StocktakeView {
             Lookup::Found(id) => self.select_product(id, window, cx),
             // The table already shows the matches to pick from.
             Lookup::Ambiguous(_) => {}
-            Lookup::NotFound => self.show_not_found(query, window, cx),
+            Lookup::NotFound => self.show_not_found(&query, window, cx),
         }
     }
 
-    fn show_not_found(&mut self, query: String, window: &mut Window, cx: &mut Context<Self>) {
+    fn show_not_found(&mut self, query: &str, window: &mut Window, cx: &mut Context<Self>) {
         // Selected, so the next scan replaces the text instead of appending to it.
         self.focus_search(window, cx);
         let title: SharedString = format!("Fant ingen vare for «{query}»").into();
@@ -116,7 +116,7 @@ impl StocktakeView {
 
         let view = cx.entity().downgrade();
         count_dialog::open(
-            &product,
+            product,
             location,
             input.clone(),
             {
