@@ -14,7 +14,8 @@ It's written in Rust on [GPUI](https://www.gpui.rs/) through [gpui-kit](https://
 4. **Read it in the background.** `read_file` runs `stocktake::stock_list::read` on the background executor. That function validates the workbook and returns `Vec<Product>` or an `ImportError`.
 5. **Open it.** `finish_import` wraps the products in a `Stocktake`, puts that in a `Session` entity (`session.rs`), and calls `open_stocktake`. That creates the search field, the `DataTable` with its `ProductTable` delegate (`product_table.rs`), and the subscriptions between them. The session is saved straight away and the file joins the recent list.
 6. **Count.** A scan types into the search; Enter runs `Stocktake::lookup`, selects the row and opens the count dialog (`count_dialog.rs`). Enter in the dialog calls `Session::record_count`, which saves to disk. Focus then returns to an empty search, and the counted row scrolls into view and flashes (`stocktake_view/counting.rs`).
-7. **Export.** Cmd/Ctrl-E writes a snapshot through `stocktake::export::write`, again in the background.
+7. **Check.** Cmd/Ctrl-2, or the menu atop the sidebar, switches the main pane to the differences (`stocktake_view/mode.rs`): a second table of the counted products whose counted quantity differs from the system quantity. Picking one counts it again; once it matches, it leaves the table.
+8. **Export.** Cmd/Ctrl-E writes a snapshot through `stocktake::export::write`, again in the background.
 
 ## Crates
 
@@ -55,9 +56,10 @@ crates/stocktake_ui/src/
 │   └── stocktake_view/
 │       ├── counting.rs    scan → count dialog → saved count → next scan
 │       ├── files.rs       import (file dialog, drop, recent), export
-│       ├── sidebar.rs     status and aisle filters, starting over, hiding and resizing the sidebar
+│       ├── mode.rs        Mode: what the main pane shows, counting or the differences
+│       ├── sidebar.rs     mode menu, status and aisle filters, starting over, hiding and resizing the sidebar
 │       └── tests.rs       UI integration tests of the window
-├── product_table.rs       ProductTable: the DataTable delegate (rows, sorting, cells)
+├── product_table.rs       ProductTable: the DataTable delegate (rows, columns, sorting, cells)
 ├── count_dialog.rs        the count dialog, and what counts as a quantity
 ├── welcome.rs             Welcome: the screen before a stock list is imported
 ├── count_status.rs        CountStatus: "Talt" / "Ikke talt" marker
@@ -74,15 +76,17 @@ crates/stocktake_ui/src/
 | Whether the last save succeeded | `Session::save_state` | The stocktake |
 | Search text | `OpenStocktake::search` (`Entity<InputState>`) | The stocktake |
 | Status and aisle filters | `OpenStocktake::filter` (`stocktake::Filter`) | The stocktake |
-| Rows shown, sort, column widths, last-counted flash | `ProductTable` inside `OpenStocktake::table` | The stocktake |
-| The differences' rows, sort and column widths | A second `ProductTable` (`Scope::Differences`) inside `OpenStocktake::differences` | The stocktake |
-| The product being counted and its quantity field | `OpenStocktake::count` (`Count`) | One open count dialog |
+| Rows shown, columns shown, sort, column widths, last-counted flash | `ProductTable` inside `OpenStocktake::table` | The stocktake |
+| The differences' rows, columns, sort and column widths | A second `ProductTable` (`Scope::Differences`) inside `OpenStocktake::differences` | The stocktake |
+| The product being counted, its location and quantity fields | `OpenStocktake::count` (`Count`) | One open count dialog |
+| Counting or differences | `StocktakeView::mode` (`Mode`) | The window |
 | Recent stock lists | `StocktakeView::recent` | The window |
+| Which recent stock lists weren't found | `StocktakeView::unavailable`, refreshed by `recent_check` | The window |
 | Sidebar hidden | `StocktakeView::sidebar_collapsed` | The window |
 | Sidebar width | `StocktakeView::sidebar_width` | The window (not saved between launches) |
 | Aisle filter closed | `StocktakeView::aisle_filter_collapsed` | The window |
 | Read in progress | `StocktakeView::import_task` | One import |
-| Hover/focus of a row button | GPUI keyed element state (`RowButton`) | The element |
+| Hover/focus of a button; whether a dropdown's menu is open | GPUI keyed element state (gpui-kit's `Button`, `ui::Dropdown`) | The element |
 
 The central rule is that **everything tied to one stocktake lives in `OpenStocktake`**. `StocktakeView::open` is `Option<OpenStocktake>`, so importing a new list or pressing "Tøm varetelling" drops all of it at once. Nothing has to be reset by hand, and no field can outlive the stocktake it describes.
 
@@ -100,6 +104,7 @@ Commands are GPUI actions declared in `stocktake_ui.rs` and handled in `Stocktak
 | `ExportStocktake` | Cmd/Ctrl-E | `files.rs` `export_stocktake` | With a stocktake |
 | `FocusSearch` | Cmd/Ctrl-F | `counting.rs` `focus_search` | With a stocktake |
 | `ToggleSidebar` | Cmd/Ctrl-B | `sidebar.rs` `toggle_sidebar` | With a stocktake |
+| `ShowCounting` / `ShowDifferences` | Cmd/Ctrl-1 / Cmd/Ctrl-2 | `mode.rs` `set_mode` | With a stocktake |
 | `FocusNext` / `FocusPrevious` | Tab / Shift-Tab | `move_focus` | Always; skips the table |
 | `Quit` (shell) | Cmd/Ctrl-Q | `main.rs` | Always |
 
@@ -166,10 +171,10 @@ Validation failures are `ImportError` variants: `NotFound`, `UnsupportedFormat`,
 Root (gpui-kit; added by open_window: dialogs, notifications)
 └── StocktakeView                         key context "Stocktake", the window's focus handle
     ├── Sidebar (only with a stocktake)   ui::Sidebar parts, sidebar.rs
-    │   └── WindowBar · app name · status and aisle checkboxes · "Tøm varetelling" (SidebarItem → RowButton)
+    │   └── WindowBar · mode menu (ui::Dropdown) · status and aisle checkboxes · "Tøm varetelling" (SidebarItem → RowButton) · "Eksporter telling"
     └── main pane
-        ├── WindowBar                     traffic lights when the sidebar is hidden, search field
-        ├── DataTable(ProductTable)       with a stocktake
+        ├── WindowBar                     traffic lights when the sidebar is hidden; search field and columns menu while counting
+        ├── DataTable(ProductTable)       with a stocktake: the stock list, or the differences
         │   or Welcome                    without one (RowButton rows)
         └── status bar                    progress and save state, with a stocktake
 ```
@@ -177,7 +182,7 @@ Root (gpui-kit; added by open_window: dialogs, notifications)
 - **Entities vs. values.** Only things with state across frames are entities: `StocktakeView`, `Session`, the two `InputState`s and the `TableState`. Everything else (`Welcome`, `CountStatus`, the `ui` components) is `RenderOnce`, rebuilt from values each frame.
 - **Subscriptions are owned by what they serve.** Those on the search, table and session are stored in `OpenStocktake::_subscriptions` and end with it. The count field's subscription lives in `Count`. The window-bounds observer, which refits the product column, lives on the view. The shell's appearance observer is detached because it lasts as long as the window.
 - **Async work** runs on the background executor and returns through a `WeakEntity`, so a closed window just drops the result. `import_task` holds the read in progress, and starting another import replaces (cancels) it, so the last file chosen wins.
-- **Focus.** The view's own `FocusHandle` keeps shortcuts working when no control has focus. Opening a stocktake focuses the search. The count dialog's field is focused with `defer_in` because the dialog takes focus for itself first. Tab skips the table (`move_focus`), and hiding the sidebar moves focus off the button that disappears. A row that's a button (`ui::RowButton`) keys its focus handle by element id and builds it with `.tab_stop(true)`: GPUI ignores an element's `tab_index` when a handle is passed to `track_focus`.
+- **Focus.** The view's own `FocusHandle` keeps shortcuts working when no control has focus. Opening a stocktake focuses the search. The count dialog's field is focused with `defer_in` because the dialog takes focus for itself first. Tab skips the table (`move_focus`). Whenever the focused control is about to leave the screen (hiding the sidebar takes its button, switching mode takes the search and the table) focus returns to the view first, so Tab and the shortcuts still have somewhere to land. A row that's a button (`ui::RowButton`) is a gpui-kit `Button`, which keys its focus handle by element id and builds it with `.tab_stop(true)`: GPUI ignores an element's `tab_index` when a handle is passed to `track_focus`.
 - **Identity.** Table rows are keyed by `ProductId::line()` and recent files by their path, never by position, so animation and focus follow the item through filtering and reordering.
 - **Layout.** The window opens maximized. The layout is flat and edge to edge (a visual reference to [tty7](https://github.com/l0ng-ai/tty7)), and the product column takes whatever width the fixed columns leave (`fit_columns`). The sidebar can be resized by dragging its trailing edge, between 200 and 400 px, and a double-click on the edge resets it to 256 px. Its width is a fixed number of pixels the view owns, not a share of the window, so maximizing the window doesn't widen it. The drag uses GPUI's own `on_drag` and `on_drag_move` (`DraggedSidebar` in `sidebar.rs`) rather than gpui-kit's `h_resizable`, which rescales panels by percentage when the window resizes and emits no event the product column could be refitted on.
 
@@ -217,6 +222,7 @@ Errors are never only logged: each reaches the counter in the window.
 - **A rule about products or counting** (e.g. a maximum plausible quantity): `crates/stocktake`, with a unit test there.
 - **A new column read from the export:** a constant in `stock_list::column`, a field on `Product` (`#[serde(default)]` keeps old saves loading), a fixture test, then the column in `ProductTable` and perhaps `export::write`.
 - **A new command:** add it to `actions!` in `stocktake_ui.rs`, bind it in `init`, handle it in `StocktakeView::render` (inside `.when(is_open, …)` if it needs a stocktake), and add a menu item in `crates/varetelling/src/menus.rs`.
+- **Another view of the stocktake** (like the differences): a `Mode` variant in `stocktake_view/mode.rs` with its action, what the sidebar's body and the main pane show for it, and a `Scope` in `product_table.rs` if it's another table.
 - **Something that changes counts:** a method on `Session`, which saves, so the persistence guarantee holds.
 - **Per-stocktake UI state:** a field on `OpenStocktake`, never on `StocktakeView`.
 - **A new dialog:** a module like `count_dialog.rs` that takes callbacks. Its workflow goes in a `stocktake_view/` child module.
@@ -229,12 +235,12 @@ Errors are never only logged: each reaches the counter in the window.
 | --- | --- | --- |
 | Domain | `crates/stocktake/src/*.rs` | Import of the sample export and of generated workbooks (header order, numbers as text, blank rows, missing columns, bad quantities, empty, missing/damaged/unsupported files), search order, lookup, aisles, export, saving, damaged saves, recent list |
 | Model | `crates/stocktake_ui/src/session.rs` | A count is saved at once; a failed save keeps the count, marks it unsaved and emits `SaveFailed` |
-| UI integration | `crates/stocktake_ui/src/stocktake_view/tests.rs` | The real window, headless: importing a workbook (rejected, then accepted, saved and remembered); scan → count → saved → back to search; a scan into the count dialog; cancelling; Tab reaching the welcome's rows; hiding and showing the sidebar by click, shortcut and keyboard |
-| Pure helpers | `count_dialog.rs`, `product_table.rs`, `path_display.rs` | Quantity parsing, uncounted-last sorting, folder display |
+| UI integration | `crates/stocktake_ui/src/stocktake_view/tests.rs` | The real window, headless: importing a workbook (rejected, then accepted, saved and remembered); scan → count → saved → back to search; counts at overflow locations adding up, replacing and moving the pick location; a scan into the count dialog; cancelling; Tab skipping a disabled Lagre; Tab reaching the welcome's rows, and passing a missing recent file by; hiding and showing the sidebar by click, shortcut and keyboard; the mode menu and shortcuts switching the pane and moving focus off the search; the differences listing and counting again; the columns menu hiding and showing columns |
+| Pure helpers | `count_dialog.rs`, `product_table.rs`, `path_display.rs`, `ui/src/styles/spacing.rs` | Quantity parsing, uncounted-last sorting, folder display, the spacing scale |
 
-Run everything with `cargo test --workspace`; a plain `cargo test` only runs the default member (the shell). The UI tests use gpui-kit's `test-support` feature, enabled for `stocktake_ui`'s tests. `ui::RowButton` registers itself for them with `.test_support()`, which does nothing in normal builds.
+Run everything with `cargo test --workspace`; a plain `cargo test` only runs the default member (the shell). The UI tests use gpui-kit's `test-support` feature, enabled for `stocktake_ui`'s tests. gpui-kit's own components register themselves for it; a row of our own that the tests look up, such as a `ui::DropdownItem`, calls `.test_support()`, which does nothing in normal builds. `.github/workflows/ci.yml` runs the same formatting, Clippy and test commands on every push.
 
-`stock_list::tests::reads_the_sample_export` reads a real export, `data/Vareliste - varetelling.xlsx`, alongside the generated fixtures. `data/` also holds the screenshots of the projects in `INSPIRATION.md`.
+`stock_list::tests::reads_the_sample_export` reads a real export, `data/Vareliste - varetelling.xlsx`, alongside the generated fixtures. The screenshots of the projects in [inspiration.md](inspiration.md) are in `docs/images/`.
 
 ## Patterns borrowed from other projects
 

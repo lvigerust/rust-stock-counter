@@ -1,0 +1,31 @@
+# Checks every push and pull request the way AGENTS.md asks for locally:
+# formatting, Clippy with warnings denied, and every crate's tests. The UI
+# tests open headless windows, so they run on a runner without a display.
+# GPUI's macOS backend is what the app ships with, so it's checked there.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Format
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+      - name: Test
+        run: cargo test --workspace --locked
