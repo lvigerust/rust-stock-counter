@@ -8,7 +8,7 @@ use gpui_kit::component::{
 use gpui_kit::{ClickEvent, CursorStyle, DragMoveEvent, Empty, Focusable as _, Pixels, px};
 use stocktake::CountState;
 use ui::{
-    Button, Dropdown, DropdownButton, DropdownItem, DropdownMenu, Heading, Sidebar, SidebarBody,
+    Button, Dropdown, DropdownButton, DropdownItem, DropdownMenu, Label, Sidebar, SidebarBody,
     SidebarFooter, SidebarHeader, SidebarHeading, SidebarItem, SidebarSection, SidebarSpacer,
     Spacing, Text, WindowBar, WindowBarItem, prelude::*,
 };
@@ -372,7 +372,7 @@ fn render_mode_menu(current: Mode, cx: &App) -> impl IntoElement {
     let button = DropdownButton::new()
         .w_full()
         .p_2()
-        .child(Heading::new(current.label()).flex_1().min_w_0().truncate())
+        .child(Label::new(current.label()).flex_1().min_w_0().truncate())
         .child(
             Icon::new(IconName::ChevronDown)
                 .small()

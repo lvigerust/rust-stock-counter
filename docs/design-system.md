@@ -10,7 +10,7 @@ Four roles, each a `ui` component. The app reads in `text_sm` (14px at the defau
 
 | Role | Part | Size, weight, color | Catalyst | Used for |
 | --- | --- | --- | --- | --- |
-| Heading | `Heading` | sm, semibold, foreground | `Subheading` | The mode atop the sidebar, an empty state's first line |
+| Heading | `Heading` | sm, semibold, foreground | `Subheading` | An empty state's first line |
 | Label | `Label` | sm, medium, foreground | `Label` | What a control or a group of values is; `Field` draws it |
 | Text | `Text` | sm, regular, muted | `Text` | Help under a field, why a list is empty, counts beside labels |
 | Section heading | `SectionHeading` | xs, medium, muted | `SidebarHeading`, `DropdownHeading` | Over a group of rows: sidebar sections, menu groups, the welcome's lists, a tooltip's list |
