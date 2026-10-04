@@ -59,20 +59,3 @@ impl StocktakeView {
         cx.notify();
     }
 }
-
-/// The main pane in [`Mode::Differences`], until there's a view of them: a
-/// heading and a line on what's coming, centered.
-pub(super) fn render_differences(cx: &App) -> impl IntoElement + use<> {
-    v_flex()
-        .size_full()
-        .items_center()
-        .justify_center()
-        .gap_2()
-        .child(div().text_lg().font_semibold().child("Differanse"))
-        .child(
-            div()
-                .text_sm()
-                .text_color(cx.theme().muted_foreground)
-                .child("Her kommer en oversikt over varene der talt antall ikke stemmer med lagersystemet."),
-        )
-}

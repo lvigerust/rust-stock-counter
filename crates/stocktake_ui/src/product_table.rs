@@ -95,13 +95,6 @@ impl ProductColumn {
         self != Self::Name
     }
 
-    /// Whether the column shows until the counter hides it. The overflow
-    /// columns are a closer look most counts don't need; the location
-    /// column already says how many overflow locations there are.
-    fn is_shown_by_default(self) -> bool {
-        !matches!(self, Self::OverflowLocations | Self::OverflowQuantity)
-    }
-
     fn key(self) -> &'static str {
         match self {
             Self::Location => "location",
@@ -150,6 +143,46 @@ impl ProductColumn {
     }
 }
 
+/// Which of the stocktake's products a table lists.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Scope {
+    /// The whole stock list, narrowed by the search and the sidebar's
+    /// filters, for counting.
+    StockList,
+    /// The counted products whose counted quantity differs from the system
+    /// quantity.
+    Differences,
+}
+
+impl Scope {
+    /// The columns shown until the counter changes them. The overflow
+    /// columns are a closer look most counts don't need; the location column
+    /// already says how many overflow locations there are. The differences
+    /// are all counted, so they leave out the status.
+    fn default_columns(self) -> Vec<ProductColumn> {
+        let shown: &[ProductColumn] = match self {
+            Self::StockList => &[
+                ProductColumn::Location,
+                ProductColumn::ItemNumber,
+                ProductColumn::Name,
+                ProductColumn::SystemQuantity,
+                ProductColumn::CountedQuantity,
+                ProductColumn::Difference,
+                ProductColumn::Status,
+            ],
+            Self::Differences => &[
+                ProductColumn::Location,
+                ProductColumn::ItemNumber,
+                ProductColumn::Name,
+                ProductColumn::SystemQuantity,
+                ProductColumn::CountedQuantity,
+                ProductColumn::Difference,
+            ],
+        };
+        shown.to_vec()
+    }
+}
+
 /// When the most recently counted product was counted. The flash is timed
 /// from here rather than from the row element, which is recreated whenever
 /// the row scrolls back into view.
@@ -163,7 +196,9 @@ pub struct LastCounted {
 /// and how each cell looks. The data itself is read from the [`Session`].
 pub struct ProductTable {
     session: Entity<Session>,
-    /// The products matching the search, in the storage's walking order.
+    scope: Scope,
+    /// The products in [`Self::scope`] matching the search, in the
+    /// storage's walking order.
     matches: Vec<ProductId>,
     /// The columns shown, in the order of [`ProductColumn::ALL`].
     columns: Vec<ProductColumn>,
@@ -177,16 +212,18 @@ pub struct ProductTable {
 }
 
 impl ProductTable {
-    pub fn new(session: Entity<Session>, cx: &App) -> Self {
-        let matches = session.read(cx).stocktake().search("");
+    pub fn new(session: Entity<Session>, scope: Scope, cx: &App) -> Self {
+        let stocktake = session.read(cx).stocktake();
+        let matches = match scope {
+            Scope::StockList => stocktake.search(""),
+            Scope::Differences => stocktake.differences(),
+        };
         Self {
             session,
+            scope,
             rows: matches.clone(),
             matches,
-            columns: ProductColumn::ALL
-                .into_iter()
-                .filter(|column| column.is_shown_by_default())
-                .collect(),
+            columns: scope.default_columns(),
             sort: None,
             width: px(0.),
             last_counted: None,
@@ -589,14 +626,41 @@ impl TableDelegate for ProductTable {
         _: &mut Window,
         cx: &mut Context<TableState<Self>>,
     ) -> impl IntoElement {
-        v_flex()
+        let empty = v_flex()
             .size_full()
             .items_center()
             .justify_center()
             .gap_2()
-            .text_color(cx.theme().muted_foreground)
-            .child(Icon::new(IconName::SearchX).large())
-            .child(div().text_sm().child("Ingen varer passer søket"))
+            .text_color(cx.theme().muted_foreground);
+        match self.scope {
+            Scope::StockList => empty
+                .child(Icon::new(IconName::SearchX).large())
+                .child(div().text_sm().child("Ingen varer passer søket")),
+            // Says what's left to count, as that's what could still turn up
+            // a difference.
+            Scope::Differences => {
+                let uncounted = self.session.read(cx).stocktake().uncounted_len();
+                let detail = match uncounted {
+                    0 => "Alle varene stemmer med lagersystemet.".to_string(),
+                    1 => "Alle talte varer stemmer med lagersystemet. 1 vare er ikke talt ennå."
+                        .to_string(),
+                    _ => format!(
+                        "Alle talte varer stemmer med lagersystemet. \
+                         {uncounted} varer er ikke talt ennå."
+                    ),
+                };
+                empty
+                    .child(Icon::new(IconName::CircleCheck).large())
+                    .child(
+                        div()
+                            .text_sm()
+                            .font_medium()
+                            .text_color(cx.theme().foreground)
+                            .child("Ingen differanse"),
+                    )
+                    .child(div().text_sm().child(detail))
+            }
+        }
     }
 
     fn cell_text(&self, row_ix: usize, col_ix: usize, cx: &App) -> String {

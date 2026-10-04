@@ -5,6 +5,7 @@
 use gpui_kit::component::{
     WindowExt as _,
     input::{InputEvent, InputState},
+    table::TableState,
 };
 use stocktake::{Lookup, ProductId};
 use ui::prelude::*;
@@ -12,7 +13,7 @@ use ui::prelude::*;
 use super::{Count, Mode, StocktakeView};
 use crate::{
     count_dialog::{self, Save, location_input, parse_quantity, quantity_input},
-    product_table::LastCounted,
+    product_table::{LastCounted, ProductTable},
 };
 
 impl StocktakeView {
@@ -65,17 +66,16 @@ impl StocktakeView {
         }
     }
 
-    /// A row was selected, by a click, the keyboard or [`Self::select_product`].
+    /// A row of `table` was selected, by a click, the keyboard or
+    /// [`Self::select_product`].
     pub(super) fn select_row(
         &mut self,
+        table: &Entity<TableState<ProductTable>>,
         row_ix: usize,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(open) = &self.open else {
-            return;
-        };
-        if let Some(id) = open.table.read(cx).delegate().product_at(row_ix) {
+        if let Some(id) = table.read(cx).delegate().product_at(row_ix) {
             self.begin_count(id, window, cx);
         }
     }
@@ -229,21 +229,32 @@ impl StocktakeView {
         }
     }
 
-    /// Ends the count and gets ready for the next scan.
+    /// Ends the count and gets ready for the next scan. Showing the
+    /// differences, there's no search to go back to, so focus returns to the
+    /// window, where its shortcuts still work.
     fn finish_count(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(open) = &self.open else {
             return;
         };
+        let counting = self.mode == Mode::Counting;
         open.search.update(cx, |search, cx| {
             search.set_value("", window, cx);
-            search.focus(window, cx);
+            if counting {
+                search.focus(window, cx);
+            }
         });
+        if !counting {
+            self.focus_handle.focus(window, cx);
+        }
         open.refresh_rows(cx);
+        open.refresh_differences(cx);
         cx.notify();
     }
 
     /// Scrolls the just-counted product into view and flashes its row, so
-    /// the counter sees where the count landed.
+    /// the counter sees where the count landed. Counted again from the
+    /// differences, a product that now matches has left them, so there's
+    /// no row to show there.
     fn reveal_counted(&mut self, id: ProductId, cx: &mut Context<Self>) {
         let Some(open) = &self.open else {
             return;
@@ -252,13 +263,15 @@ impl StocktakeView {
             id,
             at: cx.background_executor().now(),
         };
-        open.table.update(cx, |table, cx| {
-            table.delegate_mut().set_last_counted(last_counted);
-            if let Some(row_ix) = table.delegate().row_of(id) {
-                table.scroll_to_row(row_ix, cx);
-            }
-            cx.notify();
-        });
+        for table in open.tables() {
+            table.update(cx, |table, cx| {
+                table.delegate_mut().set_last_counted(last_counted);
+                if let Some(row_ix) = table.delegate().row_of(id) {
+                    table.scroll_to_row(row_ix, cx);
+                }
+                cx.notify();
+            });
+        }
     }
 
     /// Back to the search, with its text selected so typing replaces it. A

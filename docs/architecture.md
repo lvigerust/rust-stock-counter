@@ -75,6 +75,7 @@ crates/stocktake_ui/src/
 | Search text | `OpenStocktake::search` (`Entity<InputState>`) | The stocktake |
 | Status and aisle filters | `OpenStocktake::filter` (`stocktake::Filter`) | The stocktake |
 | Rows shown, sort, column widths, last-counted flash | `ProductTable` inside `OpenStocktake::table` | The stocktake |
+| The differences' rows, sort and column widths | A second `ProductTable` (`Scope::Differences`) inside `OpenStocktake::differences` | The stocktake |
 | The product being counted and its quantity field | `OpenStocktake::count` (`Count`) | One open count dialog |
 | Recent stock lists | `StocktakeView::recent` | The window |
 | Sidebar hidden | `StocktakeView::sidebar_collapsed` | The window |

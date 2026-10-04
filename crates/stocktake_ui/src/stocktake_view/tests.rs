@@ -536,6 +536,65 @@ fn the_mode_menu_switches_what_the_window_shows(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn the_differences_list_counted_products_that_differ(cx: &mut TestAppContext) {
+    let mut counter = Counter::resume(cx, "differences");
+    let differences = |counter: &mut Counter| {
+        counter.cx.read(|cx| {
+            let table = &counter.view.read(cx).open.as_ref().unwrap().differences;
+            table.read(cx).delegate().rows_count(cx)
+        })
+    };
+    // Nothing is counted, so nothing differs yet.
+    assert_eq!(differences(&mut counter), 0);
+
+    // Burano counted short differs; Veneto counted as expected doesn't.
+    counter.input(BURANO.0);
+    counter.press("enter");
+    counter.input("40");
+    counter.press("enter");
+    counter.input(VENETO.0);
+    counter.press("enter");
+    counter.input(VENETO.1);
+    counter.press("enter");
+    counter.press("secondary-2");
+    assert_eq!(differences(&mut counter), 1);
+
+    // Picking it counts it again, and focus returns to the window, as
+    // there's no search to go back to. Once it matches, it's gone.
+    counter.cx.update(|cx| {
+        let table = counter
+            .view
+            .read(cx)
+            .open
+            .as_ref()
+            .unwrap()
+            .differences
+            .clone();
+        table.update(cx, |table, cx| table.set_selected_row(0, cx));
+    });
+    counter.cx.run_until_parked();
+    assert!(counter.is_focused("count"));
+    counter.input(BURANO.1);
+    // Enter would add to the count already there; Erstatt replaces it.
+    counter.press("tab");
+    counter.press("tab");
+    assert!(counter.is_focused("replace-count"));
+    counter.press("space");
+    assert!(counter.find("count").is_none());
+    assert_eq!(counter.counted(BURANO.0), Some(49));
+    assert_eq!(differences(&mut counter), 0);
+    assert!(counter.find("search").is_none());
+    let view = counter.view.clone();
+    let focused = counter
+        .cx
+        .update_window(counter.window, |_, window, cx| {
+            view.read(cx).focus_handle.is_focused(window)
+        })
+        .unwrap();
+    assert!(focused);
+}
+
+#[gpui_kit::test]
 fn the_columns_menu_hides_and_shows_columns(cx: &mut TestAppContext) {
     let mut counter = Counter::resume(cx, "columns");
     let checked = |counter: &mut Counter, id| counter.find(id).and_then(|item| item.checked());

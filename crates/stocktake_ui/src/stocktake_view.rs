@@ -52,7 +52,7 @@ use ui::{
 use crate::{
     CONTEXT, ExportStocktake, FocusNext, FocusPrevious, FocusSearch, ImportStockList, ShowCounting,
     ShowDifferences, ToggleSidebar,
-    product_table::{ProductColumn, ProductTable, ROW_HEIGHT},
+    product_table::{ProductColumn, ProductTable, ROW_HEIGHT, Scope},
     session::{SaveState, Session, SessionEvent},
     welcome::Welcome,
 };
@@ -118,6 +118,9 @@ pub struct StocktakeView {
 struct OpenStocktake {
     session: Entity<Session>,
     table: Entity<TableState<ProductTable>>,
+    /// The counted products that came out different, shown in
+    /// [`Mode::Differences`].
+    differences: Entity<TableState<ProductTable>>,
     /// Where every scan lands, and where products are looked up by number
     /// or name.
     search: Entity<InputState>,
@@ -155,6 +158,20 @@ impl OpenStocktake {
             // Row indices now point at different products.
             table.clear_selection(cx);
         });
+    }
+
+    /// Lists the counted products that differ, after a count changed them.
+    fn refresh_differences(&self, cx: &mut App) {
+        let rows = self.session.read(cx).stocktake().differences();
+        self.differences.update(cx, |table, cx| {
+            table.delegate_mut().set_rows(rows, cx);
+            table.clear_selection(cx);
+        });
+    }
+
+    /// Both tables, the stock list's first.
+    fn tables(&self) -> [&Entity<TableState<ProductTable>>; 2] {
+        [&self.table, &self.differences]
     }
 }
 
@@ -226,12 +243,16 @@ impl StocktakeView {
             InputState::new(window, cx)
                 .placeholder("Skann strekkode, eller søk på varenummer eller navn")
         });
-        let delegate = ProductTable::new(session.clone(), cx);
-        let table = cx.new(|cx| {
-            TableState::new(delegate, window, cx)
-                .col_selectable(false)
-                .col_movable(false)
-        });
+        let new_table = |scope, window: &mut Window, cx: &mut Context<Self>| {
+            let delegate = ProductTable::new(session.clone(), scope, cx);
+            cx.new(|cx| {
+                TableState::new(delegate, window, cx)
+                    .col_selectable(false)
+                    .col_movable(false)
+            })
+        };
+        let table = new_table(Scope::StockList, window, cx);
+        let differences = new_table(Scope::Differences, window, cx);
         let subscriptions = vec![
             cx.subscribe_in(&search, window, |this, _, event, window, cx| match event {
                 InputEvent::Change => {
@@ -243,13 +264,25 @@ impl StocktakeView {
                 InputEvent::PressEnter { .. } => this.find_product(window, cx),
                 _ => {}
             }),
-            cx.subscribe_in(&table, window, |this, _, event, window, cx| {
+            // A product picked from either table is counted, so one that
+            // came out different can be counted again from the differences.
+            cx.subscribe_in(&table, window, |this, table, event, window, cx| {
                 if let TableEvent::SelectRow(row_ix) = event {
-                    this.select_row(*row_ix, window, cx);
+                    this.select_row(table, *row_ix, window, cx);
                 }
             }),
-            // Counts and the save state show in the table and status bar.
-            cx.observe(&session, |_, _, cx| cx.notify()),
+            cx.subscribe_in(&differences, window, |this, table, event, window, cx| {
+                if let TableEvent::SelectRow(row_ix) = event {
+                    this.select_row(table, *row_ix, window, cx);
+                }
+            }),
+            // Counts and the save state show in the tables and status bar.
+            cx.observe(&session, |this, _, cx| {
+                if let Some(open) = &this.open {
+                    open.refresh_differences(cx);
+                }
+                cx.notify();
+            }),
             cx.subscribe_in(&session, window, |_, _, event, window, cx| match event {
                 SessionEvent::SaveFailed(reason) => window.push_notification(
                     Notification::error(format!(
@@ -264,6 +297,7 @@ impl StocktakeView {
         self.open = Some(OpenStocktake {
             session,
             table,
+            differences,
             search,
             filter: Filter::default(),
             count: None,
@@ -303,11 +337,13 @@ impl StocktakeView {
         };
         // The table spans the main pane.
         let width = window.viewport_size().width - self.shown_sidebar_width();
-        open.table.update(cx, |table, cx| {
-            table.delegate_mut().set_width(width);
-            table.refresh(cx);
-            cx.notify();
-        });
+        for table in open.tables() {
+            table.update(cx, |table, cx| {
+                table.delegate_mut().set_width(width);
+                table.refresh(cx);
+                cx.notify();
+            });
+        }
     }
 
     /// Shows `column` if it's hidden, or hides it, as picked from the columns
@@ -332,7 +368,10 @@ impl StocktakeView {
     /// searching or clicking, and the table shows no focus ring, so a Tab
     /// stop on it would look like lost focus.
     fn move_focus(&mut self, forward: bool, window: &mut Window, cx: &mut Context<Self>) {
-        let table_focus = self.open.as_ref().map(|open| open.table.focus_handle(cx));
+        let table_focus = self
+            .open
+            .as_ref()
+            .map(|open| open.tables().map(|table| table.focus_handle(cx)));
         // Twice at most: the table is a single Tab stop.
         for _ in 0..2 {
             if forward {
@@ -341,8 +380,9 @@ impl StocktakeView {
                 window.focus_prev(cx);
             }
             if !table_focus
-                .as_ref()
-                .is_some_and(|table| table.is_focused(window))
+                .iter()
+                .flatten()
+                .any(|table| table.is_focused(window))
             {
                 break;
             }
@@ -403,17 +443,17 @@ impl StocktakeView {
                 // rows as fit and its scrollbar sits against the window. Its
                 // outer columns inset their content by the pane's padding.
                 v_flex().flex_1().min_h_0().map(|this| match open {
-                    Some(_) if self.mode == Mode::Differences => {
-                        this.child(mode::render_differences(cx))
-                    }
                     // The rows set their own height; the text stays small.
                     Some(open) => this.child(
                         div().flex_1().min_h_0().text_sm().child(
-                            DataTable::new(&open.table)
-                                .with_size(Size::Size(ROW_HEIGHT))
-                                // No frame: it would end at the window's
-                                // edge. The rows' own lines separate them.
-                                .bordered(false),
+                            DataTable::new(match self.mode {
+                                Mode::Counting => &open.table,
+                                Mode::Differences => &open.differences,
+                            })
+                            .with_size(Size::Size(ROW_HEIGHT))
+                            // No frame: it would end at the window's
+                            // edge. The rows' own lines separate them.
+                            .bordered(false),
                         ),
                     ),
                     // Padded at the bottom as deep as the bar is at the top,

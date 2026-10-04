@@ -473,6 +473,16 @@ impl Stocktake {
         ids
     }
 
+    /// The counted products whose counted quantity differs from the system
+    /// quantity, in the order [`Self::search`] gives. Uncounted ones have no
+    /// difference yet, so they're left out.
+    pub fn differences(&self) -> Vec<ProductId> {
+        self.search("")
+            .into_iter()
+            .filter(|id| self.product(*id).difference().is_some_and(|d| d != 0))
+            .collect()
+    }
+
     /// The product whose barcode is exactly `text`, if any.
     pub fn product_with_barcode(&self, text: &str) -> Option<ProductId> {
         let text = text.trim();
@@ -577,6 +587,25 @@ mod tests {
             .map(|id| stocktake.product(id).item_number())
             .collect();
         assert_eq!(items, ["150766", "152062", "152066", "150765"]);
+    }
+
+    #[test]
+    fn differences_are_counted_products_that_differ() {
+        let mut stocktake = stocktake();
+        // Counted as expected, so no difference.
+        stocktake.set_count(ProductId(0), "C4-10", 33);
+        // Counted short.
+        stocktake.set_count(ProductId(1), "C4-7", 40);
+        // Units at an overflow location alone don't make it counted.
+        stocktake.set_count(ProductId(2), "D2-1", 3);
+        assert_eq!(stocktake.differences(), [ProductId(1)]);
+
+        // Counted at zero where the system says zero isn't a difference;
+        // counted over is, and comes first in walking order.
+        stocktake.set_count(ProductId(3), "C3-1", 0);
+        assert_eq!(stocktake.differences(), [ProductId(1)]);
+        stocktake.set_count(ProductId(3), "C3-1", 2);
+        assert_eq!(stocktake.differences(), [ProductId(3), ProductId(1)]);
     }
 
     #[test]

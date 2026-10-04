@@ -47,6 +47,13 @@ Today the stocktake is done in a spreadsheet on a laptop with a USB barcode scan
 - The window opens full screen. Columns can be sorted; uncounted products stay at the bottom of the counted-quantity and difference columns whichever way they're sorted.
 - One search field above the table, plus a progress indicator (e.g. 31/43 counted).
 
+### Differences
+
+- The mode menu atop the sidebar (or Cmd/Ctrl-2) switches the main pane to **Differanse**: a table of the counted products whose counted quantity differs from the system quantity, in walking order. Uncounted and partly counted products have no difference yet and aren't listed.
+- It shows the stock list's columns without Status, and sorts the same way: by difference, the largest surplus or shortfall comes first.
+- Picking a product opens its count dialog, so a difference can be counted again. One that now matches leaves the list.
+- With nothing listed, it says so, and how many products are still uncounted.
+
 ### Finding a product
 
 - The scanner and the keyboard type into the same search field.
