@@ -8,9 +8,9 @@ use gpui_kit::component::{
 use gpui_kit::{ClickEvent, CursorStyle, DragMoveEvent, Empty, Focusable as _, Pixels, px};
 use stocktake::CountState;
 use ui::{
-    Button, Dropdown, DropdownButton, DropdownItem, DropdownMenu, Sidebar, SidebarBody,
+    Button, Dropdown, DropdownButton, DropdownItem, DropdownMenu, Heading, Sidebar, SidebarBody,
     SidebarFooter, SidebarHeader, SidebarHeading, SidebarItem, SidebarSection, SidebarSpacer,
-    Spacing, WindowBar, WindowBarItem, prelude::*,
+    Spacing, Text, WindowBar, WindowBarItem, prelude::*,
 };
 
 use super::{Mode, StocktakeView};
@@ -289,6 +289,8 @@ impl StocktakeView {
             .w_full()
             .icon(IconName::Share)
             .label("Eksporter telling")
+            // Its focus ring stands off from the sidebar, not the window.
+            .surface(cx.theme().sidebar)
             .on_click(cx.listener(|this, _, window, cx| this.export_stocktake(window, cx)))
     }
 
@@ -312,10 +314,6 @@ impl StocktakeView {
                 .small()
                 .icon(IconName::PanelLeft)
                 .disabled(disabled)
-                // gpui-kit would recolor a border for focus; this draws
-                // a faint ring around the button instead.
-                .focus_ring(false)
-                .subtle_focus_ring()
                 .map(|button| {
                     if disabled {
                         button.tooltip("Åpne en fil for å vise sidepanelet")
@@ -358,12 +356,10 @@ fn render_filter_item(
                 .gap_2()
                 .child(div().flex_1().min_w_0().truncate().child(label))
                 .child(
-                    div()
+                    Text::new(len.to_string())
                         .flex_shrink_0()
                         .text_xs()
-                        .tabular_nums()
-                        .text_color(theme.muted_foreground)
-                        .child(len.to_string()),
+                        .tabular_nums(),
                 ),
         );
     SidebarItem::new().p_0().child(checkbox)
@@ -376,15 +372,7 @@ fn render_mode_menu(current: Mode, cx: &App) -> impl IntoElement {
     let button = DropdownButton::new()
         .w_full()
         .p_2()
-        .child(
-            div()
-                .flex_1()
-                .min_w_0()
-                .truncate()
-                .text_sm()
-                .font_semibold()
-                .child(current.label()),
-        )
+        .child(Heading::new(current.label()).flex_1().min_w_0().truncate())
         .child(
             Icon::new(IconName::ChevronDown)
                 .small()

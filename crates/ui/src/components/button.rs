@@ -16,6 +16,14 @@
 //! weight, line height), and the gap and alignment of the children. So
 //! `.text_xs().justify_start()` still does what it reads as. The color stays
 //! on the button, as gpui-kit changes it there on hover and when disabled.
+//!
+//! Focus shows as the app's rings, not gpui-kit's recolored border: a
+//! [`FocusRing::Solid`] ring on a button with a fill or border of its own, a
+//! [`FocusRing::Subtle`] one on a ghost, link, text or custom button, which
+//! has no boundary for a solid ring to stand off from. [`Button::with_focus_ring`]
+//! picks the other where a row of buttons should match, and
+//! [`Button::surface`] names what a solid-ringed button sits on when that
+//! isn't the window.
 
 use std::mem;
 
@@ -26,6 +34,7 @@ use gpui_kit::{
     Action, Background, ClickEvent, Hsla, Interactivity, StyleRefinement, transparent_white,
 };
 
+use crate::FocusRing;
 use crate::prelude::*;
 
 /// How much of a disabled button shows, as on Catalyst's.
@@ -44,6 +53,12 @@ pub struct Button {
     icon: Option<Icon>,
     label: Option<SharedString>,
     accessibility_label: Option<SharedString>,
+    /// The ring the caller asked for; `None` leaves it to the variant.
+    focus_ring: Option<FocusRing>,
+    /// Whether the caller asked for gpui-kit's own focus look instead.
+    native_focus_ring: bool,
+    /// What the button sits on, for the gap inside a solid ring.
+    surface: Option<Hsla>,
     style: StyleRefinement,
     children: Vec<AnyElement>,
 }
@@ -85,6 +100,22 @@ impl Button {
         self
     }
 
+    /// How focus shows, where the variant's own choice doesn't fit: a ghost
+    /// Avbryt beside a solid Lagre takes the solid ring too, so the two
+    /// match as focus moves between them.
+    pub fn with_focus_ring(mut self, ring: FocusRing) -> Self {
+        self.focus_ring = Some(ring);
+        self
+    }
+
+    /// The color of what the button sits on, which the gap inside a
+    /// [`FocusRing::Solid`] ring is painted in. The window's background
+    /// unless said otherwise; a button in the sidebar passes the sidebar's.
+    pub fn surface(mut self, surface: Hsla) -> Self {
+        self.surface = Some(surface);
+        self
+    }
+
     pub fn tooltip(mut self, tooltip: impl Into<SharedString>) -> Self {
         self.base = self.base.tooltip(tooltip);
         self
@@ -123,6 +154,9 @@ impl From<ComponentButton> for Button {
             icon: None,
             label: None,
             accessibility_label: None,
+            focus_ring: None,
+            native_focus_ring: false,
+            surface: None,
             style: StyleRefinement::default(),
             children: Vec::new(),
         }
@@ -173,14 +207,17 @@ impl Selectable for Button {
     }
 }
 
+/// gpui-kit's own focus look, which recolors the border. `focus_ring(true)`
+/// asks for it in place of the app's rings; `focus_ring(false)` is the
+/// default, and leaves the ring to the variant or [`Button::with_focus_ring`].
 impl FocusableExt for Button {
     fn focus_ring(mut self, enabled: bool) -> Self {
-        self.base = self.base.focus_ring(enabled);
+        self.native_focus_ring = enabled;
         self
     }
 
     fn is_focus_ring_enabled(&self) -> bool {
-        self.base.is_focus_ring_enabled()
+        self.native_focus_ring
     }
 }
 
@@ -215,6 +252,9 @@ impl RenderOnce for Button {
             icon,
             label,
             accessibility_label,
+            focus_ring,
+            native_focus_ring,
+            surface,
             mut style,
             children,
         } = self;
@@ -222,6 +262,24 @@ impl RenderOnce for Button {
             accessibility_label.or_else(|| label.clone()),
             |base, label| base.accessibility_label(label),
         );
+
+        let base = if native_focus_ring {
+            base.focus_ring(true)
+        } else {
+            let ring = focus_ring.unwrap_or(match variant {
+                ButtonVariant::Ghost
+                | ButtonVariant::Link
+                | ButtonVariant::Text
+                | ButtonVariant::Custom(_) => FocusRing::Subtle,
+                _ => FocusRing::Solid,
+            });
+            let theme = cx.theme();
+            let (ring_color, surface) = (theme.ring, surface.unwrap_or(theme.background));
+            base.focus_ring(false).map(|base| match ring {
+                FocusRing::Solid => base.solid_focus_ring(ring_color, surface),
+                FocusRing::Subtle => base.subtle_focus_ring(),
+            })
+        };
 
         // Faded in its own colors, as Catalyst's is, not in gpui-kit's
         // muted ones.

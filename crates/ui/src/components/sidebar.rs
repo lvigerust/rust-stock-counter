@@ -16,8 +16,8 @@
 
 use gpui_kit::{ClickEvent, StyleRefinement};
 
-use crate::RowButton;
 use crate::prelude::*;
+use crate::{RowButton, SectionHeading};
 
 /// Declares a part that holds children and takes style overrides, leaving
 /// only its `RenderOnce` to write.
@@ -191,9 +191,9 @@ impl RenderOnce for SidebarSection {
 /// What a press on a heading that opens and closes its section does.
 type ToggleHandler = Box<dyn Fn(&ClickEvent, &mut Window, &mut App)>;
 
-/// The title of a group in a section of the sidebar, such as `Tellinger`
-/// above the stocktakes. Muted, so the items under it lead, and inset like
-/// an item's content so the two line up.
+/// The title of a group in a section of the sidebar, such as `Status` above
+/// the count states: a [`SectionHeading`], inset like an item's content so
+/// the two line up, and as tall as a row of one.
 ///
 /// With [`Self::on_toggle`] it opens and closes the items under it, the way
 /// the trigger of a gpui-kit `Collapsible` does: the whole heading is a
@@ -230,16 +230,9 @@ impl SidebarHeading {
 impl RenderOnce for SidebarHeading {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let theme = cx.theme();
-        let label = div().min_w_0().truncate().child(self.label);
+        let label = SectionHeading::new(self.label).min_w_0().truncate();
         let Some((id, open, handler)) = self.toggle else {
-            return div()
-                .min_w_0()
-                .px_2()
-                .mb_1()
-                .text_xs()
-                .text_color(theme.muted_foreground)
-                .child(label)
-                .into_any_element();
+            return label.px_2().py_1().into_any_element();
         };
         let chevron = if open {
             IconName::ChevronDown
@@ -252,9 +245,9 @@ impl RenderOnce for SidebarHeading {
             .gap_2()
             .px_2()
             .py_1()
-            .text_xs()
+            // The chevron takes the heading's color.
             .text_color(theme.muted_foreground)
-            .child(label)
+            .child(label.flex_1())
             .child(Icon::new(chevron).xsmall().flex_none())
             .into_any_element()
     }

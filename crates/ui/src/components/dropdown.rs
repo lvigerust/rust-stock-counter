@@ -41,7 +41,6 @@
 use std::rc::Rc;
 use std::sync::Arc;
 
-use gpui_kit::component::FocusableExt as _;
 use gpui_kit::component::button::ButtonVariants as _;
 use gpui_kit::component::kbd::Kbd;
 use gpui_kit::component::menu::{DropdownMenu as _, PopupMenu, PopupMenuItem};
@@ -52,7 +51,7 @@ use gpui_kit::{
 };
 
 use crate::prelude::*;
-use crate::{Button, Spacing};
+use crate::{Button, SectionHeading, Spacing};
 
 /// What a press on a [`DropdownItem`] does, besides its action.
 type ClickHandler = Rc<dyn Fn(&ClickEvent, &mut Window, &mut App)>;
@@ -199,22 +198,13 @@ fn build_menu(
     })
 }
 
-/// The entry gpui-kit's menu draws for a heading: muted, smaller text,
+/// The entry gpui-kit's menu draws for a heading: a [`SectionHeading`]
 /// inset like the items under it. gpui-kit's own heading is inset less, so
 /// it wouldn't line up with them.
 fn heading_popup_item(label: SharedString) -> PopupMenuItem {
-    PopupMenuItem::element(move |_, cx| {
-        div()
-            .px_1()
-            .pt_2()
-            .pb_1()
-            .text_xs()
-            .font_medium()
-            .text_color(cx.theme().muted_foreground)
-            .child(label.clone())
-    })
-    // Not something to pick: the arrow keys pass over it.
-    .disabled(true)
+    PopupMenuItem::element(move |_, _| SectionHeading::new(label.clone()).px_1().pt_2().pb_1())
+        // Not something to pick: the arrow keys pass over it.
+        .disabled(true)
 }
 
 /// What opens a [`Dropdown`]: a ghost [`Button`], its children side by side.
@@ -240,8 +230,7 @@ impl DropdownButton {
     }
 
     /// Outlined, for a button standing on its own, such as in a bar. It
-    /// keeps gpui-kit's height and padding for its size, and its focus
-    /// look, which recolors the outline.
+    /// keeps gpui-kit's height and padding for its size.
     pub fn outline(mut self) -> Self {
         self.outline = true;
         self
@@ -276,13 +265,7 @@ impl DropdownButton {
                 if self.outline {
                     button.outline()
                 } else {
-                    // gpui-kit would recolor a border for focus; this draws
-                    // a faint ring around the button instead.
-                    button
-                        .ghost()
-                        .h_auto()
-                        .focus_ring(false)
-                        .subtle_focus_ring()
+                    button.ghost().h_auto()
                 }
             })
             // A button centers its content; this starts it at the leading

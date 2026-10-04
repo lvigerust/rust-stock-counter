@@ -4,12 +4,11 @@ use std::{cmp::Ordering, time::Instant};
 
 use gpui_kit::component::{
     table::{Column, ColumnSort, TableDelegate, TableState},
-    tag::Tag,
     tooltip::Tooltip,
 };
 use gpui_kit::{Div, Edges, Pixels, Stateful, px};
 use stocktake::{Product, ProductId, compare_locations, natural_cmp};
-use ui::{Delta, flash, prelude::*};
+use ui::{Badge, Delta, Heading, SectionHeading, Text, flash, prelude::*};
 
 use crate::{count_dialog::SYSTEM_QUANTITY, count_status::CountStatus, session::Session};
 
@@ -552,24 +551,17 @@ impl TableDelegate for ProductTable {
                             .child(
                                 // gpui has no letter spacing, so the sign
                                 // is set apart from the number by hand.
-                                Tag::secondary().small().rounded(px(6.)).child(
+                                Badge::new().child(
                                     h_flex().gap_px().child("+").child(overflow.to_string()),
                                 ),
                             )
                             .tooltip(move |window, cx| {
                                 let buffers = buffers.clone();
-                                Tooltip::element(move |_, cx| {
+                                Tooltip::element(move |_, _| {
                                     v_flex()
-                                        .child(
-                                            div()
-                                                .font_medium()
-                                                .child("Bufferlokasjoner")
-                                                .text_color(cx.theme().muted_foreground)
-                                                .text_sm()
-                                                .mb_1(),
-                                        )
-                                        .children(buffers.clone())
                                         .p_2()
+                                        .child(SectionHeading::new("Bufferlokasjoner").mb_1())
+                                        .children(buffers.clone())
                                 })
                                 .build(window, cx)
                             })
@@ -630,7 +622,7 @@ impl TableDelegate for ProductTable {
         match self.scope {
             Scope::StockList => empty
                 .child(Icon::new(IconName::SearchX).large())
-                .child(div().text_sm().child("Ingen varer passer søket")),
+                .child(Text::new("Ingen varer passer søket")),
             // Says what's left to count, as that's what could still turn up
             // a difference.
             Scope::Differences => {
@@ -646,14 +638,8 @@ impl TableDelegate for ProductTable {
                 };
                 empty
                     .child(Icon::new(IconName::CircleCheck).large())
-                    .child(
-                        div()
-                            .text_sm()
-                            .font_medium()
-                            .text_color(cx.theme().foreground)
-                            .child("Ingen differanse"),
-                    )
-                    .child(div().text_sm().child(detail))
+                    .child(Heading::new("Ingen differanse"))
+                    .child(Text::new(detail))
             }
         }
     }

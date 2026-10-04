@@ -9,7 +9,7 @@ use std::{cell::Cell, rc::Rc};
 
 use gpui_kit::ClickEvent;
 use gpui_kit::component::{
-    FocusableExt as _, WindowExt as _,
+    WindowExt as _,
     button::ButtonVariants as _,
     checkbox::Checkbox,
     description_list::{DescriptionItem, DescriptionList},
@@ -17,7 +17,7 @@ use gpui_kit::component::{
     input::{Input, InputState},
 };
 use stocktake::Product;
-use ui::{Button, Spacing, prelude::*};
+use ui::{Button, Field, FocusRing, Spacing, StyledDialog as _, prelude::*};
 
 /// The system quantity's label, in the dialog and as the table's column
 /// header.
@@ -110,9 +110,6 @@ pub(crate) fn open(
         } else {
             product.count_at(&typed_location)
         };
-        let ring = cx.theme().ring;
-        let surface = cx.theme().background;
-        let muted = cx.theme().muted_foreground;
         let on_ok = {
             let on_save = on_save.clone();
             move |_: &ClickEvent, window: &mut Window, cx: &mut App| {
@@ -127,13 +124,8 @@ pub(crate) fn open(
                 on_save(save, moves, window, cx)
             }
         };
-        let save_button = |id: &'static str, label: &'static str| {
-            Button::new(id)
-                .label(label)
-                .focus_ring(false)
-                .solid_focus_ring(ring, surface)
-                .disabled(!valid)
-        };
+        let save_button =
+            |id: &'static str, label: &'static str| Button::new(id).label(label).disabled(!valid);
         let on_cancel = {
             let on_cancel = on_cancel.clone();
             move |_: &ClickEvent, window: &mut Window, cx: &mut App| {
@@ -170,9 +162,8 @@ pub(crate) fn open(
                         this.child(location_counts("Buffer", product.overflow_counts()))
                     })
                     .child(
-                        v_flex()
-                            .gap_3()
-                            .child(div().text_sm().font_medium().child("Lokasjon"))
+                        Field::new()
+                            .label("Lokasjon")
                             .child(Input::new(&location).id("location"))
                             .when(offers_move, |this| {
                                 let moves_pick_location = moves_pick_location.clone();
@@ -180,7 +171,6 @@ pub(crate) fn open(
                                     Checkbox::new("move-pick-location")
                                         .label("Erstatt plukklokasjon")
                                         .small()
-                                        .mt_1p5()
                                         .checked(moves)
                                         .on_click(move |checked, window, _| {
                                             moves_pick_location.set(*checked);
@@ -190,20 +180,18 @@ pub(crate) fn open(
                             }),
                     )
                     .child(
-                        v_flex()
-                            .mt_1p5()
-                            .gap_3()
-                            .child(div().text_sm().font_medium().child("Talt antall"))
+                        Field::new()
+                            .label("Talt antall")
                             .child(Input::new(&input).id("count"))
                             .when_some(earlier, |this, earlier| {
-                                this.child(div().text_sm().text_color(muted).child(format!(
+                                this.description(format!(
                                     "Allerede talt {earlier} her. Enter legger til."
-                                )))
+                                ))
                             })
                             .when_some(expected, |this, expected| {
-                                this.child(div().text_sm().text_color(muted).child(format!(
+                                this.description(format!(
                                     "Forventet {expected} her, med det som er talt i buffer."
-                                )))
+                                ))
                             }),
                     ),
             )
@@ -211,9 +199,10 @@ pub(crate) fn open(
                 DialogFooter::new()
                     .gap_3()
                     // `DialogClose` fills its container; this keeps Avbryt
-                    // as wide as its label, like the button beside it.
-                    // Neither button has a border for gpui-kit to recolor
-                    // on focus, so each draws the blue ring itself.
+                    // as wide as its label, like the button beside it. A
+                    // ghost button would take the faint ring; beside the
+                    // solid buttons it takes theirs, so focus looks the
+                    // same wherever it lands in the row.
                     .child(
                         div()
                             .flex_none()
@@ -221,8 +210,7 @@ pub(crate) fn open(
                                 Button::from(button)
                                     .ghost()
                                     .label("Avbryt")
-                                    .focus_ring(false)
-                                    .solid_focus_ring(ring, surface)
+                                    .with_focus_ring(FocusRing::Solid)
                             })),
                     )
                     .map(|footer| match earlier {
@@ -244,10 +232,9 @@ pub(crate) fn open(
                             ),
                     }),
             )
-            .p_8()
-            .rounded_2xl()
-            // Never wider than the window, less a margin; the dialog sees to
-            // that itself.
+            .dialog_frame(cx)
+            // Catalyst's `lg` dialog. Never wider than the window, less a
+            // margin; the dialog sees to that itself.
             .w(Spacing(128.).to_pixels(window.rem_size()))
     });
 }
@@ -257,9 +244,8 @@ fn location_counts<'a>(
     title: &'static str,
     counts: impl Iterator<Item = (&'a str, i64)>,
 ) -> impl IntoElement {
-    v_flex()
-        .gap_3()
-        .child(div().text_sm().font_medium().child(title))
+    Field::new()
+        .label(title)
         .child(
             DescriptionList::new()
                 .bordered(false)

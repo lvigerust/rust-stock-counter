@@ -8,7 +8,7 @@ use gpui_kit::component::{
     table::TableState,
 };
 use stocktake::{Lookup, ProductId};
-use ui::prelude::*;
+use ui::{StyledDialog as _, prelude::*};
 
 use super::{Count, Mode, StocktakeView};
 use crate::{
@@ -38,8 +38,9 @@ impl StocktakeView {
         // Selected, so the next scan replaces the text instead of appending to it.
         self.focus_search(window, cx);
         let title: SharedString = format!("Fant ingen vare for «{query}»").into();
-        window.open_alert_dialog(cx, move |dialog, _, _| {
+        window.open_alert_dialog(cx, move |dialog, _, cx| {
             dialog
+                .alert_frame(cx)
                 .title(title.clone())
                 .description(
                     "Varen står ikke på varelisten, og blir ikke registrert. \

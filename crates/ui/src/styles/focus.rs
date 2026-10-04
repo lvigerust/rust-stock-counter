@@ -17,6 +17,20 @@ const SOLID_FOCUS_RING_WIDTH: Pixels = px(2.);
 /// The space between the control's edge and the solid ring.
 const SOLID_FOCUS_RING_GAP: Pixels = px(2.);
 
+/// How keyboard focus shows on a control. The app's [`Button`](crate::Button)
+/// picks one from its variant, and a caller can pick the other.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FocusRing {
+    /// [`StyledFocus::solid_focus_ring`]: the theme's ring color, a small gap
+    /// outside the control. For a control with a fill or border of its own,
+    /// which the gap sets the ring apart from.
+    Solid,
+    /// [`StyledFocus::subtle_focus_ring`]: a faint ring hugging the control.
+    /// For a control with no boundary at rest, such as a ghost button or a
+    /// row, where a solid ring would draw a box that wasn't there.
+    Subtle,
+}
+
 pub trait StyledFocus: InteractiveElement + Sized {
     /// A faint ring just outside the control while it has keyboard focus, the
     /// way tty7 marks focus on its icon buttons.

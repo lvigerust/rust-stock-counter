@@ -33,7 +33,7 @@ graph LR
 | Crate | Path | Owns | Must not |
 | --- | --- | --- | --- |
 | `stocktake` | `crates/stocktake` | Products and counting rules, reading the stock list, export, saving, the recent list | Depend on GPUI, or word anything for the counter |
-| `ui` | `crates/ui` | Motion, typography, focus styling, small presentational components, the logo | Know what a stocktake is |
+| `ui` | `crates/ui` | The design system ([design-system.md](design-system.md)): type roles, focus rings, the dialog frame, motion, small presentational components, the logo | Know what a stocktake is |
 | `stocktake_ui` | `crates/stocktake_ui` | The counting window: model entity, workflow, screens, dialogs, Norwegian copy | Reach into the shell |
 | `varetelling` | `crates/varetelling` | `main`, window options, theme colors, menu bar | Contain feature logic |
 
@@ -192,7 +192,7 @@ The app animates only to explain a change, and nothing runs at rest. Its own cod
 
 | Animation | Where | When it runs | How long |
 | --- | --- | --- | --- |
-| `ui::Appear`: fades and rises a region into place | The welcome's logo, "Kom igang" and "Nylig åpnet" (`welcome.rs`), 70 ms apart | The first time the welcome renders | The theme's `duration_slow` |
+| `ui::Appear`: fades and rises a region into place | The welcome's logo, "Kom i gang" and "Nylig åpnet" (`welcome.rs`), 70 ms apart | The first time the welcome renders | The theme's `duration_slow` |
 | `ui::flash`: a green pulse behind a row that fades out | The counted product's row (`ProductTable::render_tr`) | Right after a count is saved | 1.4 s (`FLASH_DURATION`) |
 
 - **No idle redraws.** Both ask GPUI for another frame (`request_animation_frame`) only while they're running. Once the welcome has arrived or the flash has faded, the window stops redrawing until something changes.
@@ -226,7 +226,7 @@ Errors are never only logged: each reaches the counter in the window.
 - **Something that changes counts:** a method on `Session`, which saves, so the persistence guarantee holds.
 - **Per-stocktake UI state:** a field on `OpenStocktake`, never on `StocktakeView`.
 - **A new dialog:** a module like `count_dialog.rs` that takes callbacks. Its workflow goes in a `stocktake_view/` child module.
-- **A look reused across the app:** a `RenderOnce` component in `crates/ui/src/components/`, re-exported flat. If it needs stocktake words, it belongs in `stocktake_ui` instead (as `CountStatus` does).
+- **A look reused across the app:** a `RenderOnce` component in `crates/ui/src/components/`, re-exported flat, built as [design-system.md](design-system.md#adding-a-part) describes. If it needs stocktake words, it belongs in `stocktake_ui` instead (as `CountStatus` does).
 - **A second, unrelated capability** (say, a price list): a new feature crate beside `stocktake_ui`, composed by the shell.
 
 ## Tests

@@ -11,6 +11,7 @@ Written in Rust on [GPUI](https://www.gpui.rs/) through [gpui-kit](https://gpui-
 | [CONTEXT.md](CONTEXT.md) | The domain vocabulary: the words the code uses, and the ones it avoids |
 | [docs/spec.md](docs/spec.md) | The product: what the app does and what's still undecided |
 | [docs/architecture.md](docs/architecture.md) | How the code is laid out: crates, state, actions, files, focus, tests |
+| [docs/design-system.md](docs/design-system.md) | The visual language the `ui` crate encodes: type roles, spacing, corners, buttons, focus, dialogs |
 | [docs/inspiration.md](docs/inspiration.md) | The projects the interface takes after |
 | [AGENTS.md](AGENTS.md) | Instructions for coding agents working in this repository |
 
