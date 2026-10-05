@@ -12,6 +12,11 @@
     "reveal": "no_focus"
   },
   {
+    "label": "bundle macos",
+    "command": "scripts/bundle-macos.sh",
+    "reveal": "no_focus"
+  },
+  {
     "label": "cargo check",
     "command": "cargo check --workspace --all-targets",
     "reveal": "no_focus",
