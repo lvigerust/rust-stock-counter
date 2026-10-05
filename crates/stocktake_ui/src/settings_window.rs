@@ -7,7 +7,7 @@
 
 use gpui_kit::component::{WindowExt as _, notification::Notification};
 use gpui_kit::{Bounds, FocusHandle, Focusable, Subscription, WindowOptions, px, size};
-use ui::{Heading, SectionHeading, SwitchField, WindowBar, prelude::*};
+use ui::{Button, Heading, SectionHeading, SwitchField, WindowBar, prelude::*};
 
 use crate::{
     CloseSettings, OpenSettings, SETTINGS_CONTEXT, StocktakeView,
@@ -15,7 +15,7 @@ use crate::{
 };
 
 /// The window's size when it opens, and the least it shrinks to.
-const SIZE: (f32, f32) = (600., 320.);
+const SIZE: (f32, f32) = (600., 300.);
 
 pub(crate) struct SettingsWindow {
     state: Entity<SettingsState>,
@@ -81,6 +81,10 @@ impl Focusable for SettingsWindow {
 }
 
 impl Render for SettingsWindow {
+    /// Laid out as Catalyst's `Dialog` is, on the window itself: 2rem of
+    /// padding around, the body 1.5rem under the title and the actions
+    /// 2rem under the body, at the trailing edge. The body takes whatever
+    /// height the window has over, so the actions stay at the bottom.
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let state = self.state.clone();
         let open_count_on_paste = state.read(cx).open_count_on_paste();
@@ -96,22 +100,35 @@ impl Render for SettingsWindow {
             .child(WindowBar::new().child(Heading::new("Innstillinger")))
             .child(
                 v_flex()
-                    .px_4()
-                    .pb_4()
-                    .gap_6()
-                    .child(SectionHeading::new("Telling"))
+                    .flex_1()
+                    .px_8()
+                    .pb_8()
                     .child(
-                        SwitchField::new("open-count-on-paste", open_count_on_paste)
-                            .label("Åpne telling ved innliming")
-                            .description(
-                                "Limer du inn en hel strekkode eller et helt varenummer i søket, \
-                             åpnes tellingen for varen med en gang, som ved skanning.",
-                            )
-                            .on_change(move |open, _, cx| {
-                                state.update(cx, |state, cx| {
-                                    state.set_open_count_on_paste(*open, cx)
-                                })
-                            }),
+                        v_flex()
+                            .flex_1()
+                            .gap_6()
+                            .child(SectionHeading::new("Telling"))
+                            .child(
+                                SwitchField::new("open-count-on-paste", open_count_on_paste)
+                                    .label("Åpne telling ved innliming")
+                                    .description(
+                                        "Limer du inn en hel strekkode eller et helt varenummer \
+                                         i søket, åpnes tellingen for varen med en gang, som ved \
+                                         skanning.",
+                                    )
+                                    .on_change(move |open, _, cx| {
+                                        state.update(cx, |state, cx| {
+                                            state.set_open_count_on_paste(*open, cx)
+                                        })
+                                    }),
+                            ),
+                    )
+                    .child(
+                        h_flex().mt_8().justify_end().gap_3().child(
+                            Button::new("close-settings")
+                                .label("Lukk")
+                                .on_click(|_, window, _| window.remove_window()),
+                        ),
                     ),
             )
     }

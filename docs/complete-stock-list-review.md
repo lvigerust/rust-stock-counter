@@ -27,14 +27,18 @@ These don't depend on how the counters work.
 
 ## Tasks that need answers first
 
-These wait for the counters' answers. The questions, in Norwegian and ready to hand out, are in [questions-for-counters.md](questions-for-counters.md); the numbers below match its headings.
+These wait for the counters' answers. The questions, in Norwegian and ready to hand out, are in [questions-for-counters.md](questions-for-counters.md); the numbers below match its headings. They cover both what the complete list showed and the counters' seven requirements from their first trial of the app.
 
-1. **Q1, the same product on two lines.** Decides whether to merge the lines into one product (first or non-placeholder location as pick location), warn at import, or leave as is. 66 products. This changes the most code.
-2. **Q2, what `A1` means.** Decides whether `A1` is treated as "no location" for aisles and walk order.
-3. **Q3, what `N/A` means.** Decides how the aisle filter and walk order treat the 612 products, and whether they get their own group.
-4. **Q4, how the storage is walked.** Decides the aisle filter's labels ("Reol Tilbehør" or just "Tilbehør") and whether `D` and `DL` are one group.
-5. **Q5, products without a barcode.** Decides whether to add anything for finding unscannable products, such as a filter.
-6. **Q6, products with zero units.** Decides whether to add a "hide zero" filter, or a faster way to confirm them.
-7. **Q7, how products are searched for.** Confirms task 1 above and shows how much leniency search needs.
+1. **Q1 to Q3, counting from a phone or tablet.** Devices and scanning, what happens when the network drops, and what happens when several people count at once. These decide the cloud design: offline support and how conflicting counts are merged.
+2. **Q4, the same item number on two lines.** The counters want a duplicate check at import and the ability to delete a line. This decides whether the app suggests which line to delete, whether deleting can be undone, and who may delete.
+3. **Q5 and Q6, what `A1` and `N/A` mean.** Decide whether they are treated as "no location" for aisles and walk order, and whether products at `N/A` get a pick location while counting.
+4. **Q7, the extra column.** "Kolonne 3" is read as `ProduktDesc2` (column E), which holds text like «Porselen servant i Brun Matt». Unconfirmed. Decides where it is shown and whether it is searchable.
+5. **Q8 and Q9, changing the pick location and marking it.** Decide where the red "NY PLUKKLOKASJON" mark is shown (table, count dialog, export), and what the follow-up list for the business system should contain.
+6. **Q10, the date a product was "picked".** Unclear whether it means the date counted, the date moved, or a pick for an order. Decides the data model.
+7. **Q11, "ferdig talt".** Decides how it differs from confirming, whether it can be undone, and whether a lead reviews it.
+8. **Q12, how the storage is walked.** Decides the aisle filter's labels ("Reol Tilbehør" or just "Tilbehør") and whether `D` and `DL` are one group.
+9. **Q13, products without a barcode.** Decides whether to add anything for finding unscannable products, such as a filter. Typing is harder on a phone.
+10. **Q14, products with zero units.** Decides whether to add a "hide zero" filter, or a faster way to confirm them.
+11. **Q15, how products are searched for.** Confirms task 1 above and shows how much leniency search needs.
 
-Ask Q1 to Q3 first; the rest of the work depends most on them.
+Ask Q1 to Q4 first; the rest of the work depends most on them.
