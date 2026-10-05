@@ -1,48 +1,57 @@
 // Project tasks. Run with `task: spawn` (alt-shift-t); rerun the last one with `task: rerun` (alt-t).
 // See https://zed.dev/docs/tasks
 [
+  // Builds and launches the debug app.
   {
     "label": "cargo run",
     "command": "cargo run",
     "reveal": "no_focus"
   },
+  // Builds and launches the optimized app.
   {
     "label": "cargo run --release",
     "command": "cargo run --release",
     "reveal": "no_focus"
   },
+  // Builds the release app, wraps it in `Scala Bad.app` and installs it in /Applications.
   {
     "label": "bundle macos",
     "command": "scripts/bundle-macos.sh",
     "reveal": "no_focus"
   },
+  // Type-checks every crate and target without producing a binary.
   {
     "label": "cargo check",
     "command": "cargo check --workspace --all-targets",
     "reveal": "no_focus",
     "hide": "on_success"
   },
+  // Lints every crate and target; any warning fails, as in CI.
   {
     "label": "cargo clippy",
     "command": "cargo clippy --workspace --all-targets -- -D warnings",
     "reveal": "no_focus"
   },
+  // Formats the workspace in place.
   {
     "label": "cargo fmt",
     "command": "cargo fmt",
     "reveal": "never",
     "hide": "on_success"
   },
+  // Runs every crate's tests; the UI tests use headless windows.
   {
     "label": "cargo test",
     "command": "cargo test --workspace",
     "reveal": "no_focus"
   },
+  // Bumps Cargo.lock to the newest versions the manifests allow.
   {
     "label": "cargo update",
     "command": "cargo update",
     "reveal": "no_focus"
   },
+  // Deletes the target directory.
   {
     "label": "cargo clean",
     "command": "cargo clean",
