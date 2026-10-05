@@ -10,12 +10,14 @@
 //! | [`export`]     | Writing the counted stock list back out as `.xlsx`        |
 //! | [`store`]      | Keeping the stocktake in progress on disk                 |
 //! | [`recent`]     | Remembering which stock lists were imported               |
+//! | [`settings`]   | The counter's settings, kept between launches             |
 //!
 //! Every file operation here is synchronous and returns its own error type;
 //! the UI decides what runs in the background and how errors are worded.
 
 pub mod export;
 pub mod recent;
+pub mod settings;
 pub mod stock_list;
 pub mod store;
 
@@ -473,6 +475,16 @@ impl Stocktake {
         ids
     }
 
+    /// The counted products whose counted quantity differs from the system
+    /// quantity, in the order [`Self::search`] gives. Uncounted ones have no
+    /// difference yet, so they're left out.
+    pub fn differences(&self) -> Vec<ProductId> {
+        self.search("")
+            .into_iter()
+            .filter(|id| self.product(*id).difference().is_some_and(|d| d != 0))
+            .collect()
+    }
+
     /// The product whose barcode is exactly `text`, if any.
     pub fn product_with_barcode(&self, text: &str) -> Option<ProductId> {
         let text = text.trim();
@@ -494,11 +506,7 @@ impl Stocktake {
         if query.is_empty() {
             return Lookup::NotFound;
         }
-        let exact: Vec<_> = self
-            .products()
-            .filter(|(_, product)| product.matches_exactly(query))
-            .map(|(id, _)| id)
-            .collect();
+        let exact = self.exact_matches(query);
         let candidates = if exact.is_empty() {
             self.search(query)
         } else {
@@ -509,6 +517,24 @@ impl Stocktake {
             [id] => Lookup::Found(*id),
             many => Lookup::Ambiguous(many.len()),
         }
+    }
+
+    /// The one product whose barcode or item number is exactly `text`.
+    /// `None` when none is, or when several are: the business system can
+    /// list one item number on several lines, and a guess between them
+    /// would count the wrong one.
+    pub fn product_matching_exactly(&self, text: &str) -> Option<ProductId> {
+        match self.exact_matches(text.trim()).as_slice() {
+            [id] => Some(*id),
+            _ => None,
+        }
+    }
+
+    fn exact_matches(&self, text: &str) -> Vec<ProductId> {
+        self.products()
+            .filter(|(_, product)| product.matches_exactly(text))
+            .map(|(id, _)| id)
+            .collect()
     }
 }
 
@@ -580,6 +606,25 @@ mod tests {
     }
 
     #[test]
+    fn differences_are_counted_products_that_differ() {
+        let mut stocktake = stocktake();
+        // Counted as expected, so no difference.
+        stocktake.set_count(ProductId(0), "C4-10", 33);
+        // Counted short.
+        stocktake.set_count(ProductId(1), "C4-7", 40);
+        // Units at an overflow location alone don't make it counted.
+        stocktake.set_count(ProductId(2), "D2-1", 3);
+        assert_eq!(stocktake.differences(), [ProductId(1)]);
+
+        // Counted at zero where the system says zero isn't a difference;
+        // counted over is, and comes first in walking order.
+        stocktake.set_count(ProductId(3), "C3-1", 0);
+        assert_eq!(stocktake.differences(), [ProductId(1)]);
+        stocktake.set_count(ProductId(3), "C3-1", 2);
+        assert_eq!(stocktake.differences(), [ProductId(3), ProductId(1)]);
+    }
+
+    #[test]
     fn aisle_is_the_leading_letters() {
         let aisle = |location| Product::new("1", "", location, "", 0).aisle().to_string();
         assert_eq!(aisle("C4-7"), "C");
@@ -647,6 +692,32 @@ mod tests {
         assert_eq!(stocktake.product_with_barcode("152062"), None);
         assert_eq!(stocktake.product_with_barcode("70438115206"), None);
         assert_eq!(stocktake.product_with_barcode(""), None);
+    }
+
+    #[test]
+    fn product_matching_exactly_needs_a_whole_barcode_or_item_number() {
+        let stocktake = stocktake();
+        assert_eq!(
+            stocktake.product_matching_exactly(" 7043811520629\n"),
+            Some(ProductId(1))
+        );
+        assert_eq!(
+            stocktake.product_matching_exactly("152062"),
+            Some(ProductId(1))
+        );
+        // Partial numbers, names and nothing at all aren't whole identifiers.
+        assert_eq!(stocktake.product_matching_exactly("15206"), None);
+        assert_eq!(stocktake.product_matching_exactly("veneto 90"), None);
+        assert_eq!(stocktake.product_matching_exactly(""), None);
+    }
+
+    #[test]
+    fn product_matching_exactly_skips_an_item_number_listed_twice() {
+        let stocktake = Stocktake::new(vec![
+            Product::new("1", "Vare, parti A", "A1", "", 1),
+            Product::new("1", "Vare, parti B", "A2", "", 2),
+        ]);
+        assert_eq!(stocktake.product_matching_exactly("1"), None);
     }
 
     #[test]

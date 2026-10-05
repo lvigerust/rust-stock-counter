@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use gpui_kit::component::Root;
 use gpui_kit::component::table::TableDelegate as _;
 use gpui_kit::test::{ElementSnapshot, TestWindowExt as _};
-use gpui_kit::{AnyWindowHandle, TestAppContext, px, size};
+use gpui_kit::{Action as _, AnyWindowHandle, ClipboardItem, TestAppContext, px, size};
 use stocktake::{Product, Stocktake};
 
 use super::*;
@@ -77,6 +77,13 @@ impl<'a> Counter<'a> {
         self.step(|window, cx| window.input(text, cx));
     }
 
+    /// Pastes `text` at the focus, as Cmd-V does.
+    fn paste(&mut self, text: &str) {
+        self.cx
+            .write_to_clipboard(ClipboardItem::new_string(text.to_string()));
+        self.press("secondary-v");
+    }
+
     fn click(&mut self, id: &'static str) {
         self.find(id);
         self.step(|window, cx| window.click(id, cx));
@@ -105,6 +112,16 @@ impl<'a> Counter<'a> {
     fn value(&mut self, id: &'static str) -> Option<String> {
         self.find(id)
             .and_then(|element| element.value().map(str::to_string))
+    }
+
+    /// Whether the window itself has focus, rather than a control in it.
+    fn view_is_focused(&mut self) -> bool {
+        let view = self.view.clone();
+        self.cx
+            .update_window(self.window, |_, window, cx| {
+                view.read(cx).focus_handle.is_focused(window)
+            })
+            .unwrap()
     }
 
     /// The counted quantity of the product with `barcode`, as the session
@@ -347,8 +364,8 @@ fn importing_a_stock_list_starts_a_saved_stocktake(cx: &mut TestAppContext) {
 
     let mut counter = Counter::open(cx, store.clone());
     let view = counter.view.clone();
-    let import = |counter: &mut Counter, path: &PathBuf| {
-        let path = path.clone();
+    let import = |counter: &mut Counter, path: &Path| {
+        let path = path.to_path_buf();
         counter.step(|window, cx| {
             view.update(cx, |view, cx| {
                 view.import_stock_list(ImportSource::File(path), window, cx)
@@ -536,6 +553,72 @@ fn the_mode_menu_switches_what_the_window_shows(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
+fn the_differences_list_counted_products_that_differ(cx: &mut TestAppContext) {
+    let mut counter = Counter::resume(cx, "differences");
+    let differences = |counter: &mut Counter| {
+        counter.cx.read(|cx| {
+            let table = &counter.view.read(cx).open.as_ref().unwrap().differences;
+            table.read(cx).delegate().rows_count(cx)
+        })
+    };
+    // Nothing is counted, so nothing differs yet.
+    assert_eq!(differences(&mut counter), 0);
+
+    // Burano counted short differs; Veneto counted as expected doesn't.
+    counter.input(BURANO.0);
+    counter.press("enter");
+    counter.input("40");
+    counter.press("enter");
+    counter.input(VENETO.0);
+    counter.press("enter");
+    counter.input(VENETO.1);
+    counter.press("enter");
+    counter.press("secondary-2");
+    assert_eq!(differences(&mut counter), 1);
+
+    // Picking it counts it again, and focus returns to the window, as
+    // there's no search to go back to. Once it matches, it's gone.
+    counter.cx.update(|cx| {
+        let table = counter
+            .view
+            .read(cx)
+            .open
+            .as_ref()
+            .unwrap()
+            .differences
+            .clone();
+        table.update(cx, |table, cx| table.set_selected_row(0, cx));
+    });
+    counter.cx.run_until_parked();
+    assert!(counter.is_focused("count"));
+    counter.input(BURANO.1);
+    // Enter would add to the count already there; Erstatt replaces it.
+    counter.press("tab");
+    counter.press("tab");
+    assert!(counter.is_focused("replace-count"));
+    counter.press("space");
+    assert!(counter.find("count").is_none());
+    assert_eq!(counter.counted(BURANO.0), Some(49));
+    assert_eq!(differences(&mut counter), 0);
+    assert!(counter.find("search").is_none());
+    assert!(counter.view_is_focused());
+}
+
+#[gpui_kit::test]
+fn switching_mode_moves_focus_off_the_search(cx: &mut TestAppContext) {
+    let mut counter = Counter::resume(cx, "mode-focus");
+    assert!(counter.is_focused("search"));
+
+    // The search goes away with the stock list. Focus returns to the window,
+    // so the shortcut back still has somewhere to land.
+    counter.press("secondary-2");
+    assert!(counter.find("search").is_none());
+    assert!(counter.view_is_focused());
+    counter.press("secondary-1");
+    assert!(counter.find("search").is_some());
+}
+
+#[gpui_kit::test]
 fn the_columns_menu_hides_and_shows_columns(cx: &mut TestAppContext) {
     let mut counter = Counter::resume(cx, "columns");
     let checked = |counter: &mut Counter, id| counter.find(id).and_then(|item| item.checked());
@@ -589,4 +672,105 @@ fn the_columns_menu_hides_and_shows_columns(cx: &mut TestAppContext) {
     counter.press("enter");
     assert_eq!(columns_count(&mut counter), 6);
     assert!(counter.find("menu-item:Varenummer").is_none());
+}
+
+#[gpui_kit::test]
+fn pasting_a_barcode_opens_its_count_dialog(cx: &mut TestAppContext) {
+    let mut counter = Counter::resume(cx, "paste-barcode");
+    counter.paste(BURANO.0);
+
+    // As a scan does, without Enter.
+    assert!(counter.is_focused("count"));
+    counter.input("47");
+    counter.press("enter");
+    assert_eq!(counter.counted(BURANO.0), Some(47));
+    assert_eq!(counter.value("search").as_deref(), Some(""));
+}
+
+#[gpui_kit::test]
+fn pasting_an_item_number_opens_its_count_dialog(cx: &mut TestAppContext) {
+    let mut counter = Counter::resume(cx, "paste-item-number");
+    counter.paste(" 150766\n");
+
+    assert!(counter.is_focused("count"));
+}
+
+#[gpui_kit::test]
+fn pasting_part_of_a_number_only_searches(cx: &mut TestAppContext) {
+    let mut counter = Counter::resume(cx, "paste-part");
+    counter.paste("15206");
+    assert!(counter.find("count").is_none());
+    assert!(counter.is_focused("search"));
+    assert_eq!(counter.value("search").as_deref(), Some("15206"));
+
+    // Completing it by hand isn't a paste, and waits for Enter as before.
+    counter.input("2");
+    assert!(counter.find("count").is_none());
+    counter.press("enter");
+    assert!(counter.is_focused("count"));
+}
+
+#[gpui_kit::test]
+fn a_paste_into_typed_text_only_searches(cx: &mut TestAppContext) {
+    let mut counter = Counter::resume(cx, "paste-into-text");
+    counter.input("15");
+    counter.paste("2062");
+    assert!(counter.find("count").is_none());
+    assert_eq!(counter.value("search").as_deref(), Some("152062"));
+}
+
+#[gpui_kit::test]
+fn pasting_waits_for_enter_when_the_setting_is_off(cx: &mut TestAppContext) {
+    let mut counter = Counter::resume(cx, "paste-off");
+    let settings = counter
+        .view
+        .read_with(counter.cx, |view, _| view.settings.clone());
+    counter
+        .cx
+        .update(|cx| settings.update(cx, |state, cx| state.set_open_count_on_paste(false, cx)));
+
+    counter.paste(BURANO.0);
+    assert!(counter.find("count").is_none());
+    assert_eq!(counter.value("search").as_deref(), Some(BURANO.0));
+    counter.press("enter");
+    assert!(counter.is_focused("count"));
+}
+
+#[gpui_kit::test]
+fn the_settings_window_turns_the_paste_off_and_remembers_it(cx: &mut TestAppContext) {
+    let path = store_path("settings-window");
+    store::save(&path, &stocktake()).unwrap();
+    let mut counter = Counter::open(cx, path.clone());
+
+    // Asking twice brings the same window forward.
+    for _ in 0..2 {
+        counter.step(|window, cx| window.dispatch_action(OpenSettings.boxed_clone(), cx));
+    }
+    let settings_window = counter
+        .view
+        .read_with(counter.cx, |view, _| view.settings_window)
+        .expect("the settings window is open");
+    assert_eq!(counter.cx.windows().len(), 2);
+
+    counter
+        .cx
+        .update_window(settings_window, |_, window, cx| {
+            window.render_frame(cx);
+            window.click("open-count-on-paste", cx);
+        })
+        .unwrap();
+    counter.cx.run_until_parked();
+
+    let saved = settings::load(&settings::path_beside(&path)).unwrap();
+    assert!(!saved.open_count_on_paste());
+    counter.paste(BURANO.0);
+    assert!(counter.find("count").is_none());
+
+    // Escape closes it.
+    counter
+        .cx
+        .update_window(settings_window, |_, window, cx| window.press("escape", cx))
+        .unwrap();
+    counter.cx.run_until_parked();
+    assert_eq!(counter.cx.windows().len(), 1);
 }

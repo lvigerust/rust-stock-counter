@@ -15,7 +15,7 @@ use stocktake::{
     Product, Stocktake, export, recent,
     stock_list::{self, ImportError},
 };
-use ui::prelude::*;
+use ui::{StyledDialog as _, prelude::*};
 
 use super::StocktakeView;
 use crate::{path_display::file_name, session::Session};
@@ -59,10 +59,11 @@ impl StocktakeView {
             ImportSource::File(_) => "Forkast og importer",
         };
         let view = cx.entity().downgrade();
-        window.open_alert_dialog(cx, move |dialog, _, _| {
+        window.open_alert_dialog(cx, move |dialog, _, cx| {
             let view = view.clone();
             let source = source.clone();
             dialog
+                .alert_frame(cx)
                 .confirm()
                 .title("Forkaste varetellingen som pågår?")
                 .description(description.clone())
@@ -153,8 +154,9 @@ impl StocktakeView {
                     cx.notify();
                 }
                 let description: SharedString = import_error_message(&error).into();
-                window.open_alert_dialog(cx, move |dialog, _, _| {
+                window.open_alert_dialog(cx, move |dialog, _, cx| {
                     dialog
+                        .alert_frame(cx)
                         .title("Varelisten kunne ikke importeres")
                         .description(description.clone())
                         .ok_text("OK")
@@ -198,8 +200,9 @@ impl StocktakeView {
         let title: SharedString = format!("Fant ikke {}", file_name(&path)).into();
         self.unavailable.insert(path);
         cx.notify();
-        window.open_alert_dialog(cx, move |dialog, _, _| {
+        window.open_alert_dialog(cx, move |dialog, _, cx| {
             dialog
+                .alert_frame(cx)
                 .title(title.clone())
                 .description("Filen er flyttet, slettet eller på en disk som ikke er koblet til.")
                 .ok_text("OK")
@@ -250,9 +253,10 @@ impl StocktakeView {
             n => format!("{n} varer er ikke talt").into(),
         };
         let view = cx.entity().downgrade();
-        window.open_alert_dialog(cx, move |dialog, _, _| {
+        window.open_alert_dialog(cx, move |dialog, _, cx| {
             let view = view.clone();
             dialog
+                .alert_frame(cx)
                 .confirm()
                 .title(title.clone())
                 .description(format!(
@@ -298,8 +302,9 @@ impl StocktakeView {
                 Err(error) => {
                     let description: SharedString =
                         format!("Filen kunne ikke skrives: {error}").into();
-                    window.open_alert_dialog(cx, move |dialog, _, _| {
+                    window.open_alert_dialog(cx, move |dialog, _, cx| {
                         dialog
+                            .alert_frame(cx)
                             .title("Varetellingen kunne ikke eksporteres")
                             .description(description.clone())
                             .ok_text("OK")

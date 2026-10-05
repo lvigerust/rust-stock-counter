@@ -32,8 +32,8 @@ const DARK_HOVER: &str = "#ffffff0d";
 const FOCUS_RING: &str = "#2b7fff";
 
 /// The corners of controls, menus and popovers: Catalyst's `rounded-lg`,
-/// a little rounder than gpui-kit's 6px. Dialogs keep gpui-kit's `radius.lg`,
-/// which is 8px as well.
+/// a little rounder than gpui-kit's 6px. The other tiers follow from it:
+/// badges take `sm` (half), dialogs `xl` (double, Catalyst's `rounded-2xl`).
 const RADIUS: usize = 8;
 
 /// No color at all; the theme parser reads hex only.

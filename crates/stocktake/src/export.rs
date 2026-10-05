@@ -143,6 +143,8 @@ fn write_locations(
 
 #[cfg(test)]
 mod tests {
+    use calamine::{Data, Reader as _, open_workbook_auto};
+
     use super::*;
     use crate::{Product, Stocktake};
 
@@ -159,7 +161,6 @@ mod tests {
             std::env::temp_dir().join(format!("stocktake-export-{}.xlsx", std::process::id()));
         write(&stocktake, &path).unwrap();
 
-        use calamine::{Data, Reader as _, open_workbook_auto};
         let mut workbook = open_workbook_auto(&path).unwrap();
         let range = workbook.worksheet_range_at(0).unwrap().unwrap();
         std::fs::remove_file(&path).ok();
@@ -193,7 +194,6 @@ mod tests {
         ));
         write(&stocktake, &path).unwrap();
 
-        use calamine::{Data, Reader as _, open_workbook_auto};
         let mut workbook = open_workbook_auto(&path).unwrap();
         let counts = workbook.worksheet_range_at(0).unwrap().unwrap();
         let locations = workbook.worksheet_range("Lokasjoner").unwrap();

@@ -21,3 +21,25 @@ gpui-kit = "0.7"
 rust_xlsxwriter = "0.99.1"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
+
+# Lints beyond Clippy's defaults that every crate opts into with
+# `[lints] workspace = true`. `warn` is enough: the checks run with
+# `-D warnings`. Silence one locally with `#[expect(...)]` and a reason, not
+# by relaxing it here.
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+# Panicking is for tests (clippy.toml allows `unwrap` there); production code
+# returns a `Result` or names the invariant in an `expect`.
+unwrap_used = "warn"
+dbg_macro = "warn"
+todo = "warn"
+# Borrow what isn't consumed, and don't build the fallback before it's needed.
+needless_pass_by_value = "warn"
+or_fun_call = "warn"
+redundant_clone = "warn"
+# `let … else`, `map_or_else` and `Self` are the idioms the code uses already.
+manual_let_else = "warn"
+map_unwrap_or = "warn"
+use_self = "warn"

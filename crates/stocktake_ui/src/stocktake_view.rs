@@ -36,13 +36,13 @@ use gpui_kit::component::{
     table::{DataTable, TableEvent, TableState},
 };
 use gpui_kit::{
-    Anchor, ClickEvent, DefiniteLength, DragMoveEvent, ExternalPaths, FocusHandle, Focusable,
-    Pixels, Subscription, Task,
+    Anchor, AnyWindowHandle, ClickEvent, DefiniteLength, DragMoveEvent, ExternalPaths, FocusHandle,
+    Focusable, Pixels, Subscription, Task,
 };
 use stocktake::{
     Filter, ProductId,
     recent::{self, RecentStockLists},
-    store,
+    settings, store,
 };
 use ui::{
     Dropdown, DropdownButton, DropdownItem, DropdownMenu, Spacing, WindowBar, WindowBarItem,
@@ -50,10 +50,12 @@ use ui::{
 };
 
 use crate::{
-    CONTEXT, ExportStocktake, FocusNext, FocusPrevious, FocusSearch, ImportStockList, ShowCounting,
-    ShowDifferences, ToggleSidebar,
-    product_table::{ProductColumn, ProductTable, ROW_HEIGHT},
+    CONTEXT, ExportStocktake, FocusNext, FocusPrevious, FocusSearch, ImportStockList, OpenSettings,
+    ShowCounting, ShowDifferences, ToggleSidebar,
+    product_table::{ProductColumn, ProductTable, ROW_HEIGHT, Scope},
     session::{SaveState, Session, SessionEvent},
+    settings::SettingsState,
+    settings_window::SettingsWindow,
     welcome::Welcome,
 };
 use files::ImportSource;
@@ -89,6 +91,11 @@ pub struct StocktakeView {
     /// The look for the recent stock lists under way, if any. A newer one
     /// replaces it.
     recent_check: Option<Task<()>>,
+    /// The counter's settings, which the settings window shows too.
+    settings: Entity<SettingsState>,
+    /// The settings window, while it's open, so a second request brings it
+    /// forward instead of opening another.
+    settings_window: Option<AnyWindowHandle>,
     /// The stocktake being counted, and everything on screen that goes with
     /// it. `None` shows the welcome.
     open: Option<OpenStocktake>,
@@ -118,6 +125,9 @@ pub struct StocktakeView {
 struct OpenStocktake {
     session: Entity<Session>,
     table: Entity<TableState<ProductTable>>,
+    /// The counted products that came out different, shown in
+    /// [`Mode::Differences`].
+    differences: Entity<TableState<ProductTable>>,
     /// Where every scan lands, and where products are looked up by number
     /// or name.
     search: Entity<InputState>,
@@ -156,6 +166,20 @@ impl OpenStocktake {
             table.clear_selection(cx);
         });
     }
+
+    /// Lists the counted products that differ, after a count changed them.
+    fn refresh_differences(&self, cx: &mut App) {
+        let rows = self.session.read(cx).stocktake().differences();
+        self.differences.update(cx, |table, cx| {
+            table.delegate_mut().set_rows(rows, cx);
+            table.clear_selection(cx);
+        });
+    }
+
+    /// Both tables, the stock list's first.
+    fn tables(&self) -> [&Entity<TableState<ProductTable>>; 2] {
+        [&self.table, &self.differences]
+    }
 }
 
 impl StocktakeView {
@@ -172,6 +196,7 @@ impl StocktakeView {
         // Without them the welcome offers only the file dialog, which is
         // no reason to stop the counter.
         let recent = recent::load(&recent_path).unwrap_or_default();
+        let settings = cx.new(|_| SettingsState::load(settings::path_beside(&store_path)));
         let subscriptions = vec![
             // The product column takes the width the others leave.
             cx.observe_window_bounds(window, |this, window, cx| this.fit_columns(window, cx)),
@@ -190,6 +215,8 @@ impl StocktakeView {
             recent,
             unavailable: HashSet::new(),
             recent_check: None,
+            settings,
+            settings_window: None,
             open: None,
             resume_error: None,
             mode: Mode::default(),
@@ -214,6 +241,27 @@ impl StocktakeView {
         this
     }
 
+    /// Opens the settings window beside this one, or brings it forward if
+    /// it's open already.
+    fn open_settings(&mut self, cx: &mut Context<Self>) {
+        // A handle to a window the counter has closed fails to update.
+        if let Some(handle) = self.settings_window
+            && handle
+                .update(cx, |_, window, _| window.activate_window())
+                .is_ok()
+        {
+            return;
+        }
+        let state = self.settings.clone();
+        let owner = cx.entity();
+        self.settings_window =
+            gpui_kit::open_window(SettingsWindow::options(cx), cx, |window, cx| {
+                cx.new(|cx| SettingsWindow::new(state, &owner, window, cx))
+            })
+            .ok()
+            .map(|(handle, _)| handle);
+    }
+
     /// Shows `session` for counting, in place of the welcome or the
     /// stocktake before it, with focus in the search ready for a scan.
     fn open_stocktake(
@@ -226,12 +274,16 @@ impl StocktakeView {
             InputState::new(window, cx)
                 .placeholder("Skann strekkode, eller søk på varenummer eller navn")
         });
-        let delegate = ProductTable::new(session.clone(), cx);
-        let table = cx.new(|cx| {
-            TableState::new(delegate, window, cx)
-                .col_selectable(false)
-                .col_movable(false)
-        });
+        let new_table = |scope, window: &mut Window, cx: &mut Context<Self>| {
+            let delegate = ProductTable::new(session.clone(), scope, cx);
+            cx.new(|cx| {
+                TableState::new(delegate, window, cx)
+                    .col_selectable(false)
+                    .col_movable(false)
+            })
+        };
+        let table = new_table(Scope::StockList, window, cx);
+        let differences = new_table(Scope::Differences, window, cx);
         let subscriptions = vec![
             cx.subscribe_in(&search, window, |this, _, event, window, cx| match event {
                 InputEvent::Change => {
@@ -243,13 +295,25 @@ impl StocktakeView {
                 InputEvent::PressEnter { .. } => this.find_product(window, cx),
                 _ => {}
             }),
-            cx.subscribe_in(&table, window, |this, _, event, window, cx| {
+            // A product picked from either table is counted, so one that
+            // came out different can be counted again from the differences.
+            cx.subscribe_in(&table, window, |this, table, event, window, cx| {
                 if let TableEvent::SelectRow(row_ix) = event {
-                    this.select_row(*row_ix, window, cx);
+                    this.select_row(table, *row_ix, window, cx);
                 }
             }),
-            // Counts and the save state show in the table and status bar.
-            cx.observe(&session, |_, _, cx| cx.notify()),
+            cx.subscribe_in(&differences, window, |this, table, event, window, cx| {
+                if let TableEvent::SelectRow(row_ix) = event {
+                    this.select_row(table, *row_ix, window, cx);
+                }
+            }),
+            // Counts and the save state show in the tables and status bar.
+            cx.observe(&session, |this, _, cx| {
+                if let Some(open) = &this.open {
+                    open.refresh_differences(cx);
+                }
+                cx.notify();
+            }),
             cx.subscribe_in(&session, window, |_, _, event, window, cx| match event {
                 SessionEvent::SaveFailed(reason) => window.push_notification(
                     Notification::error(format!(
@@ -264,6 +328,7 @@ impl StocktakeView {
         self.open = Some(OpenStocktake {
             session,
             table,
+            differences,
             search,
             filter: Filter::default(),
             count: None,
@@ -303,11 +368,13 @@ impl StocktakeView {
         };
         // The table spans the main pane.
         let width = window.viewport_size().width - self.shown_sidebar_width();
-        open.table.update(cx, |table, cx| {
-            table.delegate_mut().set_width(width);
-            table.refresh(cx);
-            cx.notify();
-        });
+        for table in open.tables() {
+            table.update(cx, |table, cx| {
+                table.delegate_mut().set_width(width);
+                table.refresh(cx);
+                cx.notify();
+            });
+        }
     }
 
     /// Shows `column` if it's hidden, or hides it, as picked from the columns
@@ -332,7 +399,10 @@ impl StocktakeView {
     /// searching or clicking, and the table shows no focus ring, so a Tab
     /// stop on it would look like lost focus.
     fn move_focus(&mut self, forward: bool, window: &mut Window, cx: &mut Context<Self>) {
-        let table_focus = self.open.as_ref().map(|open| open.table.focus_handle(cx));
+        let table_focus = self
+            .open
+            .as_ref()
+            .map(|open| open.tables().map(|table| table.focus_handle(cx)));
         // Twice at most: the table is a single Tab stop.
         for _ in 0..2 {
             if forward {
@@ -341,8 +411,9 @@ impl StocktakeView {
                 window.focus_prev(cx);
             }
             if !table_focus
-                .as_ref()
-                .is_some_and(|table| table.is_focused(window))
+                .iter()
+                .flatten()
+                .any(|table| table.is_focused(window))
             {
                 break;
             }
@@ -403,17 +474,17 @@ impl StocktakeView {
                 // rows as fit and its scrollbar sits against the window. Its
                 // outer columns inset their content by the pane's padding.
                 v_flex().flex_1().min_h_0().map(|this| match open {
-                    Some(_) if self.mode == Mode::Differences => {
-                        this.child(mode::render_differences(cx))
-                    }
                     // The rows set their own height; the text stays small.
                     Some(open) => this.child(
                         div().flex_1().min_h_0().text_sm().child(
-                            DataTable::new(&open.table)
-                                .with_size(Size::Size(ROW_HEIGHT))
-                                // No frame: it would end at the window's
-                                // edge. The rows' own lines separate them.
-                                .bordered(false),
+                            DataTable::new(match self.mode {
+                                Mode::Counting => &open.table,
+                                Mode::Differences => &open.differences,
+                            })
+                            .with_size(Size::Size(ROW_HEIGHT))
+                            // No frame: it would end at the window's
+                            // edge. The rows' own lines separate them.
+                            .bordered(false),
                         ),
                     ),
                     // Padded at the bottom as deep as the bar is at the top,
@@ -425,8 +496,8 @@ impl StocktakeView {
                                 .unavailable(self.unavailable.iter().cloned())
                                 .recent(
                                     self.recent.iter().map(Path::to_path_buf),
-                                    cx.listener(|this, path: &PathBuf, window, cx| {
-                                        this.open_recent(path.clone(), window, cx)
+                                    cx.listener(|this, path: &Path, window, cx| {
+                                        this.open_recent(path.to_path_buf(), window, cx)
                                     }),
                                 ),
                         ),
@@ -449,7 +520,8 @@ impl StocktakeView {
     }
 
     /// A filled field, quieter than the table below it.
-    fn render_search(search: &Entity<InputState>, cx: &App) -> impl IntoElement {
+    fn render_search(search: &Entity<InputState>, cx: &mut Context<Self>) -> impl IntoElement {
+        let view = cx.entity().downgrade();
         let theme = cx.theme();
         // The border sits on a wrapper: the group recolors its own border
         // on focus, after any style set here, so it draws none.
@@ -479,7 +551,21 @@ impl StocktakeView {
                         InputGroupInput::new(search)
                             .id("search")
                             .cleanable(true)
-                            .pl_2(),
+                            .pl_2()
+                            // The paste lands first. Looking at the search
+                            // afterwards tells whether it was all of it.
+                            .on_paste(move |item, window, cx| {
+                                if let Some(pasted) = item.text() {
+                                    let view = view.clone();
+                                    window.defer(cx, move |window, cx| {
+                                        view.update(cx, |this, cx| {
+                                            this.search_pasted(&pasted, window, cx)
+                                        })
+                                        .ok();
+                                    });
+                                }
+                                false
+                            }),
                     ),
             )
     }
@@ -587,6 +673,7 @@ impl Render for StocktakeView {
             .on_action(cx.listener(|this, _: &ImportStockList, window, cx| {
                 this.import_stock_list(ImportSource::Choose, window, cx)
             }))
+            .on_action(cx.listener(|this, _: &OpenSettings, _, cx| this.open_settings(cx)))
             .on_action(
                 cx.listener(|this, _: &FocusNext, window, cx| this.move_focus(true, window, cx)),
             )

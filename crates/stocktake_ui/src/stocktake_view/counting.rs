@@ -5,14 +5,15 @@
 use gpui_kit::component::{
     WindowExt as _,
     input::{InputEvent, InputState},
+    table::TableState,
 };
 use stocktake::{Lookup, ProductId};
-use ui::prelude::*;
+use ui::{StyledDialog as _, prelude::*};
 
 use super::{Count, Mode, StocktakeView};
 use crate::{
     count_dialog::{self, Save, location_input, parse_quantity, quantity_input},
-    product_table::LastCounted,
+    product_table::{LastCounted, ProductTable},
 };
 
 impl StocktakeView {
@@ -29,16 +30,47 @@ impl StocktakeView {
             Lookup::Found(id) => self.select_product(id, window, cx),
             // The table already shows the matches to pick from.
             Lookup::Ambiguous(_) => {}
-            Lookup::NotFound => self.show_not_found(query, window, cx),
+            Lookup::NotFound => self.show_not_found(&query, window, cx),
         }
     }
 
-    fn show_not_found(&mut self, query: String, window: &mut Window, cx: &mut Context<Self>) {
+    /// `pasted` was pasted into the search. If that made up the whole search
+    /// and is a whole barcode or item number, the count dialog opens, as a
+    /// scan's Enter would, when the counter has that turned on. A search
+    /// that merely contains it, or a name, is left to Enter: only a complete
+    /// number is certain enough to act on unasked.
+    pub(super) fn search_pasted(
+        &mut self,
+        pasted: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(open) = &self.open else {
+            return;
+        };
+        let pasted = pasted.trim();
+        if !self.settings.read(cx).open_count_on_paste() || open.query(cx) != pasted {
+            return;
+        }
+        let found = open
+            .session
+            .read(cx)
+            .stocktake()
+            .product_matching_exactly(pasted);
+        // Not through the table's selection: the search's own change may not
+        // have narrowed the rows yet, and would clear a selection made first.
+        if let Some(id) = found {
+            self.begin_count(id, window, cx);
+        }
+    }
+
+    fn show_not_found(&mut self, query: &str, window: &mut Window, cx: &mut Context<Self>) {
         // Selected, so the next scan replaces the text instead of appending to it.
         self.focus_search(window, cx);
         let title: SharedString = format!("Fant ingen vare for «{query}»").into();
-        window.open_alert_dialog(cx, move |dialog, _, _| {
+        window.open_alert_dialog(cx, move |dialog, _, cx| {
             dialog
+                .alert_frame(cx)
                 .title(title.clone())
                 .description(
                     "Varen står ikke på varelisten, og blir ikke registrert. \
@@ -65,17 +97,16 @@ impl StocktakeView {
         }
     }
 
-    /// A row was selected, by a click, the keyboard or [`Self::select_product`].
+    /// A row of `table` was selected, by a click, the keyboard or
+    /// [`Self::select_product`].
     pub(super) fn select_row(
         &mut self,
+        table: &Entity<TableState<ProductTable>>,
         row_ix: usize,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(open) = &self.open else {
-            return;
-        };
-        if let Some(id) = open.table.read(cx).delegate().product_at(row_ix) {
+        if let Some(id) = table.read(cx).delegate().product_at(row_ix) {
             self.begin_count(id, window, cx);
         }
     }
@@ -116,7 +147,7 @@ impl StocktakeView {
 
         let view = cx.entity().downgrade();
         count_dialog::open(
-            &product,
+            product,
             location,
             input.clone(),
             {
@@ -229,21 +260,32 @@ impl StocktakeView {
         }
     }
 
-    /// Ends the count and gets ready for the next scan.
+    /// Ends the count and gets ready for the next scan. Showing the
+    /// differences, there's no search to go back to, so focus returns to the
+    /// window, where its shortcuts still work.
     fn finish_count(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(open) = &self.open else {
             return;
         };
+        let counting = self.mode == Mode::Counting;
         open.search.update(cx, |search, cx| {
             search.set_value("", window, cx);
-            search.focus(window, cx);
+            if counting {
+                search.focus(window, cx);
+            }
         });
+        if !counting {
+            self.focus_handle.focus(window, cx);
+        }
         open.refresh_rows(cx);
+        open.refresh_differences(cx);
         cx.notify();
     }
 
     /// Scrolls the just-counted product into view and flashes its row, so
-    /// the counter sees where the count landed.
+    /// the counter sees where the count landed. Counted again from the
+    /// differences, a product that now matches has left them, so there's
+    /// no row to show there.
     fn reveal_counted(&mut self, id: ProductId, cx: &mut Context<Self>) {
         let Some(open) = &self.open else {
             return;
@@ -252,13 +294,15 @@ impl StocktakeView {
             id,
             at: cx.background_executor().now(),
         };
-        open.table.update(cx, |table, cx| {
-            table.delegate_mut().set_last_counted(last_counted);
-            if let Some(row_ix) = table.delegate().row_of(id) {
-                table.scroll_to_row(row_ix, cx);
-            }
-            cx.notify();
-        });
+        for table in open.tables() {
+            table.update(cx, |table, cx| {
+                table.delegate_mut().set_last_counted(last_counted);
+                if let Some(row_ix) = table.delegate().row_of(id) {
+                    table.scroll_to_row(row_ix, cx);
+                }
+                cx.notify();
+            });
+        }
     }
 
     /// Back to the search, with its text selected so typing replaces it. A

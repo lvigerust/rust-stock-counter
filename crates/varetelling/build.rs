@@ -11,7 +11,8 @@ fn main() {
 /// the executable. A property list in the binary's `__info_plist` section
 /// is read as the bundle's, so its `CFBundleName` is shown instead.
 fn embed_info_plist() {
-    let plist = Path::new(&env::var("CARGO_MANIFEST_DIR").unwrap()).join("Info.plist");
+    let manifest_dir = env::var("CARGO_MANIFEST_DIR").expect("Cargo sets CARGO_MANIFEST_DIR");
+    let plist = Path::new(&manifest_dir).join("Info.plist");
     println!("cargo:rerun-if-changed={}", plist.display());
     if env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("macos") {
         println!(

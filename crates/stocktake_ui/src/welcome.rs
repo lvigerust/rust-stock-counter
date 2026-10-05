@@ -1,10 +1,15 @@
 //! The screen before any stock list is imported.
 
-use std::{collections::HashSet, path::PathBuf, rc::Rc, time::Duration};
+use std::{
+    collections::HashSet,
+    path::{Path, PathBuf},
+    rc::Rc,
+    time::Duration,
+};
 
 use gpui_kit::Div;
 use gpui_kit::component::{alert::Alert, kbd::Kbd};
-use ui::{RowButton, Spacing, prelude::*};
+use ui::{RowButton, SectionHeading, Spacing, prelude::*};
 
 use crate::{
     CONTEXT, ImportStockList,
@@ -15,7 +20,7 @@ use crate::{
 const STAGGER: Duration = Duration::from_millis(70);
 
 /// Opens one of the recent stock lists.
-type OpenRecent = Rc<dyn Fn(&PathBuf, &mut Window, &mut App)>;
+type OpenRecent = Rc<dyn Fn(&Path, &mut Window, &mut App)>;
 
 /// The logo over short lists of ways to start, like Zed's welcome:
 /// open a stock list, drop one on the window, or reopen a recent one.
@@ -46,7 +51,7 @@ impl Welcome {
     pub fn recent(
         mut self,
         paths: impl IntoIterator<Item = PathBuf>,
-        on_open: impl Fn(&PathBuf, &mut Window, &mut App) + 'static,
+        on_open: impl Fn(&Path, &mut Window, &mut App) + 'static,
     ) -> Self {
         self.recent = paths.into_iter().collect();
         self.on_open_recent = Some(Rc::new(on_open));
@@ -72,7 +77,7 @@ impl RenderOnce for Welcome {
         let recent = self
             .on_open_recent
             .filter(|_| !self.recent.is_empty())
-            .map(|on_open| render_recent(self.recent, &self.unavailable, on_open, cx));
+            .map(|on_open| render_recent(self.recent, &self.unavailable, &on_open, cx));
         v_flex()
             .size_full()
             .p_6()
@@ -108,7 +113,7 @@ impl RenderOnce for Welcome {
     }
 }
 
-/// "Kom igang": opening a stock list, and a reminder that dropping one on
+/// "Kom i gang": opening a stock list, and a reminder that dropping one on
 /// the window works too. The whole window accepts the drop.
 fn render_start(window: &mut Window, cx: &mut App) -> impl IntoElement {
     let muted = cx.theme().muted_foreground;
@@ -120,7 +125,7 @@ fn render_start(window: &mut Window, cx: &mut App) -> impl IntoElement {
     .map(|row| row_content(row, IconName::FolderOpen, "Åpne fil", cx))
     .children(shortcut.map(|kbd| div().text_color(muted).child(kbd)));
 
-    section("KOM IGANG", cx).child(open).child(
+    section("Kom i gang", cx).child(open).child(
         row_content(h_flex(), IconName::FileDown, "Eller dra filen hit", cx).text_color(muted),
     )
 }
@@ -131,11 +136,11 @@ fn render_start(window: &mut Window, cx: &mut App) -> impl IntoElement {
 fn render_recent(
     paths: Vec<PathBuf>,
     unavailable: &HashSet<PathBuf>,
-    on_open: OpenRecent,
+    on_open: &OpenRecent,
     cx: &App,
 ) -> Div {
     let muted = cx.theme().muted_foreground;
-    section("NYLIG ÅPNET", cx).children(paths.into_iter().map(|path| {
+    section("Nylig åpnet", cx).children(paths.into_iter().map(|path| {
         let label = file_name(&path);
         let is_unavailable = unavailable.contains(&path);
         let detail = if is_unavailable {
@@ -153,24 +158,16 @@ fn render_recent(
     }))
 }
 
-/// A muted, uppercase label with a rule running to the trailing edge, over
-/// the rows the caller adds.
+/// A section heading with a rule running from it to the trailing edge, as
+/// Zed's welcome draws its sections, over the rows the caller adds.
 fn section(label: &'static str, cx: &App) -> Div {
-    let theme = cx.theme();
     v_flex().gap_1().child(
         h_flex()
             .gap_3()
             .px_2()
             .pb_2()
-            .child(
-                div()
-                    .flex_none()
-                    .text_xs()
-                    .font_medium()
-                    .text_color(theme.muted_foreground)
-                    .child(label),
-            )
-            .child(div().flex_1().h_px().bg(theme.border)),
+            .child(SectionHeading::new(label).flex_none())
+            .child(div().flex_1().h_px().bg(cx.theme().border)),
     )
 }
 

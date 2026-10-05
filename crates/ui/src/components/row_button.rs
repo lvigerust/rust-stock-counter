@@ -1,6 +1,5 @@
 use std::rc::Rc;
 
-use gpui_kit::component::FocusableExt as _;
 use gpui_kit::component::button::{ButtonCustomVariant, ButtonVariants as _};
 use gpui_kit::{ClickEvent, Hsla, StyleRefinement, phi};
 
@@ -12,8 +11,8 @@ type ClickHandler = Rc<dyn Fn(&ClickEvent, &mut Window, &mut App)>;
 
 /// A row of content that is itself a button, such as an item in a list of
 /// files: a [`Button`] that lights up on hover, takes Tab like any control,
-/// Enter or Space press it, and focus shows as
-/// [`StyledFocus::subtle_focus_ring`].
+/// Enter or Space press it, and focus shows as a faint ring around the row,
+/// as on every borderless button.
 ///
 /// Lays its children out side by side; the caller sets the padding and gap,
 /// so a pressable row can line up with plain ones around it.
@@ -104,10 +103,6 @@ impl RenderOnce for RowButton {
             .gap_0()
             .font_normal()
             .line_height(phi())
-            // gpui-kit would recolor a border for focus; this draws a faint
-            // ring around the row instead.
-            .focus_ring(false)
-            .subtle_focus_ring()
             .disabled(self.disabled)
             // The button fades a disabled row, but can't read a custom
             // variant's colors to keep them; these are the row's at rest.

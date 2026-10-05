@@ -8,6 +8,9 @@ publish.workspace = true
 [lib]
 path = "src/stocktake_ui.rs"
 
+[lints]
+workspace = true
+
 [dependencies]
 dirs.workspace = true
 gpui-kit.workspace = true

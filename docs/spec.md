@@ -12,7 +12,7 @@ Today the stocktake is done in a spreadsheet on a laptop with a USB barcode scan
 ## Import
 
 - A clean, minimal but good-looking button to import the stock list.
-- The input is the business system's `.xlsx` export as-is (see `data/Vareliste - varetelling.xlsx`); no manual preparation.
+- The input is the business system's `.xlsx` export as-is (see `data/stock-list.xlsx`); no manual preparation.
 - Columns are read by header name, not position.
 - Per the storage owner: "Når det gjelder hva som er interessant så er det kolonne C, D, H og N" (the interesting columns are C, D, H and N). These are the columns shown to the counter:
 
@@ -46,6 +46,13 @@ Today the stocktake is done in a spreadsheet on a laptop with a USB barcode scan
 - Before a stock list is imported, the welcome lists the last five imported, newest first, each with its folder. Opening one imports it again, with the same warning if a stocktake is in progress. A file that has been moved or deleted is removed from the list.
 - The window opens full screen. Columns can be sorted; uncounted products stay at the bottom of the counted-quantity and difference columns whichever way they're sorted.
 - One search field above the table, plus a progress indicator (e.g. 31/43 counted).
+
+### Differences
+
+- The mode menu atop the sidebar (or Cmd/Ctrl-2) switches the main pane to **Differanse**: a table of the counted products whose counted quantity differs from the system quantity, in walking order. Uncounted and partly counted products have no difference yet and aren't listed.
+- It shows the stock list's columns without Status, and sorts the same way: by difference, the largest surplus or shortfall comes first.
+- Picking a product opens its count dialog, so a difference can be counted again. One that now matches leaves the list.
+- With nothing listed, it says so, and how many products are still uncounted.
 
 ### Finding a product
 

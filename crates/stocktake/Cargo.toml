@@ -10,6 +10,9 @@ publish.workspace = true
 [lib]
 path = "src/stocktake.rs"
 
+[lints]
+workspace = true
+
 [dependencies]
 calamine.workspace = true
 dirs.workspace = true
