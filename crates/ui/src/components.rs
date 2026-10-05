@@ -10,6 +10,7 @@ mod field;
 mod logo;
 mod row_button;
 mod sidebar;
+mod switch_field;
 mod text;
 mod window_bar;
 
@@ -21,5 +22,6 @@ pub use field::*;
 pub use logo::*;
 pub use row_button::*;
 pub use sidebar::*;
+pub use switch_field::*;
 pub use text::*;
 pub use window_bar::*;

@@ -79,6 +79,7 @@ Composed from named parts, as Catalyst's are, so a call site reads like the layo
 - `Dropdown(DropdownButton, DropdownMenu › heading, DropdownItem, divider)`: gpui-kit's menu behavior with Catalyst's rows.
 - `WindowBar` › `WindowBarItem`: the band that holds the window's own controls on macOS and Windows.
 - `Badge`: one neutral badge for a count worth scanning for, such as `+2` overflow locations.
+- `SwitchField`: a setting that is on or off, after Catalyst's `SwitchField`. Its `Label` and `Text` lead and the switch trails; pressing the text flips it too.
 - `Field`, `Heading`, `Label`, `Text`, `SectionHeading`, `Delta`, `Logo`.
 
 Domain-worded parts (`CountStatus`) live in the feature crate and compose these.

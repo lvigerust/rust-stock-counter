@@ -60,6 +60,8 @@ crates/stocktake_ui/src/
 │       ├── sidebar.rs     mode menu, status and aisle filters, starting over, hiding and resizing the sidebar
 │       └── tests.rs       UI integration tests of the window
 ├── product_table.rs       ProductTable: the DataTable delegate (rows, columns, sorting, cells)
+├── settings.rs            SettingsState: the settings both windows read, saved as they change
+├── settings_window.rs     SettingsWindow: the second window that shows them
 ├── count_dialog.rs        the count dialog, and what counts as a quantity
 ├── welcome.rs             Welcome: the screen before a stock list is imported
 ├── count_status.rs        CountStatus: "Talt" / "Ikke talt" marker
@@ -81,6 +83,8 @@ crates/stocktake_ui/src/
 | The product being counted, its location and quantity fields | `OpenStocktake::count` (`Count`) | One open count dialog |
 | Counting or differences | `StocktakeView::mode` (`Mode`) | The window |
 | Recent stock lists | `StocktakeView::recent` | The window |
+| Settings | `StocktakeView::settings` (`Entity<SettingsState>`), saved to `settings.json` beside the stocktake | The window; shared with the settings window |
+| The settings window | `StocktakeView::settings_window` (its handle) | While it's open |
 | Which recent stock lists weren't found | `StocktakeView::unavailable`, refreshed by `recent_check` | The window |
 | Sidebar hidden | `StocktakeView::sidebar_collapsed` | The window |
 | Sidebar width | `StocktakeView::sidebar_width` | The window (not saved between launches) |
@@ -105,6 +109,8 @@ Commands are GPUI actions declared in `stocktake_ui.rs` and handled in `Stocktak
 | `FocusSearch` | Cmd/Ctrl-F | `counting.rs` `focus_search` | With a stocktake |
 | `ToggleSidebar` | Cmd/Ctrl-B | `sidebar.rs` `toggle_sidebar` | With a stocktake |
 | `ShowCounting` / `ShowDifferences` | Cmd/Ctrl-1 / Cmd/Ctrl-2 | `mode.rs` `set_mode` | With a stocktake |
+| `OpenSettings` | Cmd/Ctrl-, | `stocktake_view.rs` `open_settings`; in the settings window it brings it forward | Always |
+| `CloseSettings` | Escape, Cmd/Ctrl-W | The settings window removes itself | In the settings window |
 | `FocusNext` / `FocusPrevious` | Tab / Shift-Tab | `move_focus` | Always; skips the table |
 | `Quit` (shell) | Cmd/Ctrl-Q | `main.rs` | Always |
 
@@ -121,6 +127,10 @@ count dialog Enter ──► save_count ─┬─ text is a listed barcode ─�
                                    └─ a quantity ─► Session::record_count (saves) ──► finish_count ──► reveal_counted
 Escape / Avbryt ──► dismiss_count ──► finish_count (nothing saved)
 ```
+
+A paste into the search takes a shortcut to the same dialog. `InputGroupInput::on_paste` hands over the clipboard before the text lands, so `search_pasted` runs deferred, once it has: if the pasted text is the whole search and `Stocktake::product_matching_exactly` finds one product by barcode or item number, `begin_count` opens its dialog, without Enter. Anything else stays a search, and typing never triggers it. The setting "Åpne telling ved innliming" (on by default) turns it off.
+
+The settings window opens beside the counting window, as tty7's does, so a setting can be tried while its effect stays in view. It owns no settings: `SettingsState` is an entity both windows read, so a change shows in each and is saved at once, and there's nothing to confirm or discard. It's a `Root` of its own (`gpui_kit::open_window`), so it shows its own toasts, and it removes itself when the counting window's view is released.
 
 The scan guard (`take_scan_from_quantity`) exists because a scanner types and then presses Enter. If the counter scans the next product while a dialog is open, the barcode would otherwise be saved as billions of units.
 
@@ -159,6 +169,7 @@ Validation failures are `ImportError` variants: `NotFound`, `UnsupportedFormat`,
 ### Saving and resuming (`store.rs`, `recent.rs`)
 
 - The stocktake in progress is JSON at `store::default_path()`: the platform data directory, then `Varetelling/varetelling.json` (on macOS, `~/Library/Application Support/Varetelling/`). It's written to a temporary file and renamed over the old one, so a crash mid-write keeps the previous save.
+- The settings are kept in `settings.json` beside it (`settings.rs`); a missing or damaged file means the defaults.
 - The five most recent stock lists are kept in `recent.json` beside it. Losing them costs a trip to the file dialog, so failures to save them are ignored on purpose.
 
 ### Exporting (`export.rs`)

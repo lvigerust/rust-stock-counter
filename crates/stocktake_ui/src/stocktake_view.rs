@@ -36,13 +36,13 @@ use gpui_kit::component::{
     table::{DataTable, TableEvent, TableState},
 };
 use gpui_kit::{
-    Anchor, ClickEvent, DefiniteLength, DragMoveEvent, ExternalPaths, FocusHandle, Focusable,
-    Pixels, Subscription, Task,
+    Anchor, AnyWindowHandle, ClickEvent, DefiniteLength, DragMoveEvent, ExternalPaths, FocusHandle,
+    Focusable, Pixels, Subscription, Task,
 };
 use stocktake::{
     Filter, ProductId,
     recent::{self, RecentStockLists},
-    store,
+    settings, store,
 };
 use ui::{
     Dropdown, DropdownButton, DropdownItem, DropdownMenu, Spacing, WindowBar, WindowBarItem,
@@ -50,10 +50,12 @@ use ui::{
 };
 
 use crate::{
-    CONTEXT, ExportStocktake, FocusNext, FocusPrevious, FocusSearch, ImportStockList, ShowCounting,
-    ShowDifferences, ToggleSidebar,
+    CONTEXT, ExportStocktake, FocusNext, FocusPrevious, FocusSearch, ImportStockList, OpenSettings,
+    ShowCounting, ShowDifferences, ToggleSidebar,
     product_table::{ProductColumn, ProductTable, ROW_HEIGHT, Scope},
     session::{SaveState, Session, SessionEvent},
+    settings::SettingsState,
+    settings_window::SettingsWindow,
     welcome::Welcome,
 };
 use files::ImportSource;
@@ -89,6 +91,11 @@ pub struct StocktakeView {
     /// The look for the recent stock lists under way, if any. A newer one
     /// replaces it.
     recent_check: Option<Task<()>>,
+    /// The counter's settings, which the settings window shows too.
+    settings: Entity<SettingsState>,
+    /// The settings window, while it's open, so a second request brings it
+    /// forward instead of opening another.
+    settings_window: Option<AnyWindowHandle>,
     /// The stocktake being counted, and everything on screen that goes with
     /// it. `None` shows the welcome.
     open: Option<OpenStocktake>,
@@ -189,6 +196,7 @@ impl StocktakeView {
         // Without them the welcome offers only the file dialog, which is
         // no reason to stop the counter.
         let recent = recent::load(&recent_path).unwrap_or_default();
+        let settings = cx.new(|_| SettingsState::load(settings::path_beside(&store_path)));
         let subscriptions = vec![
             // The product column takes the width the others leave.
             cx.observe_window_bounds(window, |this, window, cx| this.fit_columns(window, cx)),
@@ -207,6 +215,8 @@ impl StocktakeView {
             recent,
             unavailable: HashSet::new(),
             recent_check: None,
+            settings,
+            settings_window: None,
             open: None,
             resume_error: None,
             mode: Mode::default(),
@@ -229,6 +239,27 @@ impl StocktakeView {
             }
         }
         this
+    }
+
+    /// Opens the settings window beside this one, or brings it forward if
+    /// it's open already.
+    fn open_settings(&mut self, cx: &mut Context<Self>) {
+        // A handle to a window the counter has closed fails to update.
+        if let Some(handle) = self.settings_window
+            && handle
+                .update(cx, |_, window, _| window.activate_window())
+                .is_ok()
+        {
+            return;
+        }
+        let state = self.settings.clone();
+        let owner = cx.entity();
+        self.settings_window =
+            gpui_kit::open_window(SettingsWindow::options(cx), cx, |window, cx| {
+                cx.new(|cx| SettingsWindow::new(state, &owner, window, cx))
+            })
+            .ok()
+            .map(|(handle, _)| handle);
     }
 
     /// Shows `session` for counting, in place of the welcome or the
@@ -489,7 +520,8 @@ impl StocktakeView {
     }
 
     /// A filled field, quieter than the table below it.
-    fn render_search(search: &Entity<InputState>, cx: &App) -> impl IntoElement {
+    fn render_search(search: &Entity<InputState>, cx: &mut Context<Self>) -> impl IntoElement {
+        let view = cx.entity().downgrade();
         let theme = cx.theme();
         // The border sits on a wrapper: the group recolors its own border
         // on focus, after any style set here, so it draws none.
@@ -519,7 +551,21 @@ impl StocktakeView {
                         InputGroupInput::new(search)
                             .id("search")
                             .cleanable(true)
-                            .pl_2(),
+                            .pl_2()
+                            // The paste lands first. Looking at the search
+                            // afterwards tells whether it was all of it.
+                            .on_paste(move |item, window, cx| {
+                                if let Some(pasted) = item.text() {
+                                    let view = view.clone();
+                                    window.defer(cx, move |window, cx| {
+                                        view.update(cx, |this, cx| {
+                                            this.search_pasted(&pasted, window, cx)
+                                        })
+                                        .ok();
+                                    });
+                                }
+                                false
+                            }),
                     ),
             )
     }
@@ -627,6 +673,7 @@ impl Render for StocktakeView {
             .on_action(cx.listener(|this, _: &ImportStockList, window, cx| {
                 this.import_stock_list(ImportSource::Choose, window, cx)
             }))
+            .on_action(cx.listener(|this, _: &OpenSettings, _, cx| this.open_settings(cx)))
             .on_action(
                 cx.listener(|this, _: &FocusNext, window, cx| this.move_focus(true, window, cx)),
             )

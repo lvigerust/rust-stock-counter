@@ -34,6 +34,36 @@ impl StocktakeView {
         }
     }
 
+    /// `pasted` was pasted into the search. If that made up the whole search
+    /// and is a whole barcode or item number, the count dialog opens, as a
+    /// scan's Enter would, when the counter has that turned on. A search
+    /// that merely contains it, or a name, is left to Enter: only a complete
+    /// number is certain enough to act on unasked.
+    pub(super) fn search_pasted(
+        &mut self,
+        pasted: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(open) = &self.open else {
+            return;
+        };
+        let pasted = pasted.trim();
+        if !self.settings.read(cx).open_count_on_paste() || open.query(cx) != pasted {
+            return;
+        }
+        let found = open
+            .session
+            .read(cx)
+            .stocktake()
+            .product_matching_exactly(pasted);
+        // Not through the table's selection: the search's own change may not
+        // have narrowed the rows yet, and would clear a selection made first.
+        if let Some(id) = found {
+            self.begin_count(id, window, cx);
+        }
+    }
+
     fn show_not_found(&mut self, query: &str, window: &mut Window, cx: &mut Context<Self>) {
         // Selected, so the next scan replaces the text instead of appending to it.
         self.focus_search(window, cx);

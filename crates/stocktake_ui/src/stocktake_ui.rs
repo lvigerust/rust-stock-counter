@@ -13,6 +13,8 @@
 //! | `stocktake_view` | The workflow: focus, commands, files, the layout       |
 //! | `product_table`  | How the stock list renders as rows                     |
 //! | `count_dialog`   | Counting one product, and what a quantity is           |
+//! | `settings`       | The settings both windows read, saved as they change   |
+//! | `settings_window`| The settings window                                    |
 //! | `welcome`        | The screen before any stock list is imported           |
 //! | `count_status`   | A product's uncounted/partly counted/counted marker    |
 //! | `path_display`   | Showing file paths to the counter                      |
@@ -22,6 +24,8 @@ mod count_status;
 mod path_display;
 mod product_table;
 mod session;
+mod settings;
+mod settings_window;
 mod stocktake_view;
 mod welcome;
 
@@ -48,7 +52,11 @@ actions!(
         ShowCounting,
         /// Shows the products whose counted quantity differs from the
         /// system quantity.
-        ShowDifferences
+        ShowDifferences,
+        /// Opens the settings window, or brings it to the front.
+        OpenSettings,
+        /// Closes the settings window.
+        CloseSettings
     ]
 );
 
@@ -58,6 +66,9 @@ pub const APP_NAME: &str = "Scala Bad";
 
 /// Key context of the whole window.
 const CONTEXT: &str = "Stocktake";
+
+/// Key context of the settings window.
+const SETTINGS_CONTEXT: &str = "StocktakeSettings";
 
 /// Registers the feature's key bindings. Call once at startup, after
 /// `gpui_kit::init`.
@@ -71,6 +82,10 @@ pub fn init(cx: &mut App) {
         KeyBinding::new("secondary-b", ToggleSidebar, Some(CONTEXT)),
         KeyBinding::new("secondary-1", ShowCounting, Some(CONTEXT)),
         KeyBinding::new("secondary-2", ShowDifferences, Some(CONTEXT)),
+        // In both windows: from the settings window it brings it forward.
+        KeyBinding::new("secondary-,", OpenSettings, None),
+        KeyBinding::new("secondary-w", CloseSettings, Some(SETTINGS_CONTEXT)),
+        KeyBinding::new("escape", CloseSettings, Some(SETTINGS_CONTEXT)),
         // The table binds Tab to moving between columns, which traps focus in
         // it. These replace that, and also take precedence over the window's
         // own Tab handling so focus can skip the table.
