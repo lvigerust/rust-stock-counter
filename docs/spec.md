@@ -12,7 +12,7 @@ Today the stocktake is done in a spreadsheet on a laptop with a USB barcode scan
 ## Import
 
 - A clean, minimal but good-looking button to import the stock list.
-- The input is the business system's `.xlsx` export as-is (see `data/Vareliste - varetelling.xlsx`); no manual preparation.
+- The input is the business system's `.xlsx` export as-is (see `data/stock-list.xlsx`); no manual preparation.
 - Columns are read by header name, not position.
 - Per the storage owner: "Når det gjelder hva som er interessant så er det kolonne C, D, H og N" (the interesting columns are C, D, H and N). These are the columns shown to the counter:
 

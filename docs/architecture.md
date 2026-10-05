@@ -240,7 +240,7 @@ Errors are never only logged: each reaches the counter in the window.
 
 Run everything with `cargo test --workspace`; a plain `cargo test` only runs the default member (the shell). The UI tests use gpui-kit's `test-support` feature, enabled for `stocktake_ui`'s tests. gpui-kit's own components register themselves for it; a row of our own that the tests look up, such as a `ui::DropdownItem`, calls `.test_support()`, which does nothing in normal builds. `.github/workflows/ci.yml` runs the same formatting, Clippy and test commands on every push.
 
-`stock_list::tests::reads_the_sample_export` reads a real export, `data/Vareliste - varetelling.xlsx`, alongside the generated fixtures. The screenshots of the projects in [inspiration.md](inspiration.md) are in `docs/images/`.
+`stock_list::tests::reads_the_sample_export` reads a real export, `data/stock-list.xlsx`, alongside the generated fixtures. The screenshots of the projects in [inspiration.md](inspiration.md) are in `docs/images/`.
 
 ## Patterns borrowed from other projects
 

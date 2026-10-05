@@ -468,8 +468,7 @@ mod tests {
     /// `data` directory.
     #[test]
     fn reads_the_sample_export() {
-        let path =
-            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data/Vareliste - varetelling.xlsx");
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data/stock-list.xlsx");
         let products = read(&path).expect("sample stock list imports");
         assert_eq!(products.len(), 43);
 
