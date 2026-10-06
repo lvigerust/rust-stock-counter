@@ -82,6 +82,6 @@ jobs:
               run: |
                   gh release create "v${{ steps.version.outputs.version }}" "dist/Scala Bad.exe" \
                     --target "$SHA" \
-                    --title "v${{ steps.version.outputs.version }}" \
+                    --title "Windows release v${{ steps.version.outputs.version }}" \
                     --notes "Windows build of $SHA." \
                     --latest
