@@ -16,7 +16,7 @@ Takk for tilbakemeldingene på appen. Vi har gått gjennom ønskene deres og den
 
 **Hvor mange teller samtidig en vanlig tellingsdag?**
 
-Svar:
+Svar: Mest iPad. Ikke besvart ennå: hvordan strekkoden skannes, og hvor mange som teller samtidig.
 
 ### 2. Hva skjer når nettet er dårlig?
 
@@ -27,7 +27,7 @@ Tenk deg at nettet faller ut mens du står midt i en hylle og har talt tretti va
 - At du kan fortsette å telle, og at alt sendes inn når nettet er tilbake.
 - At appen stopper og sier fra, slik at du ikke mister noe.
 
-Svar:
+Svar: Nettet er sterkt over hele lageret.
 
 ### 3. Hva skjer når flere teller samtidig?
 
@@ -41,7 +41,7 @@ To personer teller i samme gang. Begge finner Como Fronter 60 – Lys Macchiato,
 
 **Hvem skal kunne se hele tellingen mens den pågår, for eksempel hvor mange varer som er talt, og av hvem?** Trenger dere innlogging, eller er alle som har lenken like godt?
 
-Svar:
+Svar: Tallene legges sammen, på lokasjonen de er talt på. Ikke besvart ennå: hvem som skal se hele tellingen, og om det trengs innlogging.
 
 ## Varer som står flere ganger
 
@@ -62,7 +62,7 @@ Dere ønsker at appen sjekker dette når listen hentes inn, og at dere kan slett
 
 **Hvem skal få lov til å slette linjer?**
 
-Svar:
+Svar: Appen sjekker for dobbeltlinjer når listen hentes inn. For hver vare som står flere ganger må den som henter inn listen velge lokasjon selv, i en dialog.
 
 ### 5. Hva betyr `A1`?
 
@@ -70,7 +70,7 @@ Over 170 varer har lokasjon `A1`, og de fleste av dem har 0 på lager.
 
 **Er `A1` en hylle du går til og teller, eller er det bare der systemet legger varer som ikke har fått en plass?**
 
-Svar:
+Svar: Trolig der systemet legger varer som ikke har fått en plass; ikke bekreftet. Linjer med 0 på lager skal kunne skjules med et filter i sidepanelet.
 
 ### 6. Hva betyr `N/A`?
 
@@ -107,7 +107,7 @@ Dere ba om å få med «kolonne 3», som inneholder farger og lignende. Vi vil v
 
 **Skal du kunne søke på den?** Husk at skjermen på en mobil er liten, så vi kan ikke vise alt samtidig. Hva er viktigst å se?
 
-Svar:
+Svar: Ja, det er kolonne E, `ProduktDesc2`. Ikke besvart ennå: hvor den skal vises, og om den skal kunne søkes på.
 
 ## Plukklokasjon
 

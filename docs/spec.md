@@ -28,8 +28,10 @@ Today the stocktake is done in a spreadsheet on a laptop with a USB barcode scan
   | Excel column | Header | Meaning |
   | --- | --- | --- |
   | F | `PrdEAN` | Barcode (may be empty); needed so a scan can find the product |
+  | E | `ProduktDesc2` | Description, e.g. «Porselen servant i Brun Matt» (may be empty); where it's shown is undecided |
 
 - All other columns are ignored.
+- An item number on more than one line (66 products in `data/complete-stock-list.xlsx`, always at different locations) is resolved before the import finishes: a dialog lists the lines for each such product, and the person importing picks one location, which becomes the product's pick location. The app doesn't suggest one. There's no undo; importing the file again asks again.
 
 - Discontinued (`Utgått`) products are included and counted like any other product. Their status isn't shown.
 - Importing while a stocktake is in progress shows a warning that the current stocktake will be discarded (e.g. "31/43 counted"). Confirming starts a fresh stocktake. Only one stocktake exists at a time.
@@ -40,6 +42,7 @@ Today the stocktake is done in a spreadsheet on a laptop with a USB barcode scan
 - The location column shows the pick location. A product counted at overflow locations shows how many after it, e.g. `C4-7 +2`, and its counted quantity is the total across all its locations.
 - Two columns are hidden until they're switched on in the columns menu. **Bufferlokasjon** lists each overflow location, and is headed **Bufferlokasjoner** once a product has more than one; sorted, it goes by the first overflow location. **Buffer** is what was counted at the overflow locations together. Either way, products without an overflow location sort last.
 - The aisle filter goes by pick location only.
+- A checkbox in the sidebar, off by default, hides products whose system quantity is zero.
 - After a count is saved, the table scrolls to the product and its row briefly highlights, so the counter sees where the count landed.
 - When every product is counted, a summary says how many products have a difference, next to an export button.
 - A stock list can also be imported by dropping the `.xlsx` file on the window.
@@ -119,3 +122,5 @@ Today the stocktake is done in a spreadsheet on a laptop with a USB barcode scan
 - **Exporting moved pick locations.** The export doesn't yet say which products' pick location was moved. The plan: keep the stock list's `Lokasjon` and mark the move from old to new, on the Lokasjoner sheet and as a new-location column on the main sheet.
 - **Showing overflow locations in the table.** The `C4-7 +2` hint is a stopgap. Check whether gpui-kit has a component that suits showing a product's locations better.
 - **Importing results.** Whether the business system can import stocktake results directly, which would make a matching export format worthwhile.
+- **System quantity of a resolved duplicate.** After the import dialog picks a location, whether the product's system quantity is that line's or the sum of both lines (`Como Fronter 60 - Lys Macchiato`: 0 at `A1`, 16 at `E2-8`). Also whether the export shows which location was chosen.
+- **Platform.** The counters count mostly on iPads over wifi that reaches the whole storage, and want counts from several counters at one location added together. This contradicts the one-laptop platform above and the "several laptops" item under out of scope; it's settled in an ADR once the rest of Q1 to Q3 in [questions-for-counters.md](questions-for-counters.md) is answered.
