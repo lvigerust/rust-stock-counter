@@ -51,6 +51,8 @@ pub enum ProductColumn {
     OverflowLocations,
     ItemNumber,
     Name,
+    /// Colour and style, which tell apart products with the same name.
+    Description,
     SystemQuantity,
     CountedQuantity,
     /// What was counted at the overflow locations together.
@@ -61,11 +63,12 @@ pub enum ProductColumn {
 
 impl ProductColumn {
     /// Every column, in the order the table shows them.
-    pub const ALL: [Self; 9] = [
+    pub const ALL: [Self; 10] = [
         Self::Location,
         Self::OverflowLocations,
         Self::ItemNumber,
         Self::Name,
+        Self::Description,
         Self::SystemQuantity,
         Self::CountedQuantity,
         Self::OverflowQuantity,
@@ -100,6 +103,7 @@ impl ProductColumn {
             Self::OverflowLocations => "overflow-locations",
             Self::ItemNumber => "item-number",
             Self::Name => "name",
+            Self::Description => "description",
             Self::SystemQuantity => "system-quantity",
             Self::CountedQuantity => "counted-quantity",
             Self::OverflowQuantity => "overflow-quantity",
@@ -117,6 +121,7 @@ impl ProductColumn {
             Self::OverflowLocations => "Bufferlokasjon",
             Self::ItemNumber => "Varenummer",
             Self::Name => "Produkt",
+            Self::Description => "Beskrivelse",
             Self::SystemQuantity => SYSTEM_QUANTITY,
             Self::CountedQuantity => "Talt",
             Self::OverflowQuantity => "Buffer",
@@ -133,6 +138,7 @@ impl ProductColumn {
             Self::OverflowLocations => Some(220.),
             Self::ItemNumber => Some(156.),
             Self::Name => None,
+            Self::Description => Some(240.),
             Self::SystemQuantity => Some(168.),
             Self::CountedQuantity => Some(136.),
             Self::OverflowQuantity => Some(136.),
@@ -164,6 +170,7 @@ impl Scope {
                 ProductColumn::Location,
                 ProductColumn::ItemNumber,
                 ProductColumn::Name,
+                ProductColumn::Description,
                 ProductColumn::SystemQuantity,
                 ProductColumn::CountedQuantity,
                 ProductColumn::Difference,
@@ -173,6 +180,7 @@ impl Scope {
                 ProductColumn::Location,
                 ProductColumn::ItemNumber,
                 ProductColumn::Name,
+                ProductColumn::Description,
                 ProductColumn::SystemQuantity,
                 ProductColumn::CountedQuantity,
                 ProductColumn::Difference,
@@ -324,6 +332,10 @@ impl ProductTable {
                 }
                 ProductColumn::ItemNumber => natural_cmp(a.item_number(), b.item_number()),
                 ProductColumn::Name => a.name().to_lowercase().cmp(&b.name().to_lowercase()),
+                ProductColumn::Description => a
+                    .description()
+                    .to_lowercase()
+                    .cmp(&b.description().to_lowercase()),
                 ProductColumn::SystemQuantity => a.system_quantity().cmp(&b.system_quantity()),
                 ProductColumn::CountedQuantity => {
                     return missing_last(
@@ -584,6 +596,12 @@ impl TableDelegate for ProductTable {
                 .font_medium()
                 .child(product.name().to_string())
                 .into_any_element(),
+            ProductColumn::Description => div()
+                .min_w_0()
+                .truncate()
+                .text_color(cx.theme().muted_foreground)
+                .child(product.description().to_string())
+                .into_any_element(),
             ProductColumn::SystemQuantity => {
                 product.system_quantity().to_string().into_any_element()
             }
@@ -659,6 +677,7 @@ impl TableDelegate for ProductTable {
             ProductColumn::OverflowLocations => overflow_locations(product),
             ProductColumn::ItemNumber => product.item_number().to_string(),
             ProductColumn::Name => product.name().to_string(),
+            ProductColumn::Description => product.description().to_string(),
             ProductColumn::SystemQuantity => product.system_quantity().to_string(),
             ProductColumn::CountedQuantity => product
                 .counted_quantity()

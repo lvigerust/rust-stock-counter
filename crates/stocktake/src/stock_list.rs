@@ -8,16 +8,23 @@ use std::{error::Error, fmt, path::Path};
 
 use calamine::{Data, Reader as _, open_workbook_auto};
 
-use crate::Product;
+use crate::{Product, same_location};
 
 /// The headers the import reads, as the business system names them.
 pub mod column {
     pub const ITEM_NUMBER: &str = "VareNR";
     pub const NAME: &str = "ProduktDesc1";
+    /// Colour and style. Optional: an export without it imports with empty
+    /// descriptions.
+    pub const DESCRIPTION: &str = "ProduktDesc2";
     pub const BARCODE: &str = "PrdEAN";
     pub const LOCATION: &str = "Lokasjon";
     pub const SYSTEM_QUANTITY: &str = "FysiskPaaLager";
 }
+
+/// What the business system writes in [`column::LOCATION`] for a product
+/// without a location. Read as an empty location.
+pub const NO_LOCATION: &str = "N/A";
 
 /// The file extensions [`read`] accepts: Excel's formats, which the business system
 /// exports to.
@@ -90,12 +97,13 @@ impl Error for ImportError {
     }
 }
 
-/// Reads the products from the business system's stock list export.
+/// Reads the business system's stock list export.
 ///
 /// Rows without an item number are skipped, since exports can end in blank
 /// lines. Every other row must have a whole-number system quantity; an empty
-/// one means nothing in stock.
-pub fn read(path: &Path) -> Result<Vec<Product>, ImportError> {
+/// one means nothing in stock. Lines with the same item number become one
+/// product; see [`StockList::duplicates`].
+pub fn read(path: &Path) -> Result<StockList, ImportError> {
     if !path.exists() {
         return Err(ImportError::NotFound);
     }
@@ -112,26 +120,205 @@ pub fn read(path: &Path) -> Result<Vec<Product>, ImportError> {
     let header = rows.next().ok_or(ImportError::Empty)?;
     let columns = Columns::find(header)?;
 
-    let mut products = Vec::new();
+    let mut lines: Vec<Lines> = Vec::new();
     // Spreadsheet rows are 1-based and the header is row 1. A range starts at
     // its first non-empty row, which for an export is the header.
     let first_row = range.start().map_or(0, |(row, _)| row as usize) + 2;
     for (row_number, row) in (first_row..).zip(rows) {
-        if let Some(product) = columns.product(row, row_number)? {
-            products.push(product);
+        let Some((item_number, line)) = columns.line(row, row_number)? else {
+            continue;
+        };
+        match lines
+            .iter_mut()
+            .find(|lines| lines.item_number == item_number)
+        {
+            Some(lines) => lines.add(line),
+            None => lines.push(Lines::new(item_number, line)),
         }
     }
 
-    if products.is_empty() {
+    if lines.is_empty() {
         return Err(ImportError::Empty);
     }
-    Ok(products)
+    Ok(StockList::new(lines))
+}
+
+/// The stock list as read, before it becomes a stocktake.
+///
+/// An item number on more than one line is one product whose system
+/// quantity is the lines' sum. When the lines are at different locations,
+/// the product is a [duplicate](Self::duplicates): the person importing
+/// picks which location is its pick location, with [`Self::pick_location`],
+/// before the stocktake starts.
+#[derive(Debug)]
+pub struct StockList {
+    products: Vec<Product>,
+    duplicates: Vec<Duplicate>,
+}
+
+/// A product the stock list lists at several locations, and its lines.
+#[derive(Debug)]
+pub struct Duplicate {
+    /// Which of the stock list's products this is.
+    product: usize,
+    lines: Vec<Line>,
+}
+
+/// One location a duplicate is listed at, and what the business system
+/// says is there.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Line {
+    location: String,
+    system_quantity: i64,
+}
+
+impl StockList {
+    fn new(lines: Vec<Lines>) -> Self {
+        let mut products = Vec::with_capacity(lines.len());
+        let mut duplicates = Vec::new();
+        for lines in lines {
+            let locations = lines.distinct_locations();
+            let mut product = Product::new(
+                lines.item_number,
+                lines.name,
+                locations[0].location.clone(),
+                lines.barcode,
+                locations.iter().map(|line| line.system_quantity).sum(),
+            )
+            .with_description(lines.description);
+            if locations.len() > 1 {
+                product = product.with_listed_locations(
+                    locations.iter().map(|line| line.location.clone()).collect(),
+                );
+                duplicates.push(Duplicate {
+                    product: products.len(),
+                    lines: locations,
+                });
+            }
+            products.push(product);
+        }
+        Self {
+            products,
+            duplicates,
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.products.len()
+    }
+
+    /// Never true: [`read`] rejects a stock list without products.
+    pub fn is_empty(&self) -> bool {
+        self.products.is_empty()
+    }
+
+    /// The products listed at several locations, in stock list order.
+    pub fn duplicates(&self) -> &[Duplicate] {
+        &self.duplicates
+    }
+
+    /// The product a duplicate is about.
+    pub fn product(&self, duplicate: &Duplicate) -> &Product {
+        &self.products[duplicate.product]
+    }
+
+    /// Makes a duplicate's `line` its pick location.
+    pub fn pick_location(&mut self, duplicate: usize, line: usize) {
+        let duplicate = &self.duplicates[duplicate];
+        let location = &duplicate.lines[line].location;
+        self.products[duplicate.product].pick_listed_location(location);
+    }
+
+    /// The products, each duplicate at the location picked for it, or its
+    /// first line's until one is.
+    pub fn into_products(self) -> Vec<Product> {
+        self.products
+    }
+}
+
+impl Duplicate {
+    /// The locations the product is listed at, in stock list order.
+    pub fn lines(&self) -> &[Line] {
+        &self.lines
+    }
+}
+
+impl Line {
+    pub fn location(&self) -> &str {
+        &self.location
+    }
+
+    pub fn system_quantity(&self) -> i64 {
+        self.system_quantity
+    }
+}
+
+/// Every line of one item number, as read.
+struct Lines {
+    item_number: String,
+    name: String,
+    description: String,
+    barcode: String,
+    lines: Vec<Line>,
+}
+
+/// One row of the stock list, besides its item number.
+struct ReadLine {
+    name: String,
+    description: String,
+    barcode: String,
+    location: String,
+    system_quantity: i64,
+}
+
+impl Lines {
+    fn new(item_number: String, line: ReadLine) -> Self {
+        Self {
+            item_number,
+            name: line.name,
+            description: line.description,
+            barcode: line.barcode,
+            lines: vec![Line {
+                location: line.location,
+                system_quantity: line.system_quantity,
+            }],
+        }
+    }
+
+    /// Adds another line of the same item number. The first line's name and
+    /// description stand; a barcode is taken from whichever line has one.
+    fn add(&mut self, line: ReadLine) {
+        if self.barcode.is_empty() {
+            self.barcode = line.barcode;
+        }
+        self.lines.push(Line {
+            location: line.location,
+            system_quantity: line.system_quantity,
+        });
+    }
+
+    /// The lines with the [same](same_location) location folded into one,
+    /// in the order they were first listed.
+    fn distinct_locations(&self) -> Vec<Line> {
+        let mut distinct: Vec<Line> = Vec::new();
+        for line in &self.lines {
+            match distinct
+                .iter_mut()
+                .find(|known| same_location(&known.location, &line.location))
+            {
+                Some(known) => known.system_quantity += line.system_quantity,
+                None => distinct.push(line.clone()),
+            }
+        }
+        distinct
+    }
 }
 
 /// Where each header the import reads sits in the header row.
 struct Columns {
     item_number: usize,
     name: usize,
+    description: Option<usize>,
     barcode: usize,
     location: usize,
     system_quantity: usize,
@@ -165,6 +352,7 @@ impl Columns {
             return Ok(Self {
                 item_number,
                 name,
+                description: position(column::DESCRIPTION),
                 barcode,
                 location,
                 system_quantity,
@@ -178,8 +366,13 @@ impl Columns {
         Err(ImportError::MissingColumns(missing))
     }
 
-    /// The product on one row, `None` for a row without an item number.
-    fn product(&self, row: &[Data], row_number: usize) -> Result<Option<Product>, ImportError> {
+    /// The line on one row with its item number, `None` for a row without
+    /// one.
+    fn line(
+        &self,
+        row: &[Data],
+        row_number: usize,
+    ) -> Result<Option<(String, ReadLine)>, ImportError> {
         let cell = |ix: usize| row.get(ix).unwrap_or(&Data::Empty);
         let item_number = text(cell(self.item_number));
         if item_number.is_empty() {
@@ -191,24 +384,42 @@ impl Columns {
                 row: row_number,
                 value: text(quantity_cell),
             })?;
-        Ok(Some(Product::new(
-            item_number,
-            text(cell(self.name)),
-            text(cell(self.location)),
-            text(cell(self.barcode)),
+        let line = ReadLine {
+            name: text(cell(self.name)),
+            description: self.description.map(cell).map(text).unwrap_or_default(),
+            barcode: text(cell(self.barcode)),
+            location: location(cell(self.location)),
             system_quantity,
-        )))
+        };
+        Ok(Some((item_number, line)))
     }
 }
 
-/// A cell as trimmed text. Whole numbers lose their `.0`, so an item number
-/// or barcode stored as a number reads the same as one stored as text.
+/// A cell as text with its whitespace tidied: trimmed, and runs of spaces
+/// collapsed, so `Gull  Børstet` is found by typing `Gull Børstet`. Whole
+/// numbers lose their `.0`, so an item number or barcode stored as a number
+/// reads the same as one stored as text.
 fn text(cell: &Data) -> String {
     match cell {
         Data::Float(value) if value.fract() == 0.0 => format!("{value:.0}"),
         Data::Int(value) => value.to_string(),
         Data::Empty => String::new(),
-        other => other.to_string().trim().to_string(),
+        other => other
+            .to_string()
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" "),
+    }
+}
+
+/// A location cell as text, with the business system's [`NO_LOCATION`] read
+/// as none.
+fn location(cell: &Data) -> String {
+    let location = text(cell);
+    if location.eq_ignore_ascii_case(NO_LOCATION) {
+        String::new()
+    } else {
+        location
     }
 }
 
@@ -266,11 +477,16 @@ mod tests {
     }
 
     /// Reads a fixture workbook and deletes it.
-    fn read_fixture(name: &str, rows: &[&[Cell]]) -> Result<Vec<Product>, ImportError> {
+    fn read_fixture_list(name: &str, rows: &[&[Cell]]) -> Result<StockList, ImportError> {
         let path = workbook(name, rows);
         let result = read(&path);
         std::fs::remove_file(&path).ok();
         result
+    }
+
+    /// Reads a fixture workbook's products and deletes it.
+    fn read_fixture(name: &str, rows: &[&[Cell]]) -> Result<Vec<Product>, ImportError> {
+        read_fixture_list(name, rows).map(StockList::into_products)
     }
 
     /// The headers in the order the business system exports them, with columns the
@@ -387,6 +603,153 @@ mod tests {
     }
 
     #[test]
+    fn reads_the_description_when_the_export_has_one() {
+        let products = read_fixture(
+            "description",
+            &[
+                HEADER,
+                &[
+                    Blank,
+                    Blank,
+                    Text("1"),
+                    Text("Como Fronter 120 - Grå Driftwood"),
+                    Text(" Como Standard -  Ramtre "),
+                    Blank,
+                    Blank,
+                    Text("B2-1"),
+                    Number(3.),
+                ],
+            ],
+        )
+        .unwrap();
+        assert_eq!(products[0].description(), "Como Standard - Ramtre");
+    }
+
+    #[test]
+    fn tidies_the_whitespace_in_text() {
+        let products = read_fixture(
+            "spaces",
+            &[
+                &[
+                    Text("VareNR"),
+                    Text("ProduktDesc1"),
+                    Text("PrdEAN"),
+                    Text("Lokasjon"),
+                    Text("FysiskPaaLager"),
+                ],
+                &[
+                    Text("1"),
+                    Text("Maranello 90 - Gull  Børstet "),
+                    Blank,
+                    Text(" C4-7"),
+                    Number(1.),
+                ],
+            ],
+        )
+        .unwrap();
+        assert_eq!(products[0].name(), "Maranello 90 - Gull Børstet");
+        assert_eq!(products[0].location(), "C4-7");
+    }
+
+    #[test]
+    fn reads_the_business_systems_no_location_as_none() {
+        let products = read_fixture(
+            "no-location",
+            &[
+                &[
+                    Text("VareNR"),
+                    Text("ProduktDesc1"),
+                    Text("PrdEAN"),
+                    Text("Lokasjon"),
+                    Text("FysiskPaaLager"),
+                ],
+                &[Text("1"), Text("Uplassert"), Blank, Text("N/A"), Number(4.)],
+                &[
+                    Text("2"),
+                    Text("Uplassert"),
+                    Blank,
+                    Text(" n/a "),
+                    Number(4.),
+                ],
+            ],
+        )
+        .unwrap();
+        assert_eq!(products[0].location(), "");
+        assert_eq!(products[0].aisle(), "");
+        assert_eq!(products[1].location(), "");
+    }
+
+    #[test]
+    fn merges_lines_with_the_same_item_number() {
+        let columns: &[Cell] = &[
+            Text("VareNR"),
+            Text("ProduktDesc1"),
+            Text("PrdEAN"),
+            Text("Lokasjon"),
+            Text("FysiskPaaLager"),
+        ];
+        let mut list = read_fixture_list(
+            "duplicates",
+            &[
+                columns,
+                &[
+                    Text("1"),
+                    Text("Como Fronter 60"),
+                    Blank,
+                    Text("A1"),
+                    Number(0.),
+                ],
+                &[Text("2"), Text("Alene"), Text("7"), Text("B1"), Number(2.)],
+                &[
+                    Text("1"),
+                    Text("Como Fronter 60"),
+                    Text("9"),
+                    Text("E2-8"),
+                    Number(16.),
+                ],
+                // The same location twice isn't a choice to make; it's one line.
+                &[Text("2"), Text("Alene"), Blank, Text("b1"), Number(3.)],
+            ],
+        )
+        .unwrap();
+        assert_eq!(list.len(), 2);
+        assert_eq!(list.duplicates().len(), 1);
+
+        let duplicate = &list.duplicates()[0];
+        let product = list.product(duplicate);
+        assert_eq!(product.item_number(), "1");
+        assert_eq!(product.system_quantity(), 16);
+        // The barcode comes from whichever line has one.
+        assert_eq!(product.barcode(), "9");
+        assert_eq!(product.location(), "A1");
+        assert_eq!(
+            duplicate.lines(),
+            [
+                Line {
+                    location: "A1".into(),
+                    system_quantity: 0
+                },
+                Line {
+                    location: "E2-8".into(),
+                    system_quantity: 16
+                },
+            ]
+        );
+
+        list.pick_location(0, 1);
+        let products = list.into_products();
+        assert_eq!(products[0].location(), "E2-8");
+        assert_eq!(
+            products[0].other_listed_locations().collect::<Vec<_>>(),
+            ["A1"]
+        );
+        assert_eq!(products[1].item_number(), "2");
+        assert_eq!(products[1].system_quantity(), 5);
+        assert_eq!(products[1].location(), "B1");
+        assert_eq!(products[1].other_listed_locations().count(), 0);
+    }
+
+    #[test]
     fn names_every_missing_column() {
         let error = read_fixture(
             "missing",
@@ -469,7 +832,9 @@ mod tests {
     #[test]
     fn reads_the_sample_export() {
         let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data/stock-list.xlsx");
-        let products = read(&path).expect("sample stock list imports");
+        let products = read(&path)
+            .expect("sample stock list imports")
+            .into_products();
         assert_eq!(products.len(), 43);
 
         // Found by item number, since exports don't promise a row order.
@@ -482,5 +847,42 @@ mod tests {
         assert_eq!(burano.barcode(), "7043811520667");
         assert_eq!(burano.system_quantity(), 33);
         assert!(!burano.is_counted());
+    }
+
+    /// The complete export the counters work from, so the import is held to
+    /// a real-world file: 3,673 rows, 66 item numbers on two lines, `N/A`
+    /// locations, and names with doubled spaces.
+    #[test]
+    fn reads_the_complete_export() {
+        let path =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data/complete-stock-list.xlsx");
+        let list = read(&path).expect("complete stock list imports");
+        assert_eq!(list.duplicates().len(), 66);
+        assert_eq!(list.len(), 3_673 - 66);
+
+        let como = list
+            .duplicates()
+            .iter()
+            .find(|duplicate| list.product(duplicate).item_number() == "202559")
+            .expect("Como Fronter 60 - Lys Macchiato is listed twice");
+        let lines: Vec<_> = como
+            .lines()
+            .iter()
+            .map(|line| (line.location(), line.system_quantity()))
+            .collect();
+        assert_eq!(lines, [("A1", 0), ("E2-8", 16)]);
+        assert_eq!(list.product(como).system_quantity(), 16);
+
+        let products = list.into_products();
+        let find = |item_number: &str| {
+            products
+                .iter()
+                .find(|product| product.item_number() == item_number)
+                .unwrap_or_else(|| panic!("{item_number} is in the list"))
+        };
+        assert!(products.iter().all(|product| product.aisle() != "N"));
+        assert!(products.iter().any(|product| product.location().is_empty()));
+        assert_eq!(find("201594").name(), "Maranello 90 - Gull Børstet");
+        assert_eq!(find("202559").description(), "Como Standard - Ramtre");
     }
 }

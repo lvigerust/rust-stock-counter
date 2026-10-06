@@ -6475,6 +6475,7 @@ name = "stocktake"
 version = "0.1.0"
 dependencies = [
  "calamine",
+ "chrono",
  "dirs 7.0.0",
  "rust_xlsxwriter",
  "serde",

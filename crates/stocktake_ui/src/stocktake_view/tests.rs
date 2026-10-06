@@ -16,10 +16,16 @@ const BURANO: (&str, &str) = ("7043811520629", "49");
 /// The second product's barcode and system quantity.
 const VENETO: (&str, &str) = ("7043811507668", "3");
 
+/// The third product's item number: it has no barcode, and the business
+/// system says there are none of it.
+const COMO: &str = "202559";
+
 fn stocktake() -> Stocktake {
     Stocktake::new(vec![
         Product::new("152062", "Burano 120 Sort", "C4-7", BURANO.0, 49),
         Product::new("150766", "Veneto 90", "D3-1", VENETO.0, 3),
+        Product::new(COMO, "Como Fronter 60 - Lys Macchiato", "A1", "", 0)
+            .with_description("Como Standard - Ramtre"),
     ])
 }
 
@@ -87,6 +93,46 @@ impl<'a> Counter<'a> {
     fn click(&mut self, id: &'static str) {
         self.find(id);
         self.step(|window, cx| window.click(id, cx));
+    }
+
+    /// Presses Tab until `id` has focus, or fails after a full round: the
+    /// stops before it depend on what the dialog offers.
+    fn tab_to(&mut self, id: &'static str) {
+        for _ in 0..8 {
+            self.press("tab");
+            if self.is_focused(id) {
+                return;
+            }
+        }
+        panic!("Tab never reached {id}");
+    }
+
+    /// How many rows the stock list's table shows.
+    fn rows(&mut self) -> usize {
+        self.cx.read(|cx| {
+            let table = &self.view.read(cx).open.as_ref().unwrap().table;
+            table.read(cx).delegate().rows_count(cx)
+        })
+    }
+
+    /// The state of the product with `item_number`, as the session holds it.
+    fn state(&mut self, item_number: &str) -> stocktake::CountState {
+        self.cx.read(|cx| {
+            let session = self.view.read(cx).open.as_ref().unwrap().session.read(cx);
+            let stocktake = session.stocktake();
+            let id = stocktake.product_matching_exactly(item_number).unwrap();
+            stocktake.product(id).count_state()
+        })
+    }
+
+    /// The pick location of the product with `item_number`.
+    fn location(&mut self, item_number: &str) -> String {
+        self.cx.read(|cx| {
+            let session = self.view.read(cx).open.as_ref().unwrap().session.read(cx);
+            let stocktake = session.stocktake();
+            let id = stocktake.product_matching_exactly(item_number).unwrap();
+            stocktake.product(id).location().to_string()
+        })
     }
 
     fn step(&mut self, f: impl FnOnce(&mut Window, &mut App)) {
@@ -196,14 +242,7 @@ fn counts_at_overflow_locations_add_up(cx: &mut TestAppContext) {
         if save == "enter" {
             counter.press("enter");
         } else {
-            // Past Avbryt to Erstatt.
-            counter.press("tab");
-            counter.press("tab");
-            assert!(counter.is_focused("replace-count"));
-            if save == "add-count" {
-                counter.press("tab");
-            }
-            assert!(counter.is_focused(save));
+            counter.tab_to(save);
             counter.press("space");
         }
         assert!(counter.find("count").is_none());
@@ -593,9 +632,7 @@ fn the_differences_list_counted_products_that_differ(cx: &mut TestAppContext) {
     assert!(counter.is_focused("count"));
     counter.input(BURANO.1);
     // Enter would add to the count already there; Erstatt replaces it.
-    counter.press("tab");
-    counter.press("tab");
-    assert!(counter.is_focused("replace-count"));
+    counter.tab_to("replace-count");
     counter.press("space");
     assert!(counter.find("count").is_none());
     assert_eq!(counter.counted(BURANO.0), Some(49));
@@ -639,6 +676,7 @@ fn the_columns_menu_hides_and_shows_columns(cx: &mut TestAppContext) {
         "menu-item:Lokasjon",
         "menu-item:Varenummer",
         "menu-item:Produkt",
+        "menu-item:Beskrivelse",
         "menu-item:I lagersystemet",
         "menu-item:Talt",
         "menu-item:Differanse",
@@ -646,21 +684,21 @@ fn the_columns_menu_hides_and_shows_columns(cx: &mut TestAppContext) {
     ] {
         assert_eq!(checked(&mut counter, id), Some(true), "{id}");
     }
-    assert_eq!(columns_count(&mut counter), 7);
+    assert_eq!(columns_count(&mut counter), 8);
 
     // Clicking one hides it, and the menu stays open with it unchecked.
     counter.click("menu-item:Varenummer");
-    assert_eq!(columns_count(&mut counter), 6);
+    assert_eq!(columns_count(&mut counter), 7);
     assert_eq!(checked(&mut counter, "menu-item:Varenummer"), Some(false));
 
     // The product name always shows: picking it does nothing, and the menu
     // stays open.
     counter.click("menu-item:Produkt");
-    assert_eq!(columns_count(&mut counter), 6);
+    assert_eq!(columns_count(&mut counter), 7);
 
     // Clicking the hidden column again shows it.
     counter.click("menu-item:Varenummer");
-    assert_eq!(columns_count(&mut counter), 7);
+    assert_eq!(columns_count(&mut counter), 8);
     assert_eq!(checked(&mut counter, "menu-item:Varenummer"), Some(true));
 
     // Picked from the keyboard, a column still toggles, and the menu closes.
@@ -670,7 +708,7 @@ fn the_columns_menu_hides_and_shows_columns(cx: &mut TestAppContext) {
     counter.press("down");
     counter.press("down");
     counter.press("enter");
-    assert_eq!(columns_count(&mut counter), 6);
+    assert_eq!(columns_count(&mut counter), 7);
     assert!(counter.find("menu-item:Varenummer").is_none());
 }
 
@@ -773,4 +811,151 @@ fn the_settings_window_turns_the_paste_off_and_remembers_it(cx: &mut TestAppCont
         .unwrap();
     counter.cx.run_until_parked();
     assert_eq!(counter.cx.windows().len(), 1);
+}
+
+#[gpui_kit::test]
+fn the_zero_stock_filter_hides_what_the_system_has_none_of(cx: &mut TestAppContext) {
+    let mut counter = Counter::resume(cx, "zero-stock");
+    assert_eq!(counter.rows(), 3);
+
+    // Off by default; checked, the product the system says is empty goes.
+    assert_eq!(
+        counter
+            .find("hide-zero-stock")
+            .and_then(|box_| box_.checked()),
+        Some(false)
+    );
+    counter.click("hide-zero-stock");
+    assert_eq!(counter.rows(), 2);
+    counter.click("hide-zero-stock");
+    assert_eq!(counter.rows(), 3);
+}
+
+#[gpui_kit::test]
+fn ferdig_talt_marks_a_counted_product_finished(cx: &mut TestAppContext) {
+    use stocktake::CountState;
+    let mut counter = Counter::resume(cx, "finished");
+
+    // Uncounted, the button is there but can't be pressed: Tab passes it by.
+    counter.input(BURANO.0);
+    counter.press("enter");
+    assert!(counter.find("finish-count").is_some());
+    counter.press("tab");
+    assert!(!counter.is_focused("finish-count"));
+    counter.press("shift-tab");
+    counter.input(BURANO.1);
+    counter.press("enter");
+    assert_eq!(counter.state("152062"), CountState::Counted);
+
+    // Counted, it marks the product finished and ends the count.
+    counter.input(BURANO.0);
+    counter.press("enter");
+    counter.tab_to("finish-count");
+    counter.press("space");
+    assert!(counter.find("count").is_none());
+    assert_eq!(counter.state("152062"), CountState::Finished);
+    assert!(counter.is_focused("search"));
+
+    // Counting again leaves the mark alone; the same button removes it.
+    counter.input(BURANO.0);
+    counter.press("enter");
+    counter.input("1");
+    counter.tab_to("add-count");
+    counter.press("space");
+    assert_eq!(counter.counted(BURANO.0), Some(50));
+    assert_eq!(counter.state("152062"), CountState::Finished);
+    counter.input(BURANO.0);
+    counter.press("enter");
+    counter.tab_to("finish-count");
+    counter.press("space");
+    assert_eq!(counter.state("152062"), CountState::Counted);
+
+    // The status filter has a box for it.
+    assert!(counter.find("status-finished").is_some());
+}
+
+#[gpui_kit::test]
+fn an_ambiguous_search_opens_nothing(cx: &mut TestAppContext) {
+    let mut counter = Counter::resume(cx, "ambiguous");
+    // Both names and the description hold an "o".
+    counter.input("o");
+    counter.press("enter");
+    assert!(counter.find("count").is_none());
+    assert!(counter.is_focused("search"));
+    assert_eq!(counter.value("search").as_deref(), Some("o"));
+}
+
+#[gpui_kit::test]
+fn importing_a_duplicate_asks_for_its_pick_location(cx: &mut TestAppContext) {
+    let store = store_path("import-duplicates");
+    let dir = store.parent().unwrap().to_path_buf();
+    std::fs::create_dir_all(&dir).unwrap();
+
+    // Item number 1 on two lines, at two locations.
+    let stock_list = dir.join("Vareliste.xlsx");
+    let mut workbook = rust_xlsxwriter::Workbook::new();
+    let sheet = workbook.add_worksheet();
+    let header = [
+        "VareNR",
+        "ProduktDesc1",
+        "ProduktDesc2",
+        "PrdEAN",
+        "Lokasjon",
+        "FysiskPaaLager",
+    ];
+    for (col, name) in (0u16..).zip(header) {
+        sheet.write_string(0, col, name).unwrap();
+    }
+    let rows = [
+        ("1", "Como Fronter 60", "Ramtre", "", "A1", 0.),
+        ("2", "Alene", "", BURANO.0, "B1", 2.),
+        ("1", "Como Fronter 60", "Ramtre", "", "E2-8", 16.),
+    ];
+    for (row, (item, name, description, barcode, location, quantity)) in (1u32..).zip(rows) {
+        sheet.write_string(row, 0, item).unwrap();
+        sheet.write_string(row, 1, name).unwrap();
+        sheet.write_string(row, 2, description).unwrap();
+        sheet.write_string(row, 3, barcode).unwrap();
+        sheet.write_string(row, 4, location).unwrap();
+        sheet.write_number(row, 5, quantity).unwrap();
+    }
+    workbook.save(&stock_list).unwrap();
+
+    let mut counter = Counter::open(cx, store.clone());
+    let view = counter.view.clone();
+    counter.step(|window, cx| {
+        view.update(cx, |view, cx| {
+            view.import_stock_list(ImportSource::File(stock_list), window, cx)
+        })
+    });
+
+    // Nothing is imported until every duplicate has a location: the
+    // button does nothing before one is picked.
+    assert!(counter.find("search").is_none());
+    counter.click("import-with-duplicates");
+    assert!(counter.find("search").is_none());
+    // The radios are reached through their group, as its second line.
+    counter.step(|window, cx| {
+        window.render_frame(cx);
+        window.within("duplicate:1").click(1usize, cx);
+    });
+    counter.click("import-with-duplicates");
+    assert!(counter.is_focused("search"));
+    assert_eq!(counter.location("1"), "E2-8");
+    // The lines are one product, with the quantities added.
+    assert_eq!(store::load(&store).unwrap().unwrap().len(), 2);
+
+    // The choice can be undone from the count dialog, which offers the
+    // other line's location.
+    counter.input("1");
+    counter.press("enter");
+    assert!(counter.is_focused("count"));
+    // Back past the location field to the other line's button.
+    counter.press("shift-tab");
+    counter.press("shift-tab");
+    assert!(counter.is_focused("pick-listed-location:A1"));
+    counter.press("space");
+    assert!(counter.find("count").is_none());
+    assert_eq!(counter.location("1"), "A1");
+    assert!(counter.is_focused("search"));
 }

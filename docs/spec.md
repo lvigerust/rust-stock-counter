@@ -6,7 +6,7 @@ An app for the year-end stocktake at Scala Bad: going through the storage and ve
 
 Until now the stocktake has been done on paper, and before that in a spreadsheet on a laptop with a USB barcode scanner. Scanning a barcode jumps to the product's row, where the system quantity is pre-filled; the counter confirms it or overwrites it. This app replaces that.
 
-- **Platform:** a native iPad app, with the one stocktake shared through CloudKit so up to four counters count at once; see [ADR 0001](adr/0001-native-ipad-app.md). It was designed and built first as a GPUI Kit desktop app for one laptop and a USB scanner, which this document still describes screen for screen; the desktop app is kept as that design, not developed further.
+- **Platform:** a native iPad app, with the one stocktake shared through CloudKit so up to four counters count at once; see [ADR 0001](adr/0001-native-ipad-app.md). It was designed and built first as a GPUI Kit desktop app for one laptop and a USB scanner, which this document describes screen for screen. The desktop app is where each rule is worked out and tried, since it builds and tests in seconds; the port starts once the open questions are settled there.
 - **Scanning:** the device's camera, or a wireless scanner, which acts as a keyboard and types into the search field like the USB scanner did.
 - **Interface language:** Norwegian. Code and docs use the English terms in `CONTEXT.md`.
 
@@ -65,7 +65,7 @@ Until now the stocktake has been done on paper, and before that in a spreadsheet
 - A barcode scan, or typing an item number, name or description, selects the matching row. The counters mostly type part of the name, such as «Burano»; the search ignores letter case.
 - Searching also matches the product's pick location and any overflow locations it has been counted at, so typing «tilbehør» lists that aisle.
 - Products without a barcode are found by typing.
-- If nothing matches, an error dialog is shown. Unlisted products are not recorded.
+- If nothing matches, an error dialog is shown. Unlisted products are not recorded. If several products match, Enter opens nothing: a notice says how many matched, and the table already lists them to pick from.
 
 ### Counting a product
 
@@ -118,11 +118,9 @@ Until now the stocktake has been done on paper, and before that in a spreadsheet
 
 ## Undecided
 
-- **Stock list size.** Assumed to be about 50 products, like the sample, but not confirmed. A list of thousands, or one covering several warehouses, could change search and table design.
 - **Stock movement during the stocktake.** It's unknown whether goods are received or shipped while counting. v1 assumes the storage is frozen and compares against one export taken right before counting. If stock moves, system quantities go stale mid-count and differences would need reconciling.
 - **Unlisted products.** v1 only shows an error. Whether they should be recorded (barcode + quantity, listed separately in the export) is open.
 - **Blind vs. pre-filled counting.** v1 pre-fills the system quantity, which risks counters confirming without really checking. Revisit once the basics work.
-- **Barcode column.** The storage owner listed C, D, H and N as the interesting columns, which doesn't include the barcode (F). The spec still reads F so scanning works. Confirm this is fine, or whether they scan something else, such as the item number.
 - **Export columns.** Whether the exported `.xlsx` should keep every original column, or only C, D, H and N plus Counted quantity and Difference.
 - **Scanning into an open count cell.** If a counter scans the next product instead of pressing Enter first, the barcode is typed into the counted-quantity cell (or the "count again" field) and the scanner's Enter submits it. The app now guards the case where the text is exactly the barcode of a listed product: nothing is saved, the scanned product is counted next, and a hint says the previous count wasn't saved. A barcode that isn't on the list is still accepted as a quantity. Not yet checked with the real scanner; a maximum quantity could close that gap.
 - **Location field in the count dialog.** The editable, pre-filled field is a first take on registering overflow locations; the interaction may change once it's tried on the floor.

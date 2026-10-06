@@ -16,6 +16,7 @@ stocktake_ui = { path = "crates/stocktake_ui" }
 ui = { path = "crates/ui" }
 
 calamine = "0.36.1"
+chrono = { version = "0.4.45", features = ["serde"] }
 dirs = "7.0.0"
 gpui-kit = "0.7"
 rust_xlsxwriter = "0.99.1"

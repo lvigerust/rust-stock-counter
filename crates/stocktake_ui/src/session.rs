@@ -73,6 +73,20 @@ impl Session {
         self.save(cx);
     }
 
+    /// Marks a product finished, or unmarks it, and saves at once.
+    pub fn set_finished(&mut self, id: ProductId, finished: bool, cx: &mut Context<Self>) {
+        self.stocktake.set_finished(id, finished);
+        self.save(cx);
+    }
+
+    /// Makes one of the locations the stock list listed a product at its
+    /// pick location, undoing the choice made at import, and saves at once.
+    pub fn pick_listed_location(&mut self, id: ProductId, location: &str, cx: &mut Context<Self>) {
+        if self.stocktake.pick_listed_location(id, location) {
+            self.save(cx);
+        }
+    }
+
     /// Writes the stocktake to disk. A write that fails marks the session
     /// unsaved and emits [`SessionEvent::SaveFailed`].
     pub fn save(&mut self, cx: &mut Context<Self>) {

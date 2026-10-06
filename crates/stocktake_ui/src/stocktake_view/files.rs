@@ -5,17 +5,25 @@
 //! slow file never stalls the window; the results come back to the view.
 
 use std::{
+    cell::RefCell,
     collections::HashSet,
     path::{Path, PathBuf},
+    rc::Rc,
 };
 
-use gpui_kit::component::{WindowExt as _, button::ButtonVariant, notification::Notification};
-use gpui_kit::{ExternalPaths, PathPromptOptions};
+use gpui_kit::component::{
+    WindowExt as _,
+    button::{ButtonVariant, ButtonVariants as _},
+    dialog::{DialogClose, DialogFooter},
+    notification::Notification,
+    radio::{Radio, RadioGroup},
+};
+use gpui_kit::{ClickEvent, ExternalPaths, PathPromptOptions};
 use stocktake::{
     Product, Stocktake, export, recent,
-    stock_list::{self, ImportError},
+    stock_list::{self, ImportError, StockList},
 };
-use ui::{StyledDialog as _, prelude::*};
+use ui::{Button, Field, FocusRing, Spacing, StyledDialog as _, Text, prelude::*};
 
 use super::StocktakeView;
 use crate::{path_display::file_name, session::Session};
@@ -115,39 +123,34 @@ impl StocktakeView {
     /// Reads the stock list off the UI thread, then starts the stocktake.
     /// Replaces any read still under way, so the last file chosen wins.
     fn read_file(&mut self, path: PathBuf, window: &mut Window, cx: &mut Context<Self>) {
-        let products = cx.background_spawn({
+        let stock_list = cx.background_spawn({
             let path = path.clone();
             async move { stock_list::read(&path) }
         });
         self.import_task = Some(cx.spawn_in(window, async move |this, cx| {
-            let products = products.await;
+            let stock_list = stock_list.await;
             this.update_in(cx, |this, window, cx| {
-                this.finish_import(path, products, window, cx)
+                this.finish_import(path, stock_list, window, cx)
             })
             .ok();
         }));
     }
 
-    /// Starts a new stocktake from what was read, saved at once, and
-    /// remembers the file among the recent ones; or says why it couldn't.
+    /// Starts a new stocktake from what was read, once any product the
+    /// stock list lists at several locations has a pick location; or says
+    /// why it couldn't be read.
     fn finish_import(
         &mut self,
         path: PathBuf,
-        products: Result<Vec<Product>, ImportError>,
+        stock_list: Result<StockList, ImportError>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        match products {
-            Ok(products) => {
-                let stocktake = Stocktake::new(products);
-                let session = cx.new(|_| Session::new(stocktake, self.store_path.clone()));
-                self.open_stocktake(session.clone(), window, cx);
-                // After opening, so a failed save is reported like any other.
-                session.update(cx, |session, cx| session.save(cx));
-                self.unavailable.remove(&path);
-                self.recent.add(path);
-                self.save_recent();
+        match stock_list {
+            Ok(stock_list) if stock_list.duplicates().is_empty() => {
+                self.start_stocktake(path, stock_list.into_products(), window, cx);
             }
+            Ok(stock_list) => self.resolve_duplicates(path, stock_list, window, cx),
             Err(error) => {
                 if matches!(error, ImportError::NotFound) {
                     self.unavailable.insert(path);
@@ -163,6 +166,128 @@ impl StocktakeView {
                 });
             }
         }
+    }
+
+    /// Starts a new stocktake over `products`, saved at once, and remembers
+    /// the file among the recent ones.
+    fn start_stocktake(
+        &mut self,
+        path: PathBuf,
+        products: Vec<Product>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let stocktake = Stocktake::new(products);
+        let session = cx.new(|_| Session::new(stocktake, self.store_path.clone()));
+        self.open_stocktake(session.clone(), window, cx);
+        // After opening, so a failed save is reported like any other.
+        session.update(cx, |session, cx| session.save(cx));
+        self.unavailable.remove(&path);
+        self.recent.add(path);
+        self.save_recent();
+    }
+
+    /// Asks which of its locations is the pick location for every product
+    /// the stock list lists at several, then starts the stocktake. The app
+    /// suggests nothing: the counters know the storage. Cancelling imports
+    /// nothing.
+    fn resolve_duplicates(
+        &mut self,
+        path: PathBuf,
+        stock_list: StockList,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let duplicates = stock_list.duplicates().len();
+        let title: SharedString = match duplicates {
+            1 => "1 vare står flere ganger i varelisten".into(),
+            n => format!("{n} varer står flere ganger i varelisten").into(),
+        };
+        // Taken out when the import goes ahead, so the dialog can't import
+        // twice.
+        let stock_list = Rc::new(RefCell::new(Some(stock_list)));
+        // Which line is picked for each duplicate, in the stock list's order.
+        let picks: Rc<RefCell<Vec<Option<usize>>>> = Rc::new(RefCell::new(vec![None; duplicates]));
+        let view = cx.entity().downgrade();
+
+        window.open_dialog(cx, move |dialog, window, cx| {
+            let list = stock_list.borrow();
+            let Some(list) = list.as_ref() else {
+                return dialog;
+            };
+            let picked = picks.borrow().clone();
+            let groups = list.duplicates().iter().enumerate().map(|(ix, duplicate)| {
+                let picks = picks.clone();
+                render_duplicate(
+                    list.product(duplicate),
+                    duplicate,
+                    picked[ix],
+                    move |line| {
+                        picks.borrow_mut()[ix] = Some(line);
+                    },
+                )
+            });
+            let import = {
+                let view = view.clone();
+                let stock_list = stock_list.clone();
+                let picks = picks.clone();
+                let path = path.clone();
+                move |_: &ClickEvent, window: &mut Window, cx: &mut App| {
+                    let Some(mut list) = stock_list.borrow_mut().take() else {
+                        return;
+                    };
+                    for (duplicate, line) in picks.borrow().iter().enumerate() {
+                        if let Some(line) = line {
+                            list.pick_location(duplicate, *line);
+                        }
+                    }
+                    window.close_dialog(cx);
+                    let path = path.clone();
+                    view.update(cx, |this, cx| {
+                        this.start_stocktake(path, list.into_products(), window, cx)
+                    })
+                    .ok();
+                }
+            };
+
+            dialog
+                .title(title.clone())
+                .close_button(false)
+                .child(
+                    v_flex()
+                        .mt_6()
+                        .gap_6()
+                        .child(Text::new(
+                            "Lagersystemet har disse varene på flere lokasjoner. Velg hvilken som \
+                             er plukklokasjonen for hver; antallene legges sammen. Valget kan \
+                             gjøres om fra tellingen av varen.",
+                        ))
+                        .children(groups),
+                )
+                .footer(
+                    DialogFooter::new()
+                        .gap_3()
+                        .child(
+                            div()
+                                .flex_none()
+                                .child(DialogClose::new().trigger(|button| {
+                                    Button::from(button)
+                                        .ghost()
+                                        .label("Avbryt")
+                                        .with_focus_ring(FocusRing::Solid)
+                                })),
+                        )
+                        .child(
+                            Button::new("import-with-duplicates")
+                                .primary()
+                                .label("Importer")
+                                .disabled(picked.iter().any(Option::is_none))
+                                .on_click(import),
+                        ),
+                )
+                .dialog_frame(cx)
+                .w(Spacing(128.).to_pixels(window.rem_size()))
+        });
     }
 
     pub(super) fn on_drop_files(
@@ -315,6 +440,44 @@ impl StocktakeView {
         })
         .detach();
     }
+}
+
+/// One product the stock list lists at several locations: its name, with
+/// what tells it apart below, then a radio per location with what the
+/// business system says is there. `on_pick` gets the index of the line
+/// picked.
+fn render_duplicate(
+    product: &Product,
+    duplicate: &stock_list::Duplicate,
+    picked: Option<usize>,
+    on_pick: impl Fn(usize) + 'static,
+) -> impl IntoElement {
+    let item_number = product.item_number();
+    let detail = if product.description().is_empty() {
+        item_number.to_string()
+    } else {
+        format!("{item_number} · {}", product.description())
+    };
+    let lines = duplicate.lines().iter().map(|line| {
+        let location = match line.location() {
+            "" => "Uten lokasjon".to_string(),
+            location => location.to_string(),
+        };
+        Radio::new(format!("duplicate:{item_number}:{}", line.location()))
+            .label(format!("{location} · {} stk", line.system_quantity()))
+    });
+    Field::new()
+        .label(product.name().to_string())
+        .description(detail)
+        .child(
+            RadioGroup::new(format!("duplicate:{item_number}"))
+                .selected_index(picked)
+                .children(lines)
+                .on_click(move |line, window, _| {
+                    on_pick(*line);
+                    window.refresh();
+                }),
+        )
 }
 
 /// Why the import failed, in the counter's words.

@@ -2,9 +2,12 @@
 //! dialog takes the quantity, the count is saved, and focus returns to the
 //! search for the next scan.
 
+use std::rc::Rc;
+
 use gpui_kit::component::{
     WindowExt as _,
     input::{InputEvent, InputState},
+    notification::Notification,
     table::TableState,
 };
 use stocktake::{Lookup, ProductId};
@@ -12,7 +15,7 @@ use ui::{StyledDialog as _, prelude::*};
 
 use super::{Count, Mode, StocktakeView};
 use crate::{
-    count_dialog::{self, Save, location_input, parse_quantity, quantity_input},
+    count_dialog::{self, CountActions, Save, location_input, parse_quantity, quantity_input},
     product_table::{LastCounted, ProductTable},
 };
 
@@ -28,8 +31,14 @@ impl StocktakeView {
         }
         match open.session.read(cx).stocktake().lookup(&query) {
             Lookup::Found(id) => self.select_product(id, window, cx),
-            // The table already shows the matches to pick from.
-            Lookup::Ambiguous(_) => {}
+            // The table already shows the matches to pick from; this says
+            // why Enter opened nothing.
+            Lookup::Ambiguous(len) => window.push_notification(
+                Notification::warning(format!(
+                    "{len} varer passer «{query}». Velg riktig i tabellen."
+                )),
+                cx,
+            ),
             Lookup::NotFound => self.show_not_found(&query, window, cx),
         }
     }
@@ -146,11 +155,8 @@ impl StocktakeView {
         });
 
         let view = cx.entity().downgrade();
-        count_dialog::open(
-            product,
-            location,
-            input.clone(),
-            {
+        let actions = CountActions {
+            on_save: Rc::new({
                 let view = view.clone();
                 move |save, moves_pick_location, window, cx| {
                     view.update(cx, |this, cx| {
@@ -158,14 +164,29 @@ impl StocktakeView {
                     })
                     .ok();
                 }
-            },
-            move |window, cx| {
+            }),
+            on_finish: Rc::new({
+                let view = view.clone();
+                move |finished, window, cx| {
+                    view.update(cx, |this, cx| this.finish_product(finished, window, cx))
+                        .ok();
+                }
+            }),
+            on_pick_listed: Rc::new({
+                let view = view.clone();
+                move |location, window, cx| {
+                    view.update(cx, |this, cx| {
+                        this.pick_listed_location(location, window, cx)
+                    })
+                    .ok();
+                }
+            }),
+            on_cancel: Rc::new(move |window, cx| {
                 view.update(cx, |this, cx| this.dismiss_count(window, cx))
                     .ok();
-            },
-            window,
-            cx,
-        );
+            }),
+        };
+        count_dialog::open(product, location, input.clone(), actions, window, cx);
         // After the dialog has taken focus for itself.
         cx.defer_in(window, move |_, window, cx| {
             input.update(cx, |input, cx| input.focus(window, cx));
@@ -221,6 +242,46 @@ impl StocktakeView {
         });
         self.finish_count(window, cx);
         self.reveal_counted(id, cx);
+    }
+
+    /// The Ferdig talt button in the count dialog: marks the product
+    /// finished, or unmarks it, and ends the count without recording one.
+    fn finish_product(&mut self, finished: bool, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(open) = &mut self.open else {
+            return;
+        };
+        let Some(count) = open.count.take() else {
+            return;
+        };
+        window.close_dialog(cx);
+        open.session.update(cx, |session, cx| {
+            session.set_finished(count.product, finished, cx)
+        });
+        self.finish_count(window, cx);
+        self.reveal_counted(count.product, cx);
+    }
+
+    /// One of the locations the stock list also listed the product at was
+    /// picked in the count dialog: it becomes the pick location, and the
+    /// count ends, since the dialog was built for the old one.
+    fn pick_listed_location(
+        &mut self,
+        location: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(open) = &mut self.open else {
+            return;
+        };
+        let Some(count) = open.count.take() else {
+            return;
+        };
+        window.close_dialog(cx);
+        open.session.update(cx, |session, cx| {
+            session.pick_listed_location(count.product, location, cx)
+        });
+        self.finish_count(window, cx);
+        self.reveal_counted(count.product, cx);
     }
 
     /// A scanner types the barcode and then presses Enter. If the counter

@@ -22,6 +22,10 @@ _Avoid_: Vare, article, SKU
 The business system's identifier for a product (VareNR).
 _Avoid_: Product ID, article number
 
+**Description**:
+A product's colour and style (ProduktDesc2), which tells apart products with the same name. Not every product has one.
+_Avoid_: Beskrivelse, variant, column E
+
 **Barcode**:
 The EAN printed on a product's packaging; scanning it identifies the product. Not every product has one.
 _Avoid_: EAN, QR code

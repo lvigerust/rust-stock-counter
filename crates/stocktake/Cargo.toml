@@ -15,6 +15,7 @@ workspace = true
 
 [dependencies]
 calamine.workspace = true
+chrono.workspace = true
 dirs.workspace = true
 rust_xlsxwriter.workspace = true
 serde.workspace = true

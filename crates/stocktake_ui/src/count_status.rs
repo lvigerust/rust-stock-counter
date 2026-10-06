@@ -7,8 +7,8 @@ use ui::prelude::*;
 /// icon shape differs as well as its color, so the state reads without color.
 ///
 /// Uncounted and partly counted are the states that need work, so they keep
-/// full-strength text; counted steps back to muted text once its check mark
-/// has said so.
+/// full-strength text; counted and finished step back to muted text once
+/// their check marks have said so.
 #[derive(IntoElement)]
 pub(crate) struct CountStatus {
     state: CountState,
@@ -25,6 +25,7 @@ impl CountStatus {
             CountState::Uncounted => "Ikke talt",
             CountState::PartlyCounted => "Delvis talt",
             CountState::Counted => "Talt",
+            CountState::Finished => "Ferdig talt",
         }
     }
 }
@@ -35,12 +36,12 @@ impl RenderOnce for CountStatus {
             CountState::Uncounted => (IconName::CircleDashed, cx.theme().muted_foreground),
             CountState::PartlyCounted => (IconName::CircleDotDashed, cx.theme().warning),
             CountState::Counted => (IconName::CircleCheck, cx.theme().success),
+            CountState::Finished => (IconName::CheckCheck, cx.theme().success),
         };
+        let done = matches!(self.state, CountState::Counted | CountState::Finished);
         h_flex()
             .gap_2p5()
-            .when(self.state == CountState::Counted, |this| {
-                this.text_color(cx.theme().muted_foreground)
-            })
+            .when(done, |this| this.text_color(cx.theme().muted_foreground))
             .child(Icon::new(icon).small().text_color(color))
             .child(Self::label(self.state))
     }

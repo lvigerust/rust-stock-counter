@@ -4,7 +4,7 @@ Scala Bad is a desktop app for the year-end stocktake (see [CONTEXT.md](../CONTE
 
 It's written in Rust on [GPUI](https://www.gpui.rs/) through [gpui-kit](https://gpui-kit.com) 0.7, and follows the gpui-kit Coding Guides in `.agents/skills/gpui-kit`. There's no server or network: the only inputs are local files.
 
-This desktop app is the design, not the product the counters will use: [ADR 0001](adr/0001-native-ipad-app.md) ports its rules and screens to a native iPad app on CloudKit. What follows describes the desktop app as it is.
+This desktop app is where the design is worked out, not the product the counters will use: [ADR 0001](adr/0001-native-ipad-app.md) ports its rules and screens to a native iPad app on CloudKit once they're settled here. What follows describes the desktop app as it is.
 
 **Contents:** [From file to table](#from-file-to-table) · [Crates](#crates) · [State](#where-state-lives) · [Actions](#how-user-actions-change-state) · [Excel and files](#excel-and-other-files) · [Views, lifecycle and focus](#views-lifecycle-and-focus) · [Motion](#motion) · [Errors](#where-errors-are-handled) · [Adding a feature](#where-to-add-a-feature) · [Tests](#tests) · [Borrowed patterns](#patterns-borrowed-from-other-projects)
 

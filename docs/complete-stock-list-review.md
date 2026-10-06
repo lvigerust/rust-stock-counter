@@ -17,7 +17,7 @@ The app was checked against `data/complete-stock-list.xlsx` by running the real 
 
 ## Tasks that can be done now
 
-These don't depend on how the counters work.
+These don't depend on how the counters work. _All fifteen are done in the desktop app, which is where the rules are tried before the port; the list stays as the record of what each answer turned into._
 
 1. **Collapse repeated spaces in product names on import.** Trim and collapse in `stock_list::text`, with a test.
 2. **Give an ambiguous scan visible feedback.** `Lookup::Ambiguous` does nothing today (`counting.rs:32`). Show a short message such as "2 varer har denne strekkoden. Velg riktig i tabellen." This holds whichever way the duplicates question (Q1) is answered.
@@ -42,7 +42,7 @@ These wait for the counters' answers. The questions, in Norwegian and ready to h
 1. **Q1 to Q3, counting from a phone or tablet.** Devices and scanning, what happens when the network drops, and what happens when several people count at once. These decide the cloud design: offline support and how conflicting counts are merged.
    - _Answered._ They've counted on paper until now, and want to count on iPads or phones because a laptop's battery doesn't last. The barcode is scanned with the device's camera if possible; wireless scanners can be bought. At most four people count at once. The wifi is stable over the whole storage. Anyone with the link can see the stocktake; no login.
    - _Decision:_ no offline queue in v1; the app needs the network. When two counters count the same product at the same location, the counts are added, the same as when one counter counts a location twice (the spec's "Enter adds"). Counts at different locations are kept apart already. No login and no counter identity in v1: a link is the access, and nobody asked to see who counted what. A wireless scanner acts as a keyboard, so the search field keeps working for it; camera scanning is new.
-   - _Platform decided:_ a native iPad app on CloudKit, with the rules ported from `crates/stocktake`; the desktop app stays as the design being ported. [ADR 0001](adr/0001-native-ipad-app.md). The tasks above still describe behaviour, so they hold for the port; which of them land in the desktop app first is a separate choice.
+   - _Platform decided:_ a native iPad app on CloudKit, with the rules ported from `crates/stocktake`; the desktop app stays as the design being ported. [ADR 0001](adr/0001-native-ipad-app.md). The tasks above still describe behaviour, so they hold for the port; they're built and tried in the desktop app first, since it builds and tests in seconds.
 2. **Q4, the same item number on two lines.** The counters want a duplicate check at import and the ability to delete a line. This decides whether the app suggests which line to delete, whether deleting can be undone, and who may delete.
    - _Answered._ The import checks for duplicates. For each duplicate product, the person importing picks the location explicitly, in a dialog; they know the storage, and it's mostly the line with 0 that goes. Deleting must be undoable, by anyone.
    - _Decision:_ task 6 above, reworked from the first round. The lines are merged, not deleted: the system quantity is their sum, so the difference is right whichever line is picked, and the choice only sets the pick location. Undo is switching the pick location to the other line from the count dialog, which any counter can do. The app doesn't suggest a line.

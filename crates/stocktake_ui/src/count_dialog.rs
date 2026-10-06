@@ -17,7 +17,7 @@ use gpui_kit::component::{
     input::{Input, InputState},
 };
 use stocktake::Product;
-use ui::{Button, Field, FocusRing, Spacing, StyledDialog as _, prelude::*};
+use ui::{Button, Field, FocusRing, Spacing, StyledDialog as _, Text, prelude::*};
 
 /// The system quantity's label, in the dialog and as the table's column
 /// header.
@@ -58,8 +58,25 @@ pub(crate) enum Save {
 }
 
 /// What the dialog's buttons and keys do.
-type Callback = Rc<dyn Fn(&mut Window, &mut App)>;
-type SaveCallback = Rc<dyn Fn(Save, bool, &mut Window, &mut App)>;
+pub(crate) type Callback = Rc<dyn Fn(&mut Window, &mut App)>;
+pub(crate) type SaveCallback = Rc<dyn Fn(Save, bool, &mut Window, &mut App)>;
+pub(crate) type FinishCallback = Rc<dyn Fn(bool, &mut Window, &mut App)>;
+pub(crate) type PickCallback = Rc<dyn Fn(&str, &mut Window, &mut App)>;
+
+/// What the dialog hands back to whoever opened it. Each closes the dialog
+/// itself once it's done, so the dialog never acts on a stale product.
+pub(crate) struct CountActions {
+    /// Enter and the save buttons: the kind of save, and whether the typed
+    /// location should become the pick location.
+    pub on_save: SaveCallback,
+    /// The Ferdig talt button: whether the product is now finished.
+    pub on_finish: FinishCallback,
+    /// One of the locations the stock list also listed the product at was
+    /// picked as its pick location.
+    pub on_pick_listed: PickCallback,
+    /// Escape or Avbryt closed the dialog.
+    pub on_cancel: Callback,
+}
 
 /// Opens the dialog for `product`, with `location` (a [`location_input`])
 /// and `input` (a [`quantity_input`], filled in by the caller) as its
@@ -73,24 +90,35 @@ type SaveCallback = Rc<dyn Fn(Save, bool, &mut Window, &mut App)>;
 /// replaces it instead. It's also told whether the location should become
 /// the pick location: while the field holds another location, a checkbox
 /// asks. Checked, the pick location's count moves there too, so that's the
-/// count Enter adds to. `on_cancel` runs when
-/// Escape or Avbryt close the dialog.
+/// count Enter adds to.
+///
+/// A counted product can be marked finished, or unmarked, with a button of
+/// its own, and a product the stock list listed at several locations offers
+/// the ones not picked at import, so the choice can be undone.
 pub(crate) fn open(
     product: Product,
     location: Entity<InputState>,
     input: Entity<InputState>,
-    on_save: impl Fn(Save, bool, &mut Window, &mut App) + 'static,
-    on_cancel: impl Fn(&mut Window, &mut App) + 'static,
+    actions: CountActions,
     window: &mut Window,
     cx: &mut App,
 ) {
     let title: SharedString = product.name().to_string().into();
+    let description: SharedString = product.description().to_string().into();
     let item_number = or_dash(product.item_number());
     let system_quantity: SharedString = product.system_quantity().to_string().into();
     // Only once the pick location itself has been counted.
     let pick_count = product.count_at(product.location());
-    let on_save: SaveCallback = Rc::new(on_save);
-    let on_cancel: Callback = Rc::new(on_cancel);
+    let other_listed: Vec<SharedString> = product
+        .other_listed_locations()
+        .map(|location| location.to_string().into())
+        .collect();
+    let CountActions {
+        on_save,
+        on_finish,
+        on_pick_listed,
+        on_cancel,
+    } = actions;
     // The checkbox's state, kept while it's hidden so it comes back as the
     // counter left it.
     let moves_pick_location = Rc::new(Cell::new(false));
@@ -133,9 +161,40 @@ pub(crate) fn open(
                 true
             }
         };
+        let finished = product.is_finished();
+        let finish_button = {
+            let on_finish = on_finish.clone();
+            Button::new("finish-count")
+                .outline()
+                .icon(IconName::CheckCheck)
+                .label(if finished {
+                    "Angre ferdig talt"
+                } else {
+                    "Ferdig talt"
+                })
+                // Finished says nobody is looking for more units, which
+                // means nothing until the pick location has a number.
+                .disabled(!product.is_counted())
+                .mr_auto()
+                .on_click(move |_, window, cx| on_finish(!finished, window, cx))
+        };
+        let muted = cx.theme().muted_foreground;
 
         dialog
-            .title(title.clone())
+            .title(
+                v_flex()
+                    .gap_1()
+                    .child(title.clone())
+                    // What tells this product from one with the same name.
+                    .when(!description.is_empty(), |this| {
+                        this.child(
+                            Text::new(description.clone())
+                                .text_sm()
+                                .font_normal()
+                                .text_color(muted),
+                        )
+                    }),
+            )
             // Avbryt and Escape already cancel. The × would be one more Tab
             // stop, and gpui-kit gives it no way to show focus here.
             .close_button(false)
@@ -160,6 +219,9 @@ pub(crate) fn open(
                     })
                     .when(product.overflow_len() > 0, |this| {
                         this.child(location_counts("Buffer", product.overflow_counts()))
+                    })
+                    .when(!other_listed.is_empty(), |this| {
+                        this.child(listed_locations(&other_listed, &on_pick_listed))
                     })
                     .child(
                         Field::new()
@@ -198,6 +260,9 @@ pub(crate) fn open(
             .footer(
                 DialogFooter::new()
                     .gap_3()
+                    // Apart from the saves, at the leading edge: it ends the
+                    // count rather than recording one.
+                    .child(finish_button)
                     // `DialogClose` fills its container; this keeps Avbryt
                     // as wide as its label, like the button beside it. A
                     // ghost button would take the faint ring; beside the
@@ -254,6 +319,31 @@ fn location_counts<'a>(
                     label: or_dash(location).into(),
                     value: SharedString::from(quantity.to_string()).into(),
                     span: 1,
+                })),
+        )
+}
+
+/// The locations the stock list also listed the product at, each a button
+/// that makes it the pick location instead of the one picked at import.
+fn listed_locations(locations: &[SharedString], on_pick: &PickCallback) -> impl IntoElement {
+    Field::new()
+        .label("Også oppført på")
+        .description(
+            "Varelisten har varen på flere lokasjoner. Velg en for å gjøre den til plukklokasjon.",
+        )
+        .child(
+            h_flex()
+                .flex_wrap()
+                .gap_2()
+                .children(locations.iter().map(|location| {
+                    let on_pick = on_pick.clone();
+                    let picked = location.clone();
+                    Button::new(format!("pick-listed-location:{location}"))
+                        .outline()
+                        .small()
+                        .icon(IconName::ArrowRightLeft)
+                        .label(or_dash(location))
+                        .on_click(move |_, window, cx| on_pick(&picked, window, cx))
                 })),
         )
 }

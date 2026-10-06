@@ -125,6 +125,15 @@ impl StocktakeView {
         cx.notify();
     }
 
+    fn set_zero_stock_shown(&mut self, shown: bool, cx: &mut Context<Self>) {
+        let Some(open) = &mut self.open else {
+            return;
+        };
+        open.filter.set_zero_stock_shown(shown);
+        open.refresh_rows(cx);
+        cx.notify();
+    }
+
     /// The pane along the leading edge: the top bar with the traffic lights
     /// and the button that hides the sidebar, set apart by a rule, then the
     /// filters with the way to start over below them, against the footer and
@@ -198,12 +207,15 @@ impl StocktakeView {
     }
 
     /// A checkbox for each count state, beside how many products are in
-    /// it, so the table can be narrowed to what's left to count. Only while
-    /// there's a stock list.
+    /// it, so the table can be narrowed to what's left to count, and one
+    /// that hides the products the business system says there are none
+    /// of: the counters leave those for last. Only while there's a stock
+    /// list.
     fn render_status_filter(&self, cx: &mut Context<Self>) -> Option<impl IntoElement + use<>> {
         let open = self.open.as_ref()?;
         let stocktake = open.session.read(cx).stocktake();
         let states = [
+            (CountState::Finished, "status-finished"),
             (CountState::Counted, "status-counted"),
             (CountState::PartlyCounted, "status-partly-counted"),
             (CountState::Uncounted, "status-uncounted"),
@@ -217,10 +229,23 @@ impl StocktakeView {
             let len = stocktake.state_len(state);
             render_filter_item(checkbox, CountStatus::label(state).into(), len, cx)
         });
+        // Checked when they're hidden: the box says what it does.
+        let hide_zero_stock = Checkbox::new("hide-zero-stock")
+            .checked(!open.filter.shows_zero_stock())
+            .on_click(
+                cx.listener(|this, hidden: &bool, _, cx| this.set_zero_stock_shown(!hidden, cx)),
+            );
+        let hide_zero_stock = render_filter_item(
+            hide_zero_stock,
+            "Skjul varer med 0 på lager".into(),
+            stocktake.zero_stock_len(),
+            cx,
+        );
         Some(
             SidebarSection::new()
                 .child(SidebarHeading::new("Status"))
-                .children(items),
+                .children(items)
+                .child(hide_zero_stock),
         )
     }
 
@@ -242,11 +267,7 @@ impl StocktakeView {
             return None;
         }
         let items = aisles.into_iter().map(|(aisle, len)| {
-            let label = if aisle.is_empty() {
-                "Uten reol".into()
-            } else {
-                SharedString::from(format!("Reol {aisle}"))
-            };
+            let label = aisle_label(&aisle);
             let checkbox = Checkbox::new(format!("aisle-{aisle}"))
                 .checked(open.filter.shows_aisle(&aisle))
                 .on_click(cx.listener(move |this, shown: &bool, _, cx| {
@@ -323,6 +344,18 @@ impl StocktakeView {
                 })
                 .on_click(cx.listener(|this, _, window, cx| this.toggle_sidebar(window, cx))),
         )
+    }
+}
+
+/// How an aisle is named in the filter. A letter is a shelf unit, «Reol A»;
+/// anything longer is a place with a name of its own (`DL`, `Tilbehør`,
+/// `Pakkedisk`) and is labelled as the location starts. Products without a
+/// location have no aisle.
+fn aisle_label(aisle: &str) -> SharedString {
+    match aisle.chars().count() {
+        0 => "Uten lokasjon".into(),
+        1 => format!("Reol {aisle}").into(),
+        _ => aisle.to_string().into(),
     }
 }
 
