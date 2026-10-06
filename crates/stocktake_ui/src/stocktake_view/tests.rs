@@ -890,7 +890,7 @@ fn importing_a_duplicate_asks_for_its_pick_location(cx: &mut TestAppContext) {
     let dir = store.parent().unwrap().to_path_buf();
     std::fs::create_dir_all(&dir).unwrap();
 
-    // Item number 1 on two lines, at two locations with stock at both.
+    // Item number 1 on two lines, at two locations with the same stock.
     let stock_list = dir.join("Vareliste.xlsx");
     let mut workbook = rust_xlsxwriter::Workbook::new();
     let sheet = workbook.add_worksheet();
@@ -906,7 +906,7 @@ fn importing_a_duplicate_asks_for_its_pick_location(cx: &mut TestAppContext) {
         sheet.write_string(0, col, name).unwrap();
     }
     let rows = [
-        ("1", "Como Fronter 60", "Ramtre", "", "A1", 4.),
+        ("1", "Como Fronter 60", "Ramtre", "", "A1", 16.),
         ("2", "Alene", "", BURANO.0, "B1", 2.),
         ("1", "Como Fronter 60", "Ramtre", "", "E2-8", 16.),
     ];
@@ -962,4 +962,14 @@ fn importing_a_duplicate_asks_for_its_pick_location(cx: &mut TestAppContext) {
     assert!(counter.find("count").is_none());
     assert_eq!(counter.location("1"), "A1");
     assert!(counter.is_focused("search"));
+}
+
+#[gpui_kit::test]
+fn zz_probe_footer(cx: &mut TestAppContext) {
+    let mut counter = Counter::resume(cx, "probe");
+    counter.input(BURANO.0);
+    counter.press("enter");
+    for id in ["location", "count", "finish-count", "save-count"] {
+        eprintln!("PROBE {id}: {:?}", counter.find(id).map(|e| e.bounds()));
+    }
 }
