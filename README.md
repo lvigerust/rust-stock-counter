@@ -24,7 +24,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all -- --check
 ```
 
-The UI tests open headless windows, so nothing appears on screen. `scripts/bundle-macos.sh` builds the release executable, wraps it in `Scala Bad.app` and installs it in `/Applications`. The Windows executable is built on demand by the `Windows build` GitHub Actions workflow, which can't be cross-compiled from macOS.
+The UI tests open headless windows, so nothing appears on screen. `scripts/bundle-macos.sh` builds the release executable, wraps it in `Scala Bad.app` and installs it in `/Applications`. The Windows executable is built by the `Windows build` GitHub Actions workflow, which can't be cross-compiled from macOS: after CI passes on a push to `main`, it publishes a release tagged `vMAJOR.MINOR.PATCH` (MAJOR.MINOR from the version in `Cargo.toml`, PATCH counting up), and it can also be run from the Actions tab.
 
 ## Layout
 

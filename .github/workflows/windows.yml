@@ -1,44 +1,87 @@
-# Builds the Windows executable on demand. GPUI compiles its DirectX shaders
-# with Windows SDK tools, so it can't be cross-compiled from macOS. Run it
-# from the Actions tab; it replaces the "latest" release with the new build,
-# which anyone can download without signing in to GitHub.
+# Builds the Windows executable and publishes it as a release, for every push
+# to main once CI has passed. GPUI compiles its DirectX shaders with Windows
+# SDK tools, so it can't be cross-compiled from macOS. It can also be run
+# from the Actions tab.
+#
+# Each release is tagged `vMAJOR.MINOR.PATCH`. MAJOR.MINOR come from the
+# version in Cargo.toml, so raising it there starts a new series; PATCH is the
+# next one after the highest tag in that series. The newest release is the
+# one GitHub marks Latest, which anyone can download without signing in.
 name: Windows build
 
-on: workflow_dispatch
+on:
+    workflow_run:
+        workflows: [CI]
+        types: [completed]
+        branches: [main]
+    workflow_dispatch:
+
+# One release at a time, so two quick pushes can't pick the same version.
+concurrency:
+    group: release
+    cancel-in-progress: false
 
 jobs:
-  build:
-    runs-on: windows-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: dtolnay/rust-toolchain@stable
-
-      - uses: Swatinem/rust-cache@v2
-
-      - name: Build
-        run: cargo build --release --locked
+    build:
+        # A pull request's CI run, or one that failed, releases nothing.
+        if: >-
+            github.event_name == 'workflow_dispatch' ||
+            (github.event.workflow_run.conclusion == 'success' &&
+             github.event.workflow_run.event == 'push')
+        runs-on: windows-latest
+        permissions:
+            contents: write
         env:
-          # Links the C runtime statically, so the executable runs without
-          # the Visual C++ Redistributable installed.
-          RUSTFLAGS: -C target-feature=+crt-static
+            # The commit CI checked, not whatever main has moved on to since.
+            SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  ref: ${{ env.SHA }}
+                  fetch-depth: 0
 
-      - name: Name the executable after the application
-        shell: bash
-        run: |
-          mkdir dist
-          cp target/release/varetelling.exe "dist/Scala Bad.exe"
+            - name: Pick the version
+              id: version
+              shell: bash
+              run: |
+                  series=$(grep -m1 '^version' Cargo.toml | sed -E 's/.*"([0-9]+\.[0-9]+)\..*/\1/')
+                  latest=$(git tag -l "v$series.*" | sed "s/^v$series\.//" | sort -n | tail -1)
+                  patch=$(( ${latest:--1} + 1 ))
+                  echo "version=$series.$patch" >> "$GITHUB_OUTPUT"
 
-      - name: Replace the latest release
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release delete latest --cleanup-tag --yes || true
-          gh release create latest "dist/Scala Bad.exe" \
-            --target "$GITHUB_SHA" \
-            --title "Latest Windows build" \
-            --notes "Built from $GITHUB_SHA." \
-            --latest
+            # The executable reports the crate's version, so it's set to the
+            # release's for this build only; nothing is committed.
+            - name: Set the version in the build
+              shell: bash
+              run: |
+                  sed -i -E '/^\[workspace\.package\]/,/^$/ s/^version = ".*"/version = "${{ steps.version.outputs.version }}"/' Cargo.toml
+
+            - uses: dtolnay/rust-toolchain@stable
+
+            - uses: Swatinem/rust-cache@v2
+
+            # Not --locked: the version above changes the workspace crates' entries
+            # in Cargo.lock. Every dependency stays at its locked version.
+            - name: Build
+              run: cargo build --release
+              env:
+                  # Links the C runtime statically, so the executable runs without
+                  # the Visual C++ Redistributable installed.
+                  RUSTFLAGS: -C target-feature=+crt-static
+
+            - name: Name the executable after the application
+              shell: bash
+              run: |
+                  mkdir dist
+                  cp target/release/varetelling.exe "dist/Scala Bad.exe"
+
+            - name: Publish the release
+              shell: bash
+              env:
+                  GH_TOKEN: ${{ github.token }}
+              run: |
+                  gh release create "v${{ steps.version.outputs.version }}" "dist/Scala Bad.exe" \
+                    --target "$SHA" \
+                    --title "v${{ steps.version.outputs.version }}" \
+                    --notes "Windows build of $SHA." \
+                    --latest
