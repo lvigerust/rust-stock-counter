@@ -1,12 +1,13 @@
 # Stocktake app: specification
 
-A desktop app for the year-end stocktake at Scala Bad: going through the storage and verifying that the number of units of each product matches what the business system says. Terminology follows [CONTEXT.md](../CONTEXT.md).
+An app for the year-end stocktake at Scala Bad: going through the storage and verifying that the number of units of each product matches what the business system says. Terminology follows [CONTEXT.md](../CONTEXT.md).
 
 ## Context
 
-Today the stocktake is done in a spreadsheet on a laptop with a USB barcode scanner. Scanning a barcode jumps to the product's row, where the system quantity is pre-filled; the counter confirms it or overwrites it. This app replaces that spreadsheet.
+Until now the stocktake has been done on paper, and before that in a spreadsheet on a laptop with a USB barcode scanner. Scanning a barcode jumps to the product's row, where the system quantity is pre-filled; the counter confirms it or overwrites it. This app replaces that.
 
-- **Platform:** GPUI Kit desktop app, one laptop, one USB barcode scanner (acts as a keyboard).
+- **Platform:** a native iPad app, with the one stocktake shared through CloudKit so up to four counters count at once; see [ADR 0001](adr/0001-native-ipad-app.md). It was designed and built first as a GPUI Kit desktop app for one laptop and a USB scanner, which this document still describes screen for screen; the desktop app is kept as that design, not developed further.
+- **Scanning:** the device's camera, or a wireless scanner, which acts as a keyboard and types into the search field like the USB scanner did.
 - **Interface language:** Norwegian. Code and docs use the English terms in `CONTEXT.md`.
 
 ## Import
@@ -111,8 +112,8 @@ Today the stocktake is done in a spreadsheet on a laptop with a USB barcode scan
 
 - Blind counting (hiding the system quantity until a count is entered). Considered UX work for later.
 - Recording products that aren't on the stock list.
-- Several laptops counting the same stocktake, whether merged or synced.
 - Keeping past stocktakes.
+- Showing who counted what. The iCloud account is the only identity, and nobody asked for it.
 - Importing results directly into the business system.
 
 ## Undecided
@@ -132,4 +133,4 @@ Today the stocktake is done in a spreadsheet on a laptop with a USB barcode scan
 - **Importing results.** Whether the business system can import stocktake results directly, which would make a matching export format worthwhile.
 - **Exporting a merged duplicate.** A product merged from several stock-list lines is one row in the export. How the line that wasn't picked is reported, so it can be cleared in the business system, is open.
 - **Reviewing finished products.** Whether a lead goes through the finished products and approves them. Nothing is built for it until asked.
-- **Platform.** The counters will count on iPads or phones, up to four at once, scanning with the device's camera or a wireless scanner, over wifi that's stable through the whole storage; anyone with the link should have access, with no login; and counts from several counters at one location are added together. This contradicts the one-laptop platform above and the "several laptops" item under out of scope. The leaning is a native iPad app for the few people in the storage, installed outside the App Store, with the `stocktake` crate as the shared core and a server holding the one stocktake; the desktop app stays as it is until that's decided, and the decision gets an ADR.
+- **Several counters at one location.** Counts from two counters at the same location are added together (Q3). What the count dialog shows while another counter's count is arriving, and whether "replace" can replace a count someone else just made, is worked out in the iPad app.
