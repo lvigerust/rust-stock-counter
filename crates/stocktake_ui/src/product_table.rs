@@ -77,8 +77,9 @@ impl ProductColumn {
     ];
 
     /// The narrowest the product name gets; it takes whatever the window
-    /// has beyond the other columns.
-    const MIN_NAME_WIDTH: f32 = 320.;
+    /// has beyond the other columns. Padding excluded, as for
+    /// [`Self::fixed_width`].
+    const MIN_NAME_WIDTH: f32 = 288.;
 
     fn is_numeric(self) -> bool {
         matches!(
@@ -128,19 +129,21 @@ impl ProductColumn {
         }
     }
 
-    /// Fixed widths for everything but the name, padding included. Column
-    /// widths are table geometry, which the table API takes in pixels.
+    /// Fixed content widths for everything but the name, padding excluded:
+    /// as narrow as the header, its label and sort arrow, or the widest
+    /// value allows. Column widths are table geometry, which the table API
+    /// takes in pixels.
     fn fixed_width(self) -> Option<f32> {
         match self {
-            Self::Location => Some(160.),
-            Self::OverflowLocations => Some(220.),
-            Self::ItemNumber => Some(156.),
+            Self::Location => Some(96.),
+            Self::OverflowLocations => Some(160.),
+            Self::ItemNumber => Some(104.),
             Self::Name => None,
-            Self::SystemQuantity => Some(168.),
-            Self::CountedQuantity => Some(136.),
-            Self::OverflowQuantity => Some(136.),
-            Self::Difference => Some(146.),
-            Self::Status => Some(180.),
+            Self::SystemQuantity => Some(120.),
+            Self::CountedQuantity => Some(48.),
+            Self::OverflowQuantity => Some(64.),
+            Self::Difference => Some(88.),
+            Self::Status => Some(96.),
         }
     }
 }
@@ -421,19 +424,32 @@ impl TableDelegate for ProductTable {
     fn column(&self, col_ix: usize, cx: &App) -> Column {
         let column = self.columns[col_ix];
         let (key, name) = (column.key(), self.column_name(column, cx));
+        let count = self.columns.len();
+        // A column's width is its content's and its padding, which is wider
+        // at the table's outer edges.
+        let padded = |ix: usize, content: f32| {
+            let paddings = cell_paddings(ix, count);
+            content + f32::from(paddings.left + paddings.right)
+        };
         let fixed: f32 = self
             .columns
             .iter()
-            .filter_map(|column| column.fixed_width())
+            .enumerate()
+            .filter_map(|(ix, column)| Some(padded(ix, column.fixed_width()?)))
             .sum();
         // Leave room for the vertical scrollbar.
-        let name_width = (f32::from(self.width) - fixed - 16.).max(ProductColumn::MIN_NAME_WIDTH);
+        let name_width = (f32::from(self.width) - fixed - 16.)
+            .max(padded(col_ix, ProductColumn::MIN_NAME_WIDTH));
+        let width = match column.fixed_width() {
+            Some(content) => padded(col_ix, content),
+            None => name_width,
+        };
         // No sort state for the table: it would draw its own arrow, pinned
         // to the cell's trailing edge. `render_th` draws it beside the label
         // instead and sorts on a click anywhere in the cell.
         Column::new(key, name)
-            .width(px(column.fixed_width().unwrap_or(name_width)))
-            .paddings(cell_paddings(col_ix, self.columns.len()))
+            .width(px(width))
+            .paddings(cell_paddings(col_ix, count))
             .min_width(px(64.))
             .movable(false)
             .when(column.is_numeric(), |column| column.text_right())
