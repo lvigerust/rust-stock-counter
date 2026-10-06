@@ -427,6 +427,52 @@ fn importing_a_stock_list_starts_a_saved_stocktake(cx: &mut TestAppContext) {
     assert_eq!(recent.iter().next(), Some(stock_list.as_path()));
 }
 
+#[gpui_kit::test]
+fn the_discard_alert_cancels_and_confirms_with_its_buttons(cx: &mut TestAppContext) {
+    let mut counter = Counter::resume(cx, "discard-alert");
+    counter.input(BURANO.0);
+    counter.press("enter");
+    counter.input("47");
+    counter.press("enter");
+
+    let missing = store_path("discard-alert").with_file_name("Borte.xlsx");
+    let view = counter.view.clone();
+    let import = |counter: &mut Counter| {
+        let path = missing.clone();
+        counter.step(|window, cx| {
+            view.update(cx, |view, cx| {
+                view.import_stock_list(ImportSource::File(path), window, cx)
+            })
+        });
+    };
+    let tried = |counter: &mut Counter| {
+        counter
+            .cx
+            .read(|cx| counter.view.read(cx).unavailable.contains(&missing))
+    };
+
+    // The alert slides in, so its buttons are reached from the keyboard
+    // rather than clicked where they were a frame ago.
+    let press = |counter: &mut Counter, button: &'static str| {
+        counter.tab_to(button);
+        counter.press("space");
+    };
+
+    // Avbryt leaves the stocktake as it was, without trying the file.
+    import(&mut counter);
+    press(&mut counter, "close");
+    assert!(counter.find("alert-confirm").is_none());
+    assert!(!tried(&mut counter));
+    assert_eq!(counter.counted(BURANO.0), Some(47));
+
+    // Confirming goes on to read it; it's missing, which the next alert says.
+    import(&mut counter);
+    press(&mut counter, "alert-confirm");
+    assert!(tried(&mut counter));
+    press(&mut counter, "alert-confirm");
+    assert!(counter.find("alert-confirm").is_none());
+}
+
 /// Remembers `stock_lists` as the recent ones beside `store`.
 fn remember(store: &Path, stock_lists: &[&Path]) {
     let mut recent = RecentStockLists::default();

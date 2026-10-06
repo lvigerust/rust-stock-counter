@@ -78,6 +78,7 @@ Composed from named parts, as Catalyst's are, so a call site reads like the layo
 - `Sidebar` › `WindowBar`, `SidebarHeader`, `SidebarBody` (scrolls) › `SidebarSection` › `SidebarHeading`, `SidebarItem`; `SidebarSpacer`; `SidebarFooter`.
 - `Dropdown(DropdownButton, DropdownMenu › heading, DropdownItem, divider)`: gpui-kit's menu behavior with Catalyst's rows.
 - `WindowBar` › `WindowBarItem`: the band that holds the window's own controls on macOS and Windows.
+- `AlertActions`: an alert's buttons, after Catalyst's `AlertActions`: a ghost `Avbryt` when there's a choice, then the confirm button (primary, or `.danger()`). Every alert takes it as its footer, so its buttons are the app's, not gpui-kit's larger defaults.
 - `Badge`: one neutral badge for a count worth scanning for, such as `+2` overflow locations.
 - `SwitchField`: a setting that is on or off, after Catalyst's `SwitchField`. Its `Label` and `Text` lead and the switch trails; pressing the text flips it too.
 - `Field`, `Heading`, `Label`, `Text`, `SectionHeading`, `Delta`, `Logo`.

@@ -13,7 +13,7 @@ use std::{
 
 use gpui_kit::component::{
     WindowExt as _,
-    button::{ButtonVariant, ButtonVariants as _},
+    button::ButtonVariants as _,
     dialog::{DialogClose, DialogFooter},
     notification::Notification,
     radio::{Radio, RadioGroup},
@@ -23,7 +23,7 @@ use stocktake::{
     Product, Stocktake, export, recent,
     stock_list::{self, ImportError, StockList},
 };
-use ui::{Button, FocusRing, Label, Spacing, StyledDialog as _, Text, prelude::*};
+use ui::{AlertActions, Button, FocusRing, Label, Spacing, StyledDialog as _, Text, prelude::*};
 
 use super::StocktakeView;
 use crate::{path_display::file_name, session::Session};
@@ -72,12 +72,9 @@ impl StocktakeView {
             let source = source.clone();
             dialog
                 .alert_frame(cx)
-                .confirm()
                 .title("Forkaste varetellingen som pågår?")
                 .description(description.clone())
-                .ok_text(ok_text)
-                .ok_variant(ButtonVariant::Danger)
-                .cancel_text("Avbryt")
+                .footer(AlertActions::new(ok_text).danger().cancel("Avbryt"))
                 .on_ok(move |_, window, cx| {
                     view.update(cx, |this, cx| {
                         this.read_stock_list(source.clone(), window, cx)
@@ -162,7 +159,7 @@ impl StocktakeView {
                         .alert_frame(cx)
                         .title("Varelisten kunne ikke importeres")
                         .description(description.clone())
-                        .ok_text("OK")
+                        .footer(AlertActions::new("OK"))
                 });
             }
         }
@@ -332,7 +329,7 @@ impl StocktakeView {
                 .alert_frame(cx)
                 .title(title.clone())
                 .description("Filen er flyttet, slettet eller på en disk som ikke er koblet til.")
-                .ok_text("OK")
+                .footer(AlertActions::new("OK"))
         });
     }
 
@@ -384,14 +381,12 @@ impl StocktakeView {
             let view = view.clone();
             dialog
                 .alert_frame(cx)
-                .confirm()
                 .title(title.clone())
                 .description(format!(
                     "De merkes med «{}» i filen.",
                     export::UNCOUNTED_MARK
                 ))
-                .ok_text("Eksporter…")
-                .cancel_text("Avbryt")
+                .footer(AlertActions::new("Eksporter…").cancel("Avbryt"))
                 .on_ok(move |_, window, cx| {
                     view.update(cx, |this, cx| this.choose_export_path(window, cx))
                         .ok();
@@ -434,7 +429,7 @@ impl StocktakeView {
                             .alert_frame(cx)
                             .title("Varetellingen kunne ikke eksporteres")
                             .description(description.clone())
-                            .ok_text("OK")
+                            .footer(AlertActions::new("OK"))
                     });
                 }
             })

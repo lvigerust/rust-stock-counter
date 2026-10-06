@@ -11,7 +11,7 @@ use gpui_kit::component::{
     table::TableState,
 };
 use stocktake::{Lookup, ProductId};
-use ui::{StyledDialog as _, prelude::*};
+use ui::{AlertActions, StyledDialog as _, prelude::*};
 
 use super::{Count, Mode, StocktakeView};
 use crate::{
@@ -85,7 +85,7 @@ impl StocktakeView {
                     "Varen står ikke på varelisten, og blir ikke registrert. \
                      Sjekk at det var riktig strekkode.",
                 )
-                .ok_text("OK")
+                .footer(AlertActions::new("OK"))
         });
     }
 
