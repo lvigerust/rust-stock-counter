@@ -16,9 +16,14 @@
 
 use gpui_kit::component::button::{ButtonVariant, ButtonVariants};
 use gpui_kit::component::dialog::{Confirm, DialogClose, DialogFooter};
+use gpui_kit::{Rems, rems};
 
 use crate::prelude::*;
 use crate::{Button, FocusRing};
+
+/// A touch shorter than a medium button's 2.25rem, so the buttons sit
+/// lighter in an alert's short decision.
+const BUTTON_HEIGHT: Rems = rems(2.125);
 
 #[derive(IntoElement)]
 pub struct AlertActions {
@@ -66,6 +71,7 @@ impl RenderOnce for AlertActions {
         let confirm = Button::new("alert-confirm")
             .with_variant(self.variant)
             .label(self.confirm)
+            .h(BUTTON_HEIGHT)
             .child(div().absolute().size_0().track_focus(&anchor))
             .on_click(move |_, window, cx| {
                 anchor.dispatch_action(&Confirm { secondary: false }, window, cx)
@@ -84,6 +90,7 @@ impl RenderOnce for AlertActions {
                             Button::from(button)
                                 .ghost()
                                 .label(cancel)
+                                .h(BUTTON_HEIGHT)
                                 .with_focus_ring(FocusRing::Solid)
                         })),
                 )
