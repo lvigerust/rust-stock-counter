@@ -40,7 +40,7 @@ Until now the stocktake has been done on paper, and before that in a spreadsheet
 
 ## Counting screen
 
-- The whole stock list as a table: location, item number, name, description, system quantity (columns H, C, D, E, N), then counted quantity, difference, and whether the product is counted, uncounted or finished.
+- The whole stock list as a table: location, item number, name with the description on a muted line under it, system quantity (columns H, C, D and E, N), then counted quantity, difference, and whether the product is counted, uncounted or finished.
 - The location column shows the pick location. A product counted at overflow locations shows how many after it, e.g. `C4-7 +2`, and its counted quantity is the total across all its locations.
 - Two columns are hidden until they're switched on in the columns menu. **Bufferlokasjon** lists each overflow location, and is headed **Bufferlokasjoner** once a product has more than one; sorted, it goes by the first overflow location. **Buffer** is what was counted at the overflow locations together. Either way, products without an overflow location sort last.
 - The aisle filter goes by pick location only. An aisle that's a letter is labelled «Reol A»; the others are labelled as the location starts (`DL`, `Tilbehør`, `Pakkedisk`), and `D` and `DL` are separate aisles.

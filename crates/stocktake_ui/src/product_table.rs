@@ -8,13 +8,14 @@ use gpui_kit::component::{
 };
 use gpui_kit::{Div, Edges, Pixels, Stateful, px};
 use stocktake::{Product, ProductId, compare_locations, natural_cmp};
-use ui::{Badge, Delta, Heading, SectionHeading, Text, flash, prelude::*};
+use ui::{Badge, Delta, Heading, SectionHeading, Spacing, Text, flash, prelude::*};
 
 use crate::{count_dialog::SYSTEM_QUANTITY, count_status::CountStatus, session::Session};
 
-/// How tall each row is: a 1.5rem line and [`ROW_PADDING`] above and below
-/// it. Table geometry is in pixels.
-pub const ROW_HEIGHT: Pixels = px(56.);
+/// How tall each row is: two 1.25rem lines, the product's name and its
+/// description, and [`ROW_PADDING`] above and below them. Table geometry is
+/// in pixels.
+pub const ROW_HEIGHT: Pixels = px(72.);
 
 /// Padding around a cell's content, 1rem, so columns are 2rem apart.
 const ROW_PADDING: Pixels = px(16.);
@@ -50,9 +51,9 @@ pub enum ProductColumn {
     /// The overflow locations and what was counted at each.
     OverflowLocations,
     ItemNumber,
+    /// The name, and under it the description: the colour and style that
+    /// tell apart products with the same name.
     Name,
-    /// Colour and style, which tell apart products with the same name.
-    Description,
     SystemQuantity,
     CountedQuantity,
     /// What was counted at the overflow locations together.
@@ -63,12 +64,11 @@ pub enum ProductColumn {
 
 impl ProductColumn {
     /// Every column, in the order the table shows them.
-    pub const ALL: [Self; 10] = [
+    pub const ALL: [Self; 9] = [
         Self::Location,
         Self::OverflowLocations,
         Self::ItemNumber,
         Self::Name,
-        Self::Description,
         Self::SystemQuantity,
         Self::CountedQuantity,
         Self::OverflowQuantity,
@@ -103,7 +103,6 @@ impl ProductColumn {
             Self::OverflowLocations => "overflow-locations",
             Self::ItemNumber => "item-number",
             Self::Name => "name",
-            Self::Description => "description",
             Self::SystemQuantity => "system-quantity",
             Self::CountedQuantity => "counted-quantity",
             Self::OverflowQuantity => "overflow-quantity",
@@ -121,7 +120,6 @@ impl ProductColumn {
             Self::OverflowLocations => "Bufferlokasjon",
             Self::ItemNumber => "Varenummer",
             Self::Name => "Produkt",
-            Self::Description => "Beskrivelse",
             Self::SystemQuantity => SYSTEM_QUANTITY,
             Self::CountedQuantity => "Talt",
             Self::OverflowQuantity => "Buffer",
@@ -138,7 +136,6 @@ impl ProductColumn {
             Self::OverflowLocations => Some(220.),
             Self::ItemNumber => Some(156.),
             Self::Name => None,
-            Self::Description => Some(240.),
             Self::SystemQuantity => Some(168.),
             Self::CountedQuantity => Some(136.),
             Self::OverflowQuantity => Some(136.),
@@ -170,7 +167,6 @@ impl Scope {
                 ProductColumn::Location,
                 ProductColumn::ItemNumber,
                 ProductColumn::Name,
-                ProductColumn::Description,
                 ProductColumn::SystemQuantity,
                 ProductColumn::CountedQuantity,
                 ProductColumn::Difference,
@@ -180,7 +176,6 @@ impl Scope {
                 ProductColumn::Location,
                 ProductColumn::ItemNumber,
                 ProductColumn::Name,
-                ProductColumn::Description,
                 ProductColumn::SystemQuantity,
                 ProductColumn::CountedQuantity,
                 ProductColumn::Difference,
@@ -331,11 +326,17 @@ impl ProductTable {
                     );
                 }
                 ProductColumn::ItemNumber => natural_cmp(a.item_number(), b.item_number()),
-                ProductColumn::Name => a.name().to_lowercase().cmp(&b.name().to_lowercase()),
-                ProductColumn::Description => a
-                    .description()
+                // Products with the same name by their description, which
+                // the column shows under it.
+                ProductColumn::Name => a
+                    .name()
                     .to_lowercase()
-                    .cmp(&b.description().to_lowercase()),
+                    .cmp(&b.name().to_lowercase())
+                    .then_with(|| {
+                        a.description()
+                            .to_lowercase()
+                            .cmp(&b.description().to_lowercase())
+                    }),
                 ProductColumn::SystemQuantity => a.system_quantity().cmp(&b.system_quantity()),
                 ProductColumn::CountedQuantity => {
                     return missing_last(
@@ -590,17 +591,20 @@ impl TableDelegate for ProductTable {
                 .text_color(cx.theme().muted_foreground)
                 .child(product.item_number().to_string())
                 .into_any_element(),
-            // The row's focal point: what the counter reads off the shelf.
-            ProductColumn::Name => div()
-                .truncate()
-                .font_medium()
-                .child(product.name().to_string())
-                .into_any_element(),
-            ProductColumn::Description => div()
+            // The row's focal point: what the counter reads off the shelf,
+            // and under it what tells it from a product with the same name.
+            ProductColumn::Name => v_flex()
                 .min_w_0()
-                .truncate()
-                .text_color(cx.theme().muted_foreground)
-                .child(product.description().to_string())
+                .line_height(Spacing(5.))
+                .child(
+                    div()
+                        .truncate()
+                        .font_medium()
+                        .child(product.name().to_string()),
+                )
+                .when(!product.description().is_empty(), |this| {
+                    this.child(Text::new(product.description().to_string()).truncate())
+                })
                 .into_any_element(),
             ProductColumn::SystemQuantity => {
                 product.system_quantity().to_string().into_any_element()
@@ -676,8 +680,10 @@ impl TableDelegate for ProductTable {
             },
             ProductColumn::OverflowLocations => overflow_locations(product),
             ProductColumn::ItemNumber => product.item_number().to_string(),
-            ProductColumn::Name => product.name().to_string(),
-            ProductColumn::Description => product.description().to_string(),
+            ProductColumn::Name => match product.description() {
+                "" => product.name().to_string(),
+                description => format!("{} · {description}", product.name()),
+            },
             ProductColumn::SystemQuantity => product.system_quantity().to_string(),
             ProductColumn::CountedQuantity => product
                 .counted_quantity()
