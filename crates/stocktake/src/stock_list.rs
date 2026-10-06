@@ -147,9 +147,10 @@ pub fn read(path: &Path) -> Result<StockList, ImportError> {
 ///
 /// An item number on more than one line is one product whose system
 /// quantity is the lines' sum. When the lines are at different locations,
-/// the product is a [duplicate](Self::duplicates): the person importing
-/// picks which location is its pick location, with [`Self::pick_location`],
-/// before the stocktake starts.
+/// and more than one has stock, the product is a
+/// [duplicate](Self::duplicates): the person importing picks which location
+/// is its pick location, with [`Self::pick_location`], before the stocktake
+/// starts. With stock at one location only, that is its pick location.
 #[derive(Debug)]
 pub struct StockList {
     products: Vec<Product>,
@@ -178,10 +179,19 @@ impl StockList {
         let mut duplicates = Vec::new();
         for lines in lines {
             let locations = lines.distinct_locations();
+            // Where the system has stock is where it is picked from, so a
+            // product with stock at one location only has nothing to choose;
+            // the empty lines are merged into it. The choice can still be
+            // changed from the count, as the product keeps every location.
+            let mut in_stock = locations.iter().filter(|line| line.system_quantity != 0);
+            let pick = match (in_stock.next(), in_stock.next()) {
+                (Some(line), None) => Some(line),
+                _ => None,
+            };
             let mut product = Product::new(
                 lines.item_number,
                 lines.name,
-                locations[0].location.clone(),
+                pick.unwrap_or(&locations[0]).location.clone(),
                 lines.barcode,
                 locations.iter().map(|line| line.system_quantity).sum(),
             )
@@ -190,10 +200,12 @@ impl StockList {
                 product = product.with_listed_locations(
                     locations.iter().map(|line| line.location.clone()).collect(),
                 );
-                duplicates.push(Duplicate {
-                    product: products.len(),
-                    lines: locations,
-                });
+                if pick.is_none() {
+                    duplicates.push(Duplicate {
+                        product: products.len(),
+                        lines: locations,
+                    });
+                }
             }
             products.push(product);
         }
@@ -680,6 +692,57 @@ mod tests {
     }
 
     #[test]
+    fn merges_the_empty_lines_into_the_location_with_stock() {
+        let columns: &[Cell] = &[
+            Text("VareNR"),
+            Text("ProduktDesc1"),
+            Text("PrdEAN"),
+            Text("Lokasjon"),
+            Text("FysiskPaaLager"),
+        ];
+        let list = read_fixture_list(
+            "empty-lines",
+            &[
+                columns,
+                &[Text("1"), Text("Som regel"), Blank, Text("A1"), Number(0.)],
+                &[
+                    Text("1"),
+                    Text("Som regel"),
+                    Blank,
+                    Text("E2-8"),
+                    Number(16.),
+                ],
+                &[
+                    Text("2"),
+                    Text("Begge tomme"),
+                    Blank,
+                    Text("A1"),
+                    Number(0.),
+                ],
+                &[
+                    Text("2"),
+                    Text("Begge tomme"),
+                    Blank,
+                    Text("B1"),
+                    Number(0.),
+                ],
+            ],
+        )
+        .unwrap();
+        // Product 1 has nothing to choose; product 2 has nothing to go by.
+        assert_eq!(list.duplicates().len(), 1);
+        assert_eq!(list.product(&list.duplicates()[0]).item_number(), "2");
+
+        let products = list.into_products();
+        assert_eq!(products[0].location(), "E2-8");
+        assert_eq!(products[0].system_quantity(), 16);
+        assert_eq!(
+            products[0].other_listed_locations().collect::<Vec<_>>(),
+            ["A1"]
+        );
+    }
+
+    #[test]
     fn merges_lines_with_the_same_item_number() {
         let columns: &[Cell] = &[
             Text("VareNR"),
@@ -697,7 +760,7 @@ mod tests {
                     Text("Como Fronter 60"),
                     Blank,
                     Text("A1"),
-                    Number(0.),
+                    Number(4.),
                 ],
                 &[Text("2"), Text("Alene"), Text("7"), Text("B1"), Number(2.)],
                 &[
@@ -718,7 +781,7 @@ mod tests {
         let duplicate = &list.duplicates()[0];
         let product = list.product(duplicate);
         assert_eq!(product.item_number(), "1");
-        assert_eq!(product.system_quantity(), 16);
+        assert_eq!(product.system_quantity(), 20);
         // The barcode comes from whichever line has one.
         assert_eq!(product.barcode(), "9");
         assert_eq!(product.location(), "A1");
@@ -727,7 +790,7 @@ mod tests {
             [
                 Line {
                     location: "A1".into(),
-                    system_quantity: 0
+                    system_quantity: 4
                 },
                 Line {
                     location: "E2-8".into(),
@@ -850,28 +913,16 @@ mod tests {
     }
 
     /// The complete export the counters work from, so the import is held to
-    /// a real-world file: 3,673 rows, 66 item numbers on two lines, `N/A`
+    /// a real-world file: 3,673 rows, 66 item numbers on two lines, 5 of them with stock at both, `N/A`
     /// locations, and names with doubled spaces.
     #[test]
     fn reads_the_complete_export() {
         let path =
             Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data/complete-stock-list.xlsx");
         let list = read(&path).expect("complete stock list imports");
-        assert_eq!(list.duplicates().len(), 66);
+        // Of the 66, only the few with stock at both locations are a choice.
+        assert_eq!(list.duplicates().len(), 5);
         assert_eq!(list.len(), 3_673 - 66);
-
-        let como = list
-            .duplicates()
-            .iter()
-            .find(|duplicate| list.product(duplicate).item_number() == "202559")
-            .expect("Como Fronter 60 - Lys Macchiato is listed twice");
-        let lines: Vec<_> = como
-            .lines()
-            .iter()
-            .map(|line| (line.location(), line.system_quantity()))
-            .collect();
-        assert_eq!(lines, [("A1", 0), ("E2-8", 16)]);
-        assert_eq!(list.product(como).system_quantity(), 16);
 
         let products = list.into_products();
         let find = |item_number: &str| {
@@ -884,5 +935,9 @@ mod tests {
         assert!(products.iter().any(|product| product.location().is_empty()));
         assert_eq!(find("201594").name(), "Maranello 90 - Gull Børstet");
         assert_eq!(find("202559").description(), "Como Standard - Ramtre");
+        // Listed at A1 with none and at E2-8 with 16: picked from E2-8.
+        let como = find("202559");
+        assert_eq!(como.location(), "E2-8");
+        assert_eq!(como.system_quantity(), 16);
     }
 }

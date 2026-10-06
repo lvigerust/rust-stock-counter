@@ -23,7 +23,7 @@ use stocktake::{
     Product, Stocktake, export, recent,
     stock_list::{self, ImportError, StockList},
 };
-use ui::{Button, Field, FocusRing, Spacing, StyledDialog as _, Text, prelude::*};
+use ui::{Button, FocusRing, Label, Spacing, StyledDialog as _, Text, prelude::*};
 
 use super::StocktakeView;
 use crate::{path_display::file_name, session::Session};
@@ -286,7 +286,9 @@ impl StocktakeView {
                         ),
                 )
                 .dialog_frame(cx)
-                .w(Spacing(128.).to_pixels(window.rem_size()))
+                // Wide enough for the explanation to wrap in two lines and
+                // for long product names to fit on one.
+                .w(Spacing(168.).to_pixels(window.rem_size()))
         });
     }
 
@@ -443,7 +445,7 @@ impl StocktakeView {
 }
 
 /// One product the stock list lists at several locations: its name, with
-/// what tells it apart below, then a radio per location with what the
+/// what tells it apart after it, then a radio per location with what the
 /// business system says is there. `on_pick` gets the index of the line
 /// picked.
 fn render_duplicate(
@@ -466,11 +468,19 @@ fn render_duplicate(
         Radio::new(format!("duplicate:{item_number}:{}", line.location()))
             .label(format!("{location} · {} stk", line.system_quantity()))
     });
-    Field::new()
-        .label(product.name().to_string())
-        .description(detail)
+    // The name with its detail after it on one line, the locations side by
+    // side below, so a duplicate stays short.
+    v_flex()
+        .gap_2()
         .child(
-            RadioGroup::new(format!("duplicate:{item_number}"))
+            h_flex()
+                .items_baseline()
+                .gap_3()
+                .child(Label::new(product.name().to_string()))
+                .child(Text::new(detail)),
+        )
+        .child(
+            RadioGroup::horizontal(format!("duplicate:{item_number}"))
                 .selected_index(picked)
                 .children(lines)
                 .on_click(move |line, window, _| {

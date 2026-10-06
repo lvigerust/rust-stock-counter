@@ -237,7 +237,7 @@ impl StocktakeView {
             );
         let hide_zero_stock = render_filter_item(
             hide_zero_stock,
-            "Skjul varer med 0 på lager".into(),
+            "Tomme varelinjer".into(),
             stocktake.zero_stock_len(),
             cx,
         );

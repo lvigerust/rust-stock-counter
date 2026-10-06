@@ -891,7 +891,7 @@ fn importing_a_duplicate_asks_for_its_pick_location(cx: &mut TestAppContext) {
     let dir = store.parent().unwrap().to_path_buf();
     std::fs::create_dir_all(&dir).unwrap();
 
-    // Item number 1 on two lines, at two locations.
+    // Item number 1 on two lines, at two locations with stock at both.
     let stock_list = dir.join("Vareliste.xlsx");
     let mut workbook = rust_xlsxwriter::Workbook::new();
     let sheet = workbook.add_worksheet();
@@ -907,7 +907,7 @@ fn importing_a_duplicate_asks_for_its_pick_location(cx: &mut TestAppContext) {
         sheet.write_string(0, col, name).unwrap();
     }
     let rows = [
-        ("1", "Como Fronter 60", "Ramtre", "", "A1", 0.),
+        ("1", "Como Fronter 60", "Ramtre", "", "A1", 4.),
         ("2", "Alene", "", BURANO.0, "B1", 2.),
         ("1", "Como Fronter 60", "Ramtre", "", "E2-8", 16.),
     ];
