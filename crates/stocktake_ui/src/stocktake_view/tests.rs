@@ -939,8 +939,13 @@ fn importing_a_duplicate_asks_for_its_pick_location(cx: &mut TestAppContext) {
         window.render_frame(cx);
         window.within("duplicate:1").click(1usize, cx);
     });
+    let facts = format!(
+        "{:?} / {:?}",
+        counter.find("import-with-duplicates"),
+        counter.find("duplicate:1"),
+    );
     counter.click("import-with-duplicates");
-    assert!(counter.is_focused("search"));
+    assert!(counter.is_focused("search"), "{facts}");
     assert_eq!(counter.location("1"), "E2-8");
     // The lines are one product, with the quantities added.
     assert_eq!(store::load(&store).unwrap().unwrap().len(), 2);
