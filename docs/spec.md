@@ -14,13 +14,14 @@ Today the stocktake is done in a spreadsheet on a laptop with a USB barcode scan
 - A clean, minimal but good-looking button to import the stock list.
 - The input is the business system's `.xlsx` export as-is (see `data/stock-list.xlsx`); no manual preparation.
 - Columns are read by header name, not position.
-- Per the storage owner: "Når det gjelder hva som er interessant så er det kolonne C, D, H og N" (the interesting columns are C, D, H and N). These are the columns shown to the counter:
+- Per the storage owner: "Når det gjelder hva som er interessant så er det kolonne C, D, H og N" (the interesting columns are C, D, H and N). The counters later asked for column E too, which tells apart products with the same name. These are the columns shown to the counter:
 
   | Excel column | Header | Meaning |
   | --- | --- | --- |
   | C | `VareNR` | Item number |
   | D | `ProduktDesc1` | Name |
-  | H | `Lokasjon` | Location (may be empty) |
+  | E | `ProduktDesc2` | Description: colour and style, e.g. «Como Standard - Ramtre» (may be empty) |
+  | H | `Lokasjon` | Location (may be empty; `N/A` means empty) |
   | N | `FysiskPaaLager` | System quantity |
 
 - Also read, but not shown:
@@ -28,21 +29,21 @@ Today the stocktake is done in a spreadsheet on a laptop with a USB barcode scan
   | Excel column | Header | Meaning |
   | --- | --- | --- |
   | F | `PrdEAN` | Barcode (may be empty); needed so a scan can find the product |
-  | E | `ProduktDesc2` | Description, e.g. «Porselen servant i Brun Matt» (may be empty); where it's shown is undecided |
 
 - All other columns are ignored.
-- An item number on more than one line (66 products in `data/complete-stock-list.xlsx`, always at different locations) is resolved before the import finishes: a dialog lists the lines for each such product, and the person importing picks one location, which becomes the product's pick location. The app doesn't suggest one. There's no undo; importing the file again asks again.
+- `N/A` in `Lokasjon` is the business system's way of saying the product has no location. It's read as an empty location, so the product has no aisle and sorts last, and the counter gives it a location when it's found.
+- An item number on more than one line (66 products in `data/complete-stock-list.xlsx`, always at different locations) becomes one product whose system quantity is the lines' sum. Before the import finishes, a dialog lists the lines for each such product, and the person importing picks which location is its pick location; the app doesn't suggest one. The other lines' locations stay on the product, and any counter can later make one of them the pick location from the count dialog, which undoes the choice. Importing the file again asks again.
 
 - Discontinued (`Utgått`) products are included and counted like any other product. Their status isn't shown.
 - Importing while a stocktake is in progress shows a warning that the current stocktake will be discarded (e.g. "31/43 counted"). Confirming starts a fresh stocktake. Only one stocktake exists at a time.
 
 ## Counting screen
 
-- The whole stock list as a table: location, item number, name, system quantity (columns H, C, D, N), then counted quantity, difference, and whether the product is counted or uncounted.
+- The whole stock list as a table: location, item number, name, description, system quantity (columns H, C, D, E, N), then counted quantity, difference, and whether the product is counted, uncounted or finished.
 - The location column shows the pick location. A product counted at overflow locations shows how many after it, e.g. `C4-7 +2`, and its counted quantity is the total across all its locations.
 - Two columns are hidden until they're switched on in the columns menu. **Bufferlokasjon** lists each overflow location, and is headed **Bufferlokasjoner** once a product has more than one; sorted, it goes by the first overflow location. **Buffer** is what was counted at the overflow locations together. Either way, products without an overflow location sort last.
-- The aisle filter goes by pick location only.
-- A checkbox in the sidebar, off by default, hides products whose system quantity is zero.
+- The aisle filter goes by pick location only. An aisle that's a letter is labelled «Reol A»; the others are labelled as the location starts (`DL`, `Tilbehør`, `Pakkedisk`), and `D` and `DL` are separate aisles.
+- A checkbox in the sidebar, off by default, hides products whose system quantity is zero. The counters leave those for last: once the rest is counted, the filter is switched off and what still stands at zero is confirmed.
 - After a count is saved, the table scrolls to the product and its row briefly highlights, so the counter sees where the count landed.
 - When every product is counted, a summary says how many products have a difference, next to an export button.
 - A stock list can also be imported by dropping the `.xlsx` file on the window.
@@ -60,8 +61,8 @@ Today the stocktake is done in a spreadsheet on a laptop with a USB barcode scan
 ### Finding a product
 
 - The scanner and the keyboard type into the same search field.
-- A barcode scan, or typing an item number or name, selects the matching row.
-- Searching also matches the product's pick location and any overflow locations it has been counted at.
+- A barcode scan, or typing an item number, name or description, selects the matching row. The counters mostly type part of the name, such as «Burano»; the search ignores letter case.
+- Searching also matches the product's pick location and any overflow locations it has been counted at, so typing «tilbehør» lists that aisle.
 - Products without a barcode are found by typing.
 - If nothing matches, an error dialog is shown. Unlisted products are not recorded.
 
@@ -70,7 +71,8 @@ Today the stocktake is done in a spreadsheet on a laptop with a USB barcode scan
 - When a row is selected, focus moves to its counted-quantity cell, pre-filled with the system quantity.
 - Enter confirms the value, or the counter types a different number first to overwrite it.
 - The count dialog has an editable location field, pre-filled with the pick location. Leaving it as is counts at the pick location, so the normal scan-and-Enter flow is unchanged.
-- To register units at an overflow location, the counter types that location into the field before saving. Any text is accepted; it's trimmed and upper-cased (`c4-7` becomes `C4-7`) so one shelf isn't recorded twice.
+- To register units at an overflow location, the counter types that location into the field before saving. Any text is accepted, so new locations such as «golv ytre lager» need nothing set up first. It's trimmed, and compared with the stocktake's locations ignoring case so one shelf isn't recorded twice: a match takes the spelling already in use (`tilbehør 1-1` becomes `Tilbehør 1-1`), and anything else is upper-cased (`c4-7` becomes `C4-7`).
+- The dialog shows the product's description under its name, since products with the same name differ only there.
 - If the product has no pick location, the field starts empty, and an empty location counts as the pick location.
 - When the field holds a location other than the pick location (compared after trimming and upper-casing), a checkbox **Erstatt plukklokasjon** appears below it, unchecked. Unchecked, the count is saved at an overflow location. Checked, the typed location becomes the product's pick location and the count is saved there; if units were already counted at that location as an overflow location, they become the pick location's count. Changing the field back to the pick location hides the checkbox.
 - The pick location can be replaced at any time. What was counted there moves with it, and is added to anything already counted at the new location as an overflow location, so the counted quantity stays the same. With the box checked, the dialog offers **Erstatt** and **Legg til** against that count.
@@ -78,6 +80,13 @@ Today the stocktake is done in a spreadsheet on a laptop with a USB barcode scan
 - Focus then returns to the search field for the next scan.
 - A product is **uncounted** until its pick location has been confirmed or overwritten. A product counted as zero is counted, so an empty pick shelf is recorded by counting zero there.
 - A product counted only at overflow locations is **partly counted** ("Delvis talt"): it has its own status in the table and its own checkbox in the sidebar's status filter, but it has no counted quantity or difference yet, and it's grouped with the uncounted products in the progress indicator and the export warning. Counting its pick location makes it counted.
+- A product that came from several stock-list lines shows the locations that weren't picked at import, and the counter can make one of them the pick location instead. What was counted at the old pick location moves with it, as with any move.
+
+### Finishing a product
+
+- A counted product can be marked **finished** ("Ferdig talt") with a button in the count dialog. It means the counter has stopped looking for more units, usually because the difference is within what they believe can be right. The app never marks a product finished on its own.
+- Finished is a status of its own in the table and the status filter, so the products that are counted but not finished are one checkbox away.
+- A finished product stays editable. Counting it again leaves the mark alone; the same button removes it.
 
 ### Counting a product again
 
@@ -87,14 +96,14 @@ Today the stocktake is done in a spreadsheet on a laptop with a USB barcode scan
 
 ## Persistence
 
-- Every confirm or overwrite is saved immediately. No save button.
+- Every confirm or overwrite is saved immediately, stamped with the time it was saved. No save button.
 - Reopening the app resumes the stocktake in progress.
 - A stocktake saved before counts were kept per location resumes with each counted quantity at the product's pick location.
 
 ## Export
 
-- Exports an `.xlsx` of the stock list with two added columns: **Counted quantity** and **Difference** (counted minus system quantity). The counted quantity is the total across all of a product's locations.
-- A second sheet lists every product counted at one or more overflow locations, one row per location with the pick location first: item number, name, location, whether it's the pick location or an overflow location, and the quantity counted there. A partly counted product's pick location is marked uncounted. Products counted only at their pick location are left out. This is what's used to update `Lokasjon` in the business system, or to move the goods.
+- Exports an `.xlsx` of the stock list with added columns: **Counted quantity**, **Difference** (counted minus system quantity), **Date counted** (the product's latest count, as a date) and **New pick location**. The counted quantity is the total across all of a product's locations. `Lokasjon` keeps what the stock list said; a product whose pick location was moved has the new one in the last column, in red, so it stands out on paper too. A product moved back to its stock-list location isn't marked.
+- A second sheet lists every product counted at one or more overflow locations, one row per location with the pick location first: item number, name, location, whether it's the pick location or an overflow location, the quantity counted there and the date it was counted. A moved pick location's row is in red. A partly counted product's pick location is marked uncounted. Products counted only at their pick location are left out. This is what's used to update `Lokasjon` in the business system, or to move the goods.
 - If any products are uncounted, the app warns before exporting, and uncounted products are marked in the file.
 - Adjustments are entered into the business system by hand from the exported file.
 
@@ -119,8 +128,8 @@ Today the stocktake is done in a spreadsheet on a laptop with a USB barcode scan
 - **Suggesting locations.** The location field could suggest the locations already in the stock list as the counter types. gpui-kit's combobox only picks from a list, and the field has to take any text, so this waits for a suitable component.
 - **Enter adds at a counted location.** When the location already has a count, Enter adds to it rather than replacing it. Whether recounting a shelf (replace) is the more common case on the floor is open.
 - **Resetting a pick location.** A counted pick location can't be moved. A reset that clears its count, so it can be counted again or moved, is planned.
-- **Exporting moved pick locations.** The export doesn't yet say which products' pick location was moved. The plan: keep the stock list's `Lokasjon` and mark the move from old to new, on the Lokasjoner sheet and as a new-location column on the main sheet.
 - **Showing overflow locations in the table.** The `C4-7 +2` hint is a stopgap. Check whether gpui-kit has a component that suits showing a product's locations better.
 - **Importing results.** Whether the business system can import stocktake results directly, which would make a matching export format worthwhile.
-- **System quantity of a resolved duplicate.** After the import dialog picks a location, whether the product's system quantity is that line's or the sum of both lines (`Como Fronter 60 - Lys Macchiato`: 0 at `A1`, 16 at `E2-8`). Also whether the export shows which location was chosen.
-- **Platform.** The counters count mostly on iPads over wifi that reaches the whole storage, and want counts from several counters at one location added together. This contradicts the one-laptop platform above and the "several laptops" item under out of scope; it's settled in an ADR once the rest of Q1 to Q3 in [questions-for-counters.md](questions-for-counters.md) is answered.
+- **Exporting a merged duplicate.** A product merged from several stock-list lines is one row in the export. How the line that wasn't picked is reported, so it can be cleared in the business system, is open.
+- **Reviewing finished products.** Whether a lead goes through the finished products and approves them. Nothing is built for it until asked.
+- **Platform.** The counters will count on iPads or phones, up to four at once, scanning with the device's camera or a wireless scanner, over wifi that's stable through the whole storage; anyone with the link should have access, with no login; and counts from several counters at one location are added together. This contradicts the one-laptop platform above and the "several laptops" item under out of scope. The leaning is a native iPad app for the few people in the storage, installed outside the App Store, with the `stocktake` crate as the shared core and a server holding the one stocktake; the desktop app stays as it is until that's decided, and the decision gets an ADR.

@@ -31,7 +31,7 @@ A place in the storage where units of a product are kept, usually a shelf positi
 _Avoid_: Lokasjon, bin, slot
 
 **Pick location**:
-The location a product is picked from. It starts as the one the stock list gives, which may be empty, and a counter can move it at any time during the stocktake. What was counted there moves with it.
+The location a product is picked from. It starts as the one the stock list gives, which may be empty, or as the one chosen at import when the stock list gives several; a counter can move it at any time during the stocktake. What was counted there moves with it.
 _Avoid_: Lager, plukklokasjon, main location, primary location, home location
 
 **Overflow location**:
@@ -65,3 +65,7 @@ _Avoid_: Pending, open, missing
 **Partly counted**:
 An uncounted product with units counted at one or more overflow locations. It's counted once its pick location is, if only as zero.
 _Avoid_: Delvis talt, in progress
+
+**Finished**:
+A counted product a counter has marked as no longer worth looking for more units of, usually because its difference is close enough to accept. It can still be counted again.
+_Avoid_: Ferdig talt, done, closed, approved, locked

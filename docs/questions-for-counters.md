@@ -16,7 +16,7 @@ Takk for tilbakemeldingene på appen. Vi har gått gjennom ønskene deres og den
 
 **Hvor mange teller samtidig en vanlig tellingsdag?**
 
-Svar: Mest iPad. Ikke besvart ennå: hvordan strekkoden skannes, og hvor mange som teller samtidig.
+Svar: Til nå har de talt på papir. De vil bruke iPad eller mobil, siden PC-en ikke har lang nok batteritid. Strekkoden skannes med kameraet på enheten hvis det går; trådløse skannere kan kjøpes. Maks 4 personer teller samtidig.
 
 ### 2. Hva skjer når nettet er dårlig?
 
@@ -27,7 +27,7 @@ Tenk deg at nettet faller ut mens du står midt i en hylle og har talt tretti va
 - At du kan fortsette å telle, og at alt sendes inn når nettet er tilbake.
 - At appen stopper og sier fra, slik at du ikke mister noe.
 
-Svar: Nettet er sterkt over hele lageret.
+Svar: Nettet er veldig stabilt i hele lokalet.
 
 ### 3. Hva skjer når flere teller samtidig?
 
@@ -41,7 +41,7 @@ To personer teller i samme gang. Begge finner Como Fronter 60 – Lys Macchiato,
 
 **Hvem skal kunne se hele tellingen mens den pågår, for eksempel hvor mange varer som er talt, og av hvem?** Trenger dere innlogging, eller er alle som har lenken like godt?
 
-Svar: Tallene legges sammen, på lokasjonen de er talt på. Ikke besvart ennå: hvem som skal se hele tellingen, og om det trengs innlogging.
+Svar: Tallene legges sammen, på lokasjonen de er talt på. Alle som har lenken har tilgang; ingen innlogging.
 
 ## Varer som står flere ganger
 
@@ -62,7 +62,7 @@ Dere ønsker at appen sjekker dette når listen hentes inn, og at dere kan slett
 
 **Hvem skal få lov til å slette linjer?**
 
-Svar: Appen sjekker for dobbeltlinjer når listen hentes inn. For hver vare som står flere ganger må den som henter inn listen velge lokasjon selv, i en dialog.
+Svar: Appen sjekker for dobbeltlinjer når listen hentes inn. For hver vare som står flere ganger må den som henter inn listen velge lokasjon selv, i en dialog. De som teller kjenner lageret og vet hvilken linje som skal bort; stort sett er det linjen med 0. Sletting skal kunne angres, og alle må kunne angre.
 
 ### 5. Hva betyr `A1`?
 
@@ -70,7 +70,7 @@ Over 170 varer har lokasjon `A1`, og de fleste av dem har 0 på lager.
 
 **Er `A1` en hylle du går til og teller, eller er det bare der systemet legger varer som ikke har fått en plass?**
 
-Svar: Trolig der systemet legger varer som ikke har fått en plass; ikke bekreftet. Linjer med 0 på lager skal kunne skjules med et filter i sidepanelet.
+Svar: `A1` er standardlokasjonen nye varer får når de kommer inn. Noen blir aldri flyttet til en annen lokasjon i systemet, fordi de vet hvor varene ligger. `A1` er også en fysisk lokasjon. Linjer med 0 på lager skal kunne skjules med et filter i sidepanelet.
 
 ### 6. Hva betyr `N/A`?
 
@@ -84,7 +84,7 @@ Svar: Trolig der systemet legger varer som ikke har fått en plass; ikke bekreft
 
 **Når du finner en slik vare, setter du da en ny plukklokasjon på den med en gang?**
 
-Svar:
+Svar: `N/A` betyr at varen ikke har fått noen lokasjon i det hele tatt. De skal telles i samme runde, og får en lokasjon under tellingen. Nye lokasjoner opprettes også, for eksempel «golv ytre lager».
 
 ## Mer informasjon om varen
 
@@ -107,7 +107,7 @@ Dere ba om å få med «kolonne 3», som inneholder farger og lignende. Vi vil v
 
 **Skal du kunne søke på den?** Husk at skjermen på en mobil er liten, så vi kan ikke vise alt samtidig. Hva er viktigst å se?
 
-Svar: Ja, det er kolonne E, `ProduktDesc2`. Ikke besvart ennå: hvor den skal vises, og om den skal kunne søkes på.
+Svar: Ja, det er kolonne E, `ProduktDesc2`. Den inneholder farge og stil, og er viktig for tellingen: tre varer heter «Como Fronter 120 - Grå Driftwood», og kolonne E skiller dem («Como Standard - Integrert håndtak», «Como Standard - Ramtre», «Como Standard - Slett»). De kommer til å telle på iPad, kanskje PC også, så skjermen er ikke så liten.
 
 ## Plukklokasjon
 
@@ -125,7 +125,7 @@ Du teller en vare på `E2-8`, og ser at den egentlig hører hjemme på `B3-1`.
 
 **Hvem oppdaterer lagersystemet etterpå, og hva trenger den personen å se?** Et eksempel er en liste med bare varene som har fått ny plukklokasjon, med gammel og ny plass ved siden av hverandre.
 
-Svar:
+Svar: Varer flyttes stadig til nye lokasjoner uten at plukklokasjonen endres i MultiCase. Ikke besvart: hva de gjør i praksis når de ser at en vare hører hjemme et annet sted, og hvem som oppdaterer lagersystemet etterpå.
 
 ### 9. Hvordan skal en ny plukklokasjon vises?
 
@@ -141,7 +141,7 @@ Dere ønsker at en ny plukklokasjon markeres tydelig, for eksempel med rød farg
 
 **Hvis du flytter varen tilbake til den opprinnelige plassen, skal markeringen forsvinne?**
 
-Svar:
+Svar: En endret plukklokasjon skal vises i rødt i Excel-arket ved eksport og utskrift. Ikke besvart: om den må synes i appen, om den gamle lokasjonen skal stå ved siden av, og om markeringen forsvinner når varen flyttes tilbake.
 
 ### 10. Datoen «når en vare er plukket»
 
@@ -160,7 +160,7 @@ Dere ønsker å legge inn en dato når en vare er plukket. Vi vil forstå hva da
 
 **Skal den gjelde hele varen, eller hver enkelt lokasjon varen står på?**
 
-Svar:
+Svar: Datoen varen ble talt. Den trenger bare å synes ved eksport og utskrift.
 
 ## Ferdig talt
 
@@ -178,7 +178,7 @@ Tenk deg at en vare står på hylla med 10 stk, og at du i tillegg finner 6 stk 
 
 **Trenger dere en liste over varer som er talt, men ikke markert ferdig?** Skal en leder gå gjennom de ferdigtalte varene og godkjenne dem?
 
-Svar:
+Svar: Når en vare er talt og avviket er innenfor det de mener kan stemme, slutter de å telle og lete etter det varenummeret. Lagerbeholdningen må likevel kunne endres etterpå. Ikke besvart: om en leder skal gå gjennom de ferdigtalte varene.
 
 ## Lageret og finne varer
 
@@ -194,7 +194,7 @@ Lokasjonene i listen er ikke bare reoler som A–G. Det finnes også:
 
 **Kaller dere dem «reoler», eller bruker dere andre ord?** Det avgjør hva appen skriver i filteret, for eksempel «Reol Tilbehør» eller bare «Tilbehør».
 
-Svar:
+Svar: Ingen fast rekkefølge. De ville søkt på «tilbehør», eller på produktgruppe, for eksempel «Polito».
 
 ### 13. Varer uten strekkode
 
@@ -208,7 +208,7 @@ Rundt 950 varer har ingen strekkode, og 679 av dem har lager. Dem kan du ikke sk
 
 **Hva ville gjort det raskest?** Et eksempel er å se alle varer uten strekkode samlet i én liste. Husk at det er tungt å skrive på en mobil.
 
-Svar:
+Svar: Går etter hyllen.
 
 ### 14. Varer med 0 på lager
 
@@ -218,7 +218,7 @@ Rundt 650 varer står med 0 på lager, og 320 av dem har fortsatt en hylleplass.
 
 Hvis du sjekker: vil du ha dem blant de andre varene, eller helt til slutt?
 
-Svar:
+Svar: De tas når de anser seg ferdige med varetellingen, og varene fortsatt står i 0.
 
 ### 15. Hvordan søker du etter varer?
 
@@ -230,4 +230,4 @@ Svar:
 
 **Hender det at du skriver feil mellomrom, eller blander store og små bokstaver?**
 
-Svar:
+Svar: Deler av navnet, for eksempel «Burano». Ikke besvart: om mellomrom og store og små bokstaver blandes.
