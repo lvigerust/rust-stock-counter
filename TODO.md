@@ -1,1 +1,1 @@
-../../../Library/Mobile Documents/iCloud~md~obsidian/Documents/Follow-ups/Projects/Stock Counter/TODO.md
+../../../Library/Mobile Documents/iCloud~md~obsidian/Documents/Todos/Projects/Stock Counter/TODO.md
