@@ -175,7 +175,6 @@ pub(crate) fn open(
                 // Finished says nobody is looking for more units, which
                 // means nothing until the pick location has a number.
                 .disabled(!product.is_counted())
-                .mr_auto()
                 .on_click(move |_, window, cx| on_finish(!finished, window, cx))
         };
         let muted = cx.theme().muted_foreground;
@@ -263,6 +262,10 @@ pub(crate) fn open(
                     // Apart from the saves, at the leading edge: it ends the
                     // count rather than recording one.
                     .child(finish_button)
+                    // A spacer, not an auto margin: the footer is
+                    // `justify_end`, and GPUI's layout gives the free space
+                    // to both, which pushes the saves out past the dialog.
+                    .child(div().flex_1())
                     // `DialogClose` fills its container; this keeps Avbryt
                     // as wide as its label, like the button beside it. A
                     // ghost button would take the faint ring; beside the

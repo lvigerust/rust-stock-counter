@@ -965,11 +965,16 @@ fn importing_a_duplicate_asks_for_its_pick_location(cx: &mut TestAppContext) {
 }
 
 #[gpui_kit::test]
-fn zz_probe_footer(cx: &mut TestAppContext) {
-    let mut counter = Counter::resume(cx, "probe");
+fn the_count_dialog_keeps_its_buttons_inside_it(cx: &mut TestAppContext) {
+    let mut counter = Counter::resume(cx, "footer");
     counter.input(BURANO.0);
     counter.press("enter");
-    for id in ["location", "count", "finish-count", "save-count"] {
-        eprintln!("PROBE {id}: {:?}", counter.find(id).map(|e| e.bounds()));
-    }
+
+    // The footer lines up with the fields above it: Ferdig talt at their
+    // leading edge, Lagre at their trailing one.
+    let field = counter.find("count").unwrap().bounds();
+    let finish = counter.find("finish-count").unwrap().bounds();
+    let save = counter.find("save-count").unwrap().bounds();
+    assert_eq!(finish.left(), field.left());
+    assert_eq!(save.right(), field.right());
 }
