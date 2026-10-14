@@ -25,3 +25,7 @@ Do check the code you write, with commands that compile and test it without open
 - `cargo test --workspace` (a plain `cargo test` only runs the shell crate). The UI tests use headless windows, so nothing appears on screen.
 
 Report which of these passed, and show the output of any that failed.
+
+## Issue tracker
+
+Issues are the Stock Counter project's todos in Obsidian. See `docs/agents/issue-tracker.md`.
