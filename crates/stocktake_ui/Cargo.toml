@@ -18,6 +18,8 @@ stocktake.workspace = true
 ui.workspace = true
 
 [dev-dependencies]
+# Reads back what the export tests wrote.
+calamine.workspace = true
 gpui-kit = { workspace = true, features = ["test-support"] }
 # Writes stock list fixtures for the import tests.
 rust_xlsxwriter.workspace = true

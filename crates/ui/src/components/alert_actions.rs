@@ -1,10 +1,13 @@
 //! An alert's buttons, after Catalyst's `AlertActions`: a ghost Avbryt, when
-//! there's a choice, then the button that confirms.
+//! there's a choice, an outline button for a second way to go on, then the
+//! button that confirms.
 //!
 //! gpui-kit's alert draws its own OK and Cancel, with its 16px labels and its
 //! outlined Cancel. This footer draws them as the app's [`Button`]s, and
 //! leaves what they do to gpui-kit: Avbryt and Escape cancel, the confirm
-//! button and Enter run the alert's `on_ok`.
+//! button and Enter run the alert's `on_ok`. The second way on is the
+//! footer's own: gpui-kit's alert knows only OK and Cancel, so its button
+//! closes the alert and runs its handler.
 //!
 //! ```ignore
 //! dialog
@@ -14,9 +17,12 @@
 //!     .footer(AlertActions::new("Forkast og importer").danger().cancel("Avbryt"))
 //! ```
 
+use gpui_kit::component::WindowExt as _;
 use gpui_kit::component::button::{ButtonVariant, ButtonVariants};
 use gpui_kit::component::dialog::{Confirm, DialogClose, DialogFooter};
 use gpui_kit::{Rems, rems};
+
+use std::rc::Rc;
 
 use crate::prelude::*;
 use crate::{Button, FocusRing};
@@ -30,6 +36,16 @@ pub struct AlertActions {
     confirm: SharedString,
     variant: ButtonVariant,
     cancel: Option<SharedString>,
+    alternative: Option<Alternative>,
+}
+
+/// What a second way on does once the alert has closed.
+type AlternativeHandler = Rc<dyn Fn(&mut Window, &mut App)>;
+
+/// A second way to go on, beside the confirm button.
+struct Alternative {
+    label: SharedString,
+    handler: AlternativeHandler,
 }
 
 impl AlertActions {
@@ -40,7 +56,22 @@ impl AlertActions {
             confirm: confirm.into(),
             variant: ButtonVariant::Primary,
             cancel: None,
+            alternative: None,
         }
+    }
+
+    /// An outline button before the confirm one, labeled `label`, that
+    /// closes the alert and runs `handler`.
+    pub fn alternative(
+        mut self,
+        label: impl Into<SharedString>,
+        handler: impl Fn(&mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.alternative = Some(Alternative {
+            label: label.into(),
+            handler: Rc::new(handler),
+        });
+        self
     }
 
     /// A button before the confirm one that leaves without doing anything.
@@ -93,6 +124,18 @@ impl RenderOnce for AlertActions {
                                 .h(BUTTON_HEIGHT)
                                 .with_focus_ring(FocusRing::Solid)
                         })),
+                )
+            })
+            .when_some(self.alternative, |footer, alternative| {
+                footer.child(
+                    Button::new("alert-alternative")
+                        .outline()
+                        .label(alternative.label)
+                        .h(BUTTON_HEIGHT)
+                        .on_click(move |_, window, cx| {
+                            window.close_dialog(cx);
+                            (alternative.handler)(window, cx);
+                        }),
                 )
             })
             .child(confirm)

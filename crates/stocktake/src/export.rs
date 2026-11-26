@@ -25,6 +25,25 @@ pub const DATE_COUNTED: &str = "Dato talt";
 /// Heads the column with a product's pick location when a counter moved it.
 pub const NEW_PICK_LOCATION: &str = "Ny plukklokasjon";
 
+/// Which products the file lists.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Rows {
+    /// Every product, the uncounted ones marked.
+    All,
+    /// Only counted products. A partly counted product is uncounted, so its
+    /// overflow counts are left out with it.
+    Counted,
+}
+
+impl Rows {
+    fn includes(self, product: &Product) -> bool {
+        match self {
+            Self::All => true,
+            Self::Counted => product.is_counted(),
+        }
+    }
+}
+
 /// The formats the sheets share.
 struct Formats {
     header: Format,
@@ -67,20 +86,20 @@ pub fn xlsx_path(path: &Path) -> PathBuf {
 /// Writes the stock list in location order with the counted quantity, the
 /// difference, the day it was counted and any new pick location added.
 /// Uncounted products are marked and highlighted, and their difference is
-/// left empty.
+/// left empty, or left out with [`Rows::Counted`].
 ///
 /// If any product was counted at overflow locations, a second sheet lists
 /// where its units were found, for updating its location in the business
 /// system.
-pub fn write(stocktake: &Stocktake, path: &Path) -> Result<(), XlsxError> {
+pub fn write(stocktake: &Stocktake, rows: Rows, path: &Path) -> Result<(), XlsxError> {
     let mut workbook = Workbook::new();
     let formats = Formats::new();
-    write_counts(&mut workbook, stocktake, &formats)?;
+    write_counts(&mut workbook, stocktake, rows, &formats)?;
     if stocktake
         .products()
-        .any(|(_, product)| product.overflow_len() > 0)
+        .any(|(_, product)| rows.includes(product) && product.overflow_len() > 0)
     {
-        write_locations(&mut workbook, stocktake, &formats)?;
+        write_locations(&mut workbook, stocktake, rows, &formats)?;
     }
     workbook.save(path)
 }
@@ -129,6 +148,7 @@ fn is_moved(product: &Product) -> bool {
 fn write_counts(
     workbook: &mut Workbook,
     stocktake: &Stocktake,
+    rows: Rows,
     formats: &Formats,
 ) -> Result<(), XlsxError> {
     let sheet = workbook.add_worksheet();
@@ -153,8 +173,12 @@ fn write_counts(
         formats,
     )?;
 
-    for (row, id) in (1u32..).zip(stocktake.search("")) {
-        let product = stocktake.product(id);
+    let products = stocktake
+        .search("")
+        .into_iter()
+        .map(|id| stocktake.product(id))
+        .filter(|product| rows.includes(product));
+    for (row, product) in (1u32..).zip(products) {
         // The stock list's own; a move goes in the last column.
         sheet.write_string(row, 0, product.listed_location())?;
         sheet.write_string(row, 1, product.item_number())?;
@@ -187,6 +211,7 @@ fn write_counts(
 fn write_locations(
     workbook: &mut Workbook,
     stocktake: &Stocktake,
+    rows: Rows,
     formats: &Formats,
 ) -> Result<(), XlsxError> {
     let sheet = workbook.add_worksheet();
@@ -209,7 +234,7 @@ fn write_locations(
         .search("")
         .into_iter()
         .map(|id| stocktake.product(id))
-        .filter(|product| product.overflow_len() > 0);
+        .filter(|product| rows.includes(product) && product.overflow_len() > 0);
     let mut row = 1u32;
     for product in split {
         let pick = (
@@ -280,7 +305,7 @@ mod tests {
 
         let path =
             std::env::temp_dir().join(format!("stocktake-export-{}.xlsx", std::process::id()));
-        write(&stocktake, &path).unwrap();
+        write(&stocktake, Rows::All, &path).unwrap();
 
         let mut workbook = open_workbook_auto(&path).unwrap();
         let range = workbook.worksheet_range_at(0).unwrap().unwrap();
@@ -304,6 +329,43 @@ mod tests {
         assert_eq!(range.get((3, 9)), Some(&Data::String("B1".to_string())));
         // Nothing was found off its pick location, so there's no second sheet.
         assert_eq!(workbook.sheet_names().len(), 1);
+    }
+
+    #[test]
+    fn leaves_out_uncounted_products_when_asked() {
+        let mut stocktake = Stocktake::new(vec![
+            Product::new("1", "Counted", "A1", "", 5),
+            Product::new("2", "Uncounted", "A2", "", 3),
+            Product::new("3", "Partly counted", "A3", "", 4),
+            Product::new("4", "Split", "A4", "", 2),
+        ]);
+        let ids = stocktake.search("");
+        stocktake.set_count(ids[0], "", 5);
+        stocktake.set_count(ids[2], "B1", 4);
+        stocktake.set_count(ids[3], "A4", 1);
+        stocktake.set_count(ids[3], "C1", 1);
+
+        let path = std::env::temp_dir().join(format!(
+            "stocktake-export-counted-{}.xlsx",
+            std::process::id()
+        ));
+        write(&stocktake, Rows::Counted, &path).unwrap();
+
+        let mut workbook = open_workbook_auto(&path).unwrap();
+        let counts = workbook.worksheet_range_at(0).unwrap().unwrap();
+        let locations = workbook.worksheet_range("Lokasjoner").unwrap();
+        std::fs::remove_file(&path).ok();
+
+        let names = |range: &calamine::Range<Data>, col: usize| -> Vec<String> {
+            range
+                .rows()
+                .skip(1)
+                .map(|row| row[col].to_string())
+                .collect()
+        };
+        assert_eq!(names(&counts, 2), ["Counted", "Split"]);
+        // The partly counted product's overflow count goes with it.
+        assert_eq!(names(&locations, 1), ["Split", "Split"]);
     }
 
     #[test]
@@ -340,7 +402,7 @@ mod tests {
             "stocktake-export-locations-{}.xlsx",
             std::process::id()
         ));
-        write(&stocktake, &path).unwrap();
+        write(&stocktake, Rows::All, &path).unwrap();
 
         let mut workbook = open_workbook_auto(&path).unwrap();
         let counts = workbook.worksheet_range_at(0).unwrap().unwrap();

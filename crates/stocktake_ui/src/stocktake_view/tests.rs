@@ -473,6 +473,40 @@ fn the_discard_alert_cancels_and_confirms_with_its_buttons(cx: &mut TestAppConte
     assert!(counter.find("alert-confirm").is_none());
 }
 
+#[gpui_kit::test]
+fn the_export_alert_offers_to_leave_out_the_uncounted(cx: &mut TestAppContext) {
+    use calamine::{Reader as _, open_workbook_auto};
+
+    let mut counter = Counter::resume(cx, "export-counted");
+    counter.input(BURANO.0);
+    counter.press("enter");
+    counter.input("47");
+    counter.press("enter");
+
+    let view = counter.view.clone();
+    counter.step(|window, cx| view.update(cx, |view, cx| view.export_stocktake(window, cx)));
+    counter.tab_to("alert-alternative");
+    counter.press("space");
+    assert!(counter.find("alert-confirm").is_none());
+
+    // A name typed without the extension gets it.
+    let dir = store_path("export-counted-file").with_file_name("");
+    std::fs::create_dir_all(&dir).unwrap();
+    counter
+        .cx
+        .simulate_new_path_selection(|_| Some(dir.join("Telling")));
+    counter.cx.run_until_parked();
+
+    let mut workbook = open_workbook_auto(dir.join("Telling.xlsx")).unwrap();
+    let counts = workbook.worksheet_range_at(0).unwrap().unwrap();
+    let names: Vec<String> = counts
+        .rows()
+        .skip(1)
+        .map(|row| row[2].to_string())
+        .collect();
+    assert_eq!(names, ["Burano 120 Sort"]);
+}
+
 /// Remembers `stock_lists` as the recent ones beside `store`.
 fn remember(store: &Path, stock_lists: &[&Path]) {
     let mut recent = RecentStockLists::default();

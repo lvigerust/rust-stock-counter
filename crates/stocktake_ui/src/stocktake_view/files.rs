@@ -20,7 +20,9 @@ use gpui_kit::component::{
 };
 use gpui_kit::{ClickEvent, ExternalPaths, PathPromptOptions};
 use stocktake::{
-    Product, Stocktake, export, recent,
+    Product, Stocktake, export,
+    export::Rows,
+    recent,
     stock_list::{self, ImportError, StockList},
 };
 use ui::{AlertActions, Button, FocusRing, Label, Spacing, StyledDialog as _, Text, prelude::*};
@@ -361,14 +363,14 @@ impl StocktakeView {
     }
 
     /// Writes the counted stock list to a file the counter picks, first
-    /// warning if anything is uncounted.
+    /// warning if anything is uncounted and offering to leave it out.
     pub(super) fn export_stocktake(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(open) = &self.open else {
             return;
         };
         let uncounted = open.session.read(cx).stocktake().uncounted_len();
         if uncounted == 0 {
-            self.choose_export_path(window, cx);
+            self.choose_export_path(Rows::All, window, cx);
             return;
         }
 
@@ -377,19 +379,29 @@ impl StocktakeView {
             n => format!("{n} varer er ikke talt").into(),
         };
         let view = cx.entity().downgrade();
-        window.open_alert_dialog(cx, move |dialog, _, cx| {
+        let export_rows = move |rows| {
             let view = view.clone();
+            move |window: &mut Window, cx: &mut App| {
+                view.update(cx, |this, cx| this.choose_export_path(rows, window, cx))
+                    .ok();
+            }
+        };
+        window.open_alert_dialog(cx, move |dialog, _, cx| {
+            let all = export_rows(Rows::All);
             dialog
                 .alert_frame(cx)
                 .title(title.clone())
                 .description(format!(
-                    "De merkes med «{}» i filen.",
+                    "De merkes med «{}» i filen, med mindre du eksporterer bare de talte.",
                     export::UNCOUNTED_MARK
                 ))
-                .footer(AlertActions::new("Eksporter…").cancel("Avbryt"))
+                .footer(
+                    AlertActions::new("Eksporter alle…")
+                        .alternative("Bare talte…", export_rows(Rows::Counted))
+                        .cancel("Avbryt"),
+                )
                 .on_ok(move |_, window, cx| {
-                    view.update(cx, |this, cx| this.choose_export_path(window, cx))
-                        .ok();
+                    all(window, cx);
                     true
                 })
         });
@@ -397,7 +409,7 @@ impl StocktakeView {
 
     /// Asks where to save, then writes a snapshot of the stocktake as it is
     /// now; counts made while the dialog is open aren't in the file.
-    fn choose_export_path(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    fn choose_export_path(&mut self, rows: Rows, window: &mut Window, cx: &mut Context<Self>) {
         let Some(open) = &self.open else {
             return;
         };
@@ -414,7 +426,7 @@ impl StocktakeView {
             let written = cx
                 .background_spawn({
                     let path = path.clone();
-                    async move { export::write(&stocktake, &path) }
+                    async move { export::write(&stocktake, rows, &path) }
                 })
                 .await;
             this.update_in(cx, |_, window, cx| match written {

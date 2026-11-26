@@ -6486,6 +6486,7 @@ dependencies = [
 name = "stocktake_ui"
 version = "0.1.0"
 dependencies = [
+ "calamine",
  "dirs 7.0.0",
  "gpui-kit",
  "rust_xlsxwriter",
