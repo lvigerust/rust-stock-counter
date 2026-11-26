@@ -410,6 +410,7 @@ impl StocktakeView {
             let Ok(Ok(Some(path))) = path.await else {
                 return;
             };
+            let path = export::xlsx_path(&path);
             let written = cx
                 .background_spawn({
                     let path = path.clone();

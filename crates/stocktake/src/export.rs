@@ -1,6 +1,7 @@
 //! Writes the counted stock list for entering adjustments into the business system.
 
-use std::path::Path;
+use std::ffi::OsString;
+use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, Datelike as _, Local, Utc};
 use rust_xlsxwriter::{Color, ExcelDateTime, Format, FormatBorder, Workbook, Worksheet, XlsxError};
@@ -46,6 +47,21 @@ impl Formats {
             moved: Format::new().set_font_color(Color::Red),
         }
     }
+}
+
+/// `path` ending in `.xlsx`, added when it doesn't. The Windows save dialog
+/// keeps whatever name is typed, so a name typed over the suggested one is
+/// saved without the extension, and Windows then can't tell it's a workbook.
+pub fn xlsx_path(path: &Path) -> PathBuf {
+    let is_xlsx = path
+        .extension()
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("xlsx"));
+    if is_xlsx {
+        return path.to_path_buf();
+    }
+    let mut name = OsString::from(path);
+    name.push(".xlsx");
+    PathBuf::from(name)
 }
 
 /// Writes the stock list in location order with the counted quantity, the
@@ -288,6 +304,23 @@ mod tests {
         assert_eq!(range.get((3, 9)), Some(&Data::String("B1".to_string())));
         // Nothing was found off its pick location, so there's no second sheet.
         assert_eq!(workbook.sheet_names().len(), 1);
+    }
+
+    #[test]
+    fn adds_the_extension_when_the_name_lacks_it() {
+        assert_eq!(
+            xlsx_path(Path::new("Telling november")),
+            Path::new("Telling november.xlsx")
+        );
+        // A dot in the name isn't an extension to replace.
+        assert_eq!(
+            xlsx_path(Path::new("Telling 26.11")),
+            Path::new("Telling 26.11.xlsx")
+        );
+        assert_eq!(
+            xlsx_path(Path::new("Varetelling.XLSX")),
+            Path::new("Varetelling.XLSX")
+        );
     }
 
     #[test]
