@@ -628,8 +628,7 @@ impl TableDelegate for ProductTable {
             ProductColumn::CountedQuantity => render_counted_quantity(product, cx),
             ProductColumn::OverflowQuantity => product
                 .overflow_quantity()
-                .map(|quantity| quantity.to_string())
-                .unwrap_or_default()
+                .map_or_default(|quantity| quantity.to_string())
                 .into_any_element(),
             ProductColumn::Difference => match product.difference() {
                 Some(difference) => Delta::new(difference).into_any_element(),
@@ -703,16 +702,13 @@ impl TableDelegate for ProductTable {
             ProductColumn::SystemQuantity => product.system_quantity().to_string(),
             ProductColumn::CountedQuantity => product
                 .counted_quantity()
-                .map(|quantity| quantity.to_string())
-                .unwrap_or_default(),
+                .map_or_default(|quantity| quantity.to_string()),
             ProductColumn::OverflowQuantity => product
                 .overflow_quantity()
-                .map(|quantity| quantity.to_string())
-                .unwrap_or_default(),
+                .map_or_default(|quantity| quantity.to_string()),
             ProductColumn::Difference => product
                 .difference()
-                .map(|difference| difference.to_string())
-                .unwrap_or_default(),
+                .map_or_default(|difference| difference.to_string()),
             ProductColumn::Status => CountStatus::label(product.count_state()).to_string(),
         }
     }
