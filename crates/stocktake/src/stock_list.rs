@@ -410,7 +410,7 @@ impl Columns {
             })?;
         let line = ReadLine {
             name: text(cell(self.name)),
-            description: self.description.map(cell).map(text).unwrap_or_default(),
+            description: self.description.map(cell).map_or_default(text),
             barcode: text(cell(self.barcode)),
             location: location(cell(self.location)),
             system_quantity,
